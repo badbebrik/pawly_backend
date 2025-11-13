@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,7 +25,7 @@ func (a *App) Run() error {
 			Str("port", a.Config.AppPort).
 			Msg("starting HTTP server")
 
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal().Err(err).Msg("server crash")
 		}
 	}()

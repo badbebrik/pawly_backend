@@ -9,7 +9,10 @@ func (a *App) setupRoutes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":"ok"}`))
+		_, err := w.Write([]byte(`{"status":"ok"}`))
+		if err != nil {
+			return
+		}
 	})
 
 	return r

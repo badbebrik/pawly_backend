@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: auth_postgres
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: auth_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

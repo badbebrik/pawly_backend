@@ -15,8 +15,10 @@ type Config struct {
 	PostgresHost     string
 	PostgresPort     string
 
-	RedisAddr string
-	RedisDB   int
+	RedisHost     string
+	RedisPort     string
+	RedisPassword string
+	RedisDB       int
 
 	JWTSecret           string
 	AccessTokenTTLMin   int
@@ -31,7 +33,9 @@ func Load() *Config {
 		PostgresDB:          getEnv("POSTGRES_DB", "auth_db"),
 		PostgresHost:        getEnv("POSTGRES_HOST", "localhost"),
 		PostgresPort:        getEnv("POSTGRES_PORT", "5432"),
-		RedisAddr:           getEnv("REDIS_ADDR", ""),
+		RedisHost:           getEnv("REDIS_ADDR", ""),
+		RedisPort:           getEnv("REDIS_PORT", ""),
+		RedisPassword:       getEnv("REDIS_PASSWORD", ""),
 		RedisDB:             getEnvInt("REDIS_DB", 0),
 		JWTSecret:           getEnv("JWT_SECRET", "DEFAULT"),
 		AccessTokenTTLMin:   getEnvInt("ACCESS_TOKEN_TTL_MINITUES", 15),

@@ -9,6 +9,7 @@ import (
 type App struct {
 	Config *config.Config
 	PG     *db.Postgres
+	Redis  *db.Redis
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -17,14 +18,28 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	redis, err := db.NewRedis(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	return &App{
 		Config: cfg,
 		PG:     pg,
+		Redis:  redis,
 	}, nil
 }
 
 func (a *App) Close() {
 	log.Info().Msg("closing App resources...")
+
+	if a.Redis != nil {
+		err := a.Redis.Close()
+		if err != nil {
+			return
+		}
+	}
+
 	if a.PG != nil {
 		a.PG.Close()
 	}

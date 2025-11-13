@@ -12,6 +12,10 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: services/auth
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,7 +29,7 @@ jobs:
         run: go mod tidy
 
       - name: Build
-        run: go build ./services/auth/cmd
+        run: go build ./cmd
 
       - name: Run Tests
         run: go test ./... -v

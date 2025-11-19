@@ -6,15 +6,15 @@ import (
 )
 
 type User struct {
-	ID           uuid.UUID
-	Email        string
-	PasswordHash *string
-	IsVerified   bool
-	IsActive     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	LastLoggedAt time.Time
-	DeletedAt    *time.Time
+	ID           uuid.UUID  `json:"id"`
+	Email        string     `json:"email"`
+	PasswordHash *string    `json:"password_hash"`
+	IsVerified   bool       `json:"is_verified"`
+	IsActive     bool       `json:"is_active"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	LastLoggedAt time.Time  `json:"last_logged_at"`
+	DeletedAt    *time.Time `json:"deleted_at"`
 }
 
 func (u *User) HasPassword() bool {

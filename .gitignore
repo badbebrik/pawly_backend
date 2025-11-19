@@ -95,7 +95,7 @@ fabric.properties
 .idea/**/azureSettings.xml
 
 ### dotenv ###
-.env
+*.env
 !/services/**/.env.example
 
 # End of https://www.toptal.com/developers/gitignore/api/goland,go

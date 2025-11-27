@@ -10,5 +10,7 @@ CREATE TABLE oauth_identities (
       UNIQUE(provider, external_id)
 );
 
+CREATE INDEX idx_oauth_user_id ON oauth_identities(user_id);
+
 -- +goose Down
 DROP TABLE oauth_identities;

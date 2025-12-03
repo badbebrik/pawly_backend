@@ -23,23 +23,34 @@ type Config struct {
 	JWTSecret           string
 	AccessTokenTTLMin   int
 	RefreshTokenTTLDays int
+
+	RabbitHost               string
+	RabbitPort               string
+	RabbitUser               string
+	RabbitPassword           string
+	RabbitNotificationsQueue string
 }
 
 func Load() *Config {
 	cfg := &Config{
-		AppPort:             getEnv("APP_PORT", "8000"),
-		PostgresUser:        getEnv("POSTGRES_USER", "postgres"),
-		PostgresPassword:    getEnv("POSTGRES_PASSWORD", "password"),
-		PostgresDB:          getEnv("POSTGRES_DB", "auth_db"),
-		PostgresHost:        getEnv("POSTGRES_HOST", "localhost"),
-		PostgresPort:        getEnv("POSTGRES_PORT", "5432"),
-		RedisHost:           getEnv("REDIS_ADDR", ""),
-		RedisPort:           getEnv("REDIS_PORT", ""),
-		RedisPassword:       getEnv("REDIS_PASSWORD", ""),
-		RedisDB:             getEnvInt("REDIS_DB", 0),
-		JWTSecret:           getEnv("JWT_SECRET", "DEFAULT"),
-		AccessTokenTTLMin:   getEnvInt("ACCESS_TOKEN_TTL_MINITUES", 15),
-		RefreshTokenTTLDays: getEnvInt("REFRESH_TOKEN_TTL_DAYS", 30),
+		AppPort:                  getEnv("APP_PORT", "8000"),
+		PostgresUser:             getEnv("POSTGRES_USER", "postgres"),
+		PostgresPassword:         getEnv("POSTGRES_PASSWORD", "password"),
+		PostgresDB:               getEnv("POSTGRES_DB", "auth_db"),
+		PostgresHost:             getEnv("POSTGRES_HOST", "localhost"),
+		PostgresPort:             getEnv("POSTGRES_PORT", "5432"),
+		RedisHost:                getEnv("REDIS_HOST", ""),
+		RedisPort:                getEnv("REDIS_PORT", ""),
+		RedisPassword:            getEnv("REDIS_PASSWORD", ""),
+		RedisDB:                  getEnvInt("REDIS_DB", 0),
+		JWTSecret:                getEnv("JWT_SECRET", "DEFAULT"),
+		AccessTokenTTLMin:        getEnvInt("ACCESS_TOKEN_TTL_MINITUES", 15),
+		RefreshTokenTTLDays:      getEnvInt("REFRESH_TOKEN_TTL_DAYS", 30),
+		RabbitHost:               getEnv("RABBITMQ_HOST", "localhost"),
+		RabbitPort:               getEnv("RABBITMQ_PORT", "5672"),
+		RabbitUser:               getEnv("RABBITMQ_USER", ""),
+		RabbitPassword:           getEnv("RABBITMQ_PASSWORD", ""),
+		RabbitNotificationsQueue: getEnv("RABBITMQ_NOTIFICATIONS_QUEUE", ""),
 	}
 
 	return cfg

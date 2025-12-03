@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type OAuthIdentityRepository interface {
+type Repository interface {
 	Create(ctx context.Context, identity *model.OAuthIdentity) error
 	GetByProviderAndExternalID(ctx context.Context, provider, externalID string) (*model.OAuthIdentity, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]model.OAuthIdentity, error)

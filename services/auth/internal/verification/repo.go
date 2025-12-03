@@ -10,7 +10,7 @@ import (
 )
 
 type Repository interface {
-	RequestCode(ctx context.Context, email, purpose string) (ttlSeconds int, resendInSeconds int, err error)
+	RequestCode(ctx context.Context, email, purpose string) (code string, ttlSeconds int, resendInSeconds int, err error)
 	VerifyCode(ctx context.Context, email, purpose, code string) error
 }
 
@@ -32,7 +32,7 @@ func key(purpose, email string) string {
 	return fmt.Sprintf("verification:%s:%s", purpose, email)
 }
 
-func (r *RedisRepository) RequestCode(ctx context.Context, email, purpose string) (int, int, error) {
+func (r *RedisRepository) RequestCode(ctx context.Context, email, purpose string) (string, int, int, error) {
 	k := key(purpose, email)
 
 	now := time.Now()
@@ -42,11 +42,11 @@ func (r *RedisRepository) RequestCode(ctx context.Context, email, purpose string
 		var rec CodeRecord
 		if err := json.Unmarshal(data, &rec); err == nil {
 			if now.Before(rec.ResendAvailableAt) {
-				return int(CodeTTL.Seconds()), int(rec.ResendAvailableAt.Sub(now).Seconds()), ErrResendTooSoon
+				return "", int(CodeTTL.Seconds()), int(rec.ResendAvailableAt.Sub(now).Seconds()), ErrResendTooSoon
 			}
 		}
 	} else if !errors.Is(err, redis.Nil) {
-		return 0, 0, err
+		return "", 0, 0, err
 	}
 
 	code := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
@@ -61,14 +61,14 @@ func (r *RedisRepository) RequestCode(ctx context.Context, email, purpose string
 
 	jsonData, err := json.Marshal(rec)
 	if err != nil {
-		return 0, 0, err
+		return "", 0, 0, err
 	}
 
 	if err := r.rdb.Set(ctx, k, jsonData, CodeTTL).Err(); err != nil {
-		return 0, 0, err
+		return "", 0, 0, err
 	}
 
-	return int(CodeTTL.Seconds()), int(ResendCooldown.Seconds()), nil
+	return code, int(CodeTTL.Seconds()), int(ResendCooldown.Seconds()), nil
 }
 
 func (r *RedisRepository) VerifyCode(ctx context.Context, email, purpose, inputCode string) error {

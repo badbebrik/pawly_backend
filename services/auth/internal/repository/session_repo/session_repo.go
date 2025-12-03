@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-type SessionRepository interface {
+type Repository interface {
 	Create(ctx context.Context, session *model.Session) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Session, error)
 	GetActiveByID(ctx context.Context, id uuid.UUID) (*model.Session, error)

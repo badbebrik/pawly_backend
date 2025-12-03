@@ -21,6 +21,8 @@ type Repository interface {
 	UpdateEmail(ctx context.Context, id uuid.UUID, newEmail string) error
 	SetActive(ctx context.Context, id uuid.UUID, active bool) error
 	UpdateLastLoginAt(ctx context.Context, id uuid.UUID, t time.Time) error
+	SoftDelete(ctx context.Context, id uuid.UUID) error
+	CreateUserWithProfile(ctx context.Context, user *model.User, createProfile func() error) error
 }
 type UserRepo struct {
 	db *pgxpool.Pool
@@ -213,4 +215,54 @@ func isUniqueViolation(err error) bool {
 		return pgErr.Code == pgerrcode.UniqueViolation
 	}
 	return false
+}
+
+func (ur *UserRepo) CreateUserWithProfile(ctx context.Context, user *model.User, createProfile func() error) error {
+	tx, err := ur.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+
+	txRepo := &UserRepoTx{tx: tx}
+
+	if err := txRepo.Create(ctx, user); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+
+	if err := createProfile(); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type UserRepoTx struct {
+	tx pgx.Tx
+}
+
+func (r *UserRepoTx) Create(ctx context.Context, user *model.User) error {
+	query := `
+        INSERT INTO users (id, email, password_hash, is_verified, is_active, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+    `
+	_, err := r.tx.Exec(ctx, query,
+		user.ID,
+		user.Email,
+		user.PasswordHash,
+		user.IsVerified,
+		user.IsActive)
+
+	if err != nil {
+		if isUniqueViolation(err) {
+			return ErrEmailTaken
+		}
+		return err
+	}
+	return nil
 }

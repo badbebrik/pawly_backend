@@ -12,6 +12,12 @@ type JWTService struct {
 	refreshTTL time.Duration
 }
 
+type TokenManager interface {
+	GenerateAccessToken(userID, sessionID string) (string, error)
+	GenerateRefreshToken(userID, sessionID string) (string, error)
+	ValidateToken(tokenStr string) (*Payload, error)
+}
+
 func NewJWTService(cnf config.Config) *JWTService {
 	svc := &JWTService{
 		secretKey:  []byte(cnf.JWTSecret),

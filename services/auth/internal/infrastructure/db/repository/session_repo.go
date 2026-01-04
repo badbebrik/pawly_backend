@@ -1,7 +1,8 @@
-package session_repo
+package pgrepo
 
 import (
-	"auth/internal/model"
+	"auth/internal/domain/model"
+	"auth/internal/repository"
 	"context"
 	"errors"
 	"github.com/google/uuid"
@@ -9,15 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
 )
-
-type Repository interface {
-	Create(ctx context.Context, session *model.Session) error
-	GetByID(ctx context.Context, id uuid.UUID) (*model.Session, error)
-	GetActiveByID(ctx context.Context, id uuid.UUID) (*model.Session, error)
-	UpdateRefreshToken(ctx context.Context, id uuid.UUID, newHash string, newExpiresAt time.Time) error
-	Revoke(ctx context.Context, id uuid.UUID) error
-	RevokeAll(ctx context.Context, userID uuid.UUID) error
-}
 
 type SessionRepo struct {
 	db *pgxpool.Pool
@@ -30,7 +22,7 @@ func NewSessionRepo(db *pgxpool.Pool) *SessionRepo {
 func (r *SessionRepo) Create(ctx context.Context, s *model.Session) error {
 	query := `
         INSERT INTO sessions (id, user_id, refresh_token_hash, expires_at, is_revoked, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, FALSE, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, FALSE, NOW(), NOW())
     `
 	_, err := r.db.Exec(ctx, query,
 		s.ID,
@@ -65,29 +57,12 @@ func (r *SessionRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Session
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrSessionNotFound
+			return nil, repository.ErrNotFound
 		}
 		return nil, err
 	}
 
 	return &s, nil
-}
-
-func (r *SessionRepo) GetActiveByID(ctx context.Context, id uuid.UUID) (*model.Session, error) {
-	s, err := r.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.IsRevoked {
-		return nil, ErrSessionNotFound
-	}
-
-	if time.Now().After(s.ExpiresAt) {
-		return nil, ErrSessionExpired
-	}
-
-	return s, nil
 }
 
 func (r *SessionRepo) UpdateRefreshToken(ctx context.Context, id uuid.UUID, newHash string, newExpires time.Time) error {
@@ -102,7 +77,7 @@ func (r *SessionRepo) UpdateRefreshToken(ctx context.Context, id uuid.UUID, newH
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return ErrSessionNotFound
+		return repository.ErrNotFound
 	}
 
 	return nil
@@ -120,7 +95,7 @@ func (r *SessionRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return ErrSessionNotFound
+		return repository.ErrNotFound
 	}
 
 	return nil

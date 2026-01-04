@@ -1,21 +1,14 @@
-package device_repo
+package pgrepo
 
 import (
-	"auth/internal/model"
+	"auth/internal/domain/model"
+	"auth/internal/repository"
 	"context"
 	"errors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type Repository interface {
-	Upsert(ctx context.Context, d *model.Device) error
-	GetByUserAndDevice(ctx context.Context, userID uuid.UUID, deviceID string) (*model.Device, error)
-	SetActive(ctx context.Context, userID uuid.UUID, deviceID string, active bool) error
-	DeactivateByFCMToken(ctx context.Context, token string) error
-	DeactivateAllByUserID(ctx context.Context, userID uuid.UUID) error
-}
 
 type UserDeviceRepo struct {
 	db *pgxpool.Pool
@@ -49,7 +42,7 @@ func (r *UserDeviceRepo) GetByUserAndDevice(ctx context.Context, userID uuid.UUI
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrDeviceNotFound
+			return nil, repository.ErrNotFound
 		}
 		return nil, err
 	}
@@ -68,7 +61,7 @@ func (r *UserDeviceRepo) Upsert(ctx context.Context, d *model.Device) error {
 		).Scan(&existingUserID)
 
 		if err == nil && existingUserID != d.UserID {
-			return ErrTokenInUse
+			return repository.ErrConflict
 		}
 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -78,7 +71,7 @@ func (r *UserDeviceRepo) Upsert(ctx context.Context, d *model.Device) error {
 
 	_, err := r.GetByUserAndDevice(ctx, d.UserID, d.DeviceID)
 
-	if errors.Is(err, ErrDeviceNotFound) {
+	if errors.Is(err, repository.ErrNotFound) {
 		query := `
             INSERT INTO devices 
             (id, user_id, device_id, platform, app_version, locale, fcm_token, is_active, created_at, updated_at)
@@ -139,7 +132,7 @@ func (r *UserDeviceRepo) SetActive(ctx context.Context, userID uuid.UUID, device
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return ErrDeviceNotFound
+		return repository.ErrNotFound
 	}
 	return nil
 }

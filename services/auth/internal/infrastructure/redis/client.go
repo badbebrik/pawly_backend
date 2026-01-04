@@ -1,4 +1,4 @@
-package db
+package redisdb
 
 import (
 	"auth/internal/config"
@@ -33,6 +33,10 @@ func NewRedis(cfg *config.Config) (*Redis, error) {
 	log.Info().Str("host", cfg.RedisHost).Str("db", strconv.Itoa(cfg.RedisDB)).Msg("Connected to redis")
 
 	return &Redis{client: rdb}, nil
+}
+
+func (r *Redis) Client() *redis.Client {
+	return r.client
 }
 
 func (r *Redis) Close() error {

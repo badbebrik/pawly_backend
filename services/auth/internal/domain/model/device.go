@@ -18,8 +18,8 @@ type Device struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-var (
-	ios     byte = 1
-	android byte = 2
-	web     byte = 3
+const (
+	PlatformIOS     byte = 1
+	PlatformAndroid byte = 2
+	PlatformWeb     byte = 3
 )

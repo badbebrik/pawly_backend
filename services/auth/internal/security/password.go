@@ -1,9 +1,7 @@
-package util
+package security
 
 import (
 	"golang.org/x/crypto/bcrypt"
-	"regexp"
-	"strings"
 )
 
 func HashPassword(pwd string) (string, error) {
@@ -12,12 +10,6 @@ func HashPassword(pwd string) (string, error) {
 		return "", err
 	}
 	return string(hash), nil
-}
-
-var emailRegex = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
-
-func ValidateEmail(email string) bool {
-	return emailRegex.MatchString(email)
 }
 
 func ValidatePassword(p string) bool {
@@ -39,6 +31,6 @@ func ValidatePassword(p string) bool {
 	return hasLetter && hasDigit
 }
 
-func NormalizeEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
+func ComparePassword(hash, pwd string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pwd))
 }

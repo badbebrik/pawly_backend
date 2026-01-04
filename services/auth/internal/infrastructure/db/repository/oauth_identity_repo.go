@@ -1,20 +1,14 @@
-package oauth_identity_repo
+package pgrepo
 
 import (
-	"auth/internal/model"
+	"auth/internal/domain/model"
+	"auth/internal/repository"
 	"context"
 	"errors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type Repository interface {
-	Create(ctx context.Context, identity *model.OAuthIdentity) error
-	GetByProviderAndExternalID(ctx context.Context, provider, externalID string) (*model.OAuthIdentity, error)
-	GetByUserID(ctx context.Context, userID uuid.UUID) ([]model.OAuthIdentity, error)
-	GetByEmail(ctx context.Context, provider, email string) (*model.OAuthIdentity, error)
-}
 
 type OAuthIdentityRepo struct {
 	db *pgxpool.Pool
@@ -63,7 +57,7 @@ func (r *OAuthIdentityRepo) GetByProviderAndExternalID(ctx context.Context, prov
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrIdentityNotFound
+		return nil, repository.ErrNotFound
 	}
 
 	return &oi, err
@@ -127,7 +121,7 @@ func (r *OAuthIdentityRepo) GetByEmail(ctx context.Context, provider, email stri
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrIdentityNotFound
+		return nil, repository.ErrNotFound
 	}
 
 	return &oi, err

@@ -1,4 +1,4 @@
-package db
+package redisdb
 
 import (
 	"auth/internal/config"
@@ -15,7 +15,7 @@ type Redis struct {
 }
 
 func NewRedis(cfg *config.Config) (*Redis, error) {
-	addr := fmt.Sprintf("%s:%s", cfg.PostgresHost, cfg.RedisPort)
+	addr := fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
@@ -33,6 +33,10 @@ func NewRedis(cfg *config.Config) (*Redis, error) {
 	log.Info().Str("host", cfg.RedisHost).Str("db", strconv.Itoa(cfg.RedisDB)).Msg("Connected to redis")
 
 	return &Redis{client: rdb}, nil
+}
+
+func (r *Redis) Client() *redis.Client {
+	return r.client
 }
 
 func (r *Redis) Close() error {

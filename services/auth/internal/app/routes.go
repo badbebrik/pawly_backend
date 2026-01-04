@@ -1,6 +1,7 @@
 package app
 
 import (
+	"auth/internal/transport/http/handlers"
 	"github.com/go-chi/chi/v5"
 	"net/http"
 )
@@ -14,6 +15,10 @@ func (a *App) setupRoutes() http.Handler {
 			return
 		}
 	})
+
+	authHandlers := handlers.NewAuthHandlers(a.AuthSvc)
+
+	r.Post("/auth/register/email", authHandlers.RegisterEmail)
 
 	return r
 }

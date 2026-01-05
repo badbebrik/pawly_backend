@@ -1,8 +1,8 @@
 package main
 
 import (
-	"email/config"
 	"email/internal/app"
+	"email/internal/config"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

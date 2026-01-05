@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"email/config"
+	"email/internal/config"
 	"email/internal/queue"
 	"email/internal/service"
 	"email/internal/smtp"

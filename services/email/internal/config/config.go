@@ -3,95 +3,74 @@ package config
 import (
 	"os"
 	"strconv"
-	"time"
 )
-
-type SMTPConfig struct {
-	Host           string
-	Port           int
-	Username       string
-	Password       string
-	From           string
-	UseTLS         bool
-	UseStartTLS    bool
-	SkipTLSVerify  bool
-	ConnectTimeout time.Duration
-	SendTimeout    time.Duration
-}
-
-type RabbitConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Queue    string
-}
 
 type Config struct {
 	AppPort string
 
-	Rabbit RabbitConfig
+	RabbitHost           string
+	RabbitPort           string
+	RabbitUser           string
+	RabbitPassword       string
+	RabbitEmailJobsQueue string
+
+	TemplateDir   string
+	DefaultLocale string
 
 	SMTPPrimary  SMTPConfig
 	SMTPFallback SMTPConfig
+}
 
-	RequeueOnFail bool
-	TemplateDir   string
+type SMTPConfig struct {
+	Host          string
+	Port          int
+	Username      string
+	Password      string
+	From          string
+	UseStartTLS   bool
+	SkipTLSVerify bool
 }
 
 func Load() *Config {
 	return &Config{
-		AppPort: getEnv("APP_PORT", ""),
-
-		Rabbit: RabbitConfig{
-			Host:     getEnv("RABBITMQ_HOST", ""),
-			Port:     getEnv("RABBITMQ_PORT", ""),
-			User:     getEnv("RABBITMQ_USER", ""),
-			Password: getEnv("RABBITMQ_PASSWORD", ""),
-			Queue:    getEnv("RABBITMQ_EMAIL_JOBS_QUEUE", ""),
-		},
-
+		AppPort:              getEnv("APP_PORT", ""),
+		RabbitHost:           getEnv("RABBITMQ_HOST", ""),
+		RabbitPort:           getEnv("RABBITMQ_PORT", ""),
+		RabbitUser:           getEnv("RABBITMQ_USER", ""),
+		RabbitPassword:       getEnv("RABBITMQ_PASSWORD", ""),
+		RabbitEmailJobsQueue: getEnv("RABBITMQ_EMAIL_JOBS_QUEUE", ""),
+		TemplateDir:          getEnv("TEMPLATE_DIR", ""),
+		DefaultLocale:        getEnv("DEFAULT_LOCALE", ""),
 		SMTPPrimary: SMTPConfig{
-			Host:           getEnv("SMTP_PRIMARY_HOST", ""),
-			Port:           getEnvInt("SMTP_PRIMARY_PORT", 587),
-			Username:       getEnv("SMTP_PRIMARY_USERNAME", ""),
-			Password:       getEnv("SMTP_PRIMARY_PASSWORD", ""),
-			From:           getEnv("SMTP_PRIMARY_FROM", ""),
-			UseTLS:         getEnvBool("SMTP_PRIMARY_USE_TLS", false),
-			UseStartTLS:    getEnvBool("SMTP_PRIMARY_USE_STARTTLS", true),
-			SkipTLSVerify:  getEnvBool("SMTP_PRIMARY_SKIP_TLS_VERIFY", false),
-			ConnectTimeout: getEnvDuration("SMTP_PRIMARY_CONNECT_TIMEOUT", 5*time.Second),
-			SendTimeout:    getEnvDuration("SMTP_PRIMARY_SEND_TIMEOUT", 10*time.Second),
+			Host:          getEnv("SMTP_PRIMARY_HOST", ""),
+			Port:          getEnvInt("SMTP_PRIMARY_PORT", 587),
+			Username:      getEnv("SMTP_PRIMARY_USERNAME", ""),
+			Password:      getEnv("SMTP_PRIMARY_PASSWORD", ""),
+			From:          getEnv("SMTP_PRIMARY_FROM", ""),
+			UseStartTLS:   getEnvBool("SMTP_PRIMARY_USE_STARTTLS", true),
+			SkipTLSVerify: getEnvBool("SMTP_PRIMARY_SKIP_TLS_VERIFY", false),
 		},
-
 		SMTPFallback: SMTPConfig{
-			Host:           getEnv("SMTP_FALLBACK_HOST", ""),
-			Port:           getEnvInt("SMTP_FALLBACK_PORT", 587),
-			Username:       getEnv("SMTP_FALLBACK_USERNAME", ""),
-			Password:       getEnv("SMTP_FALLBACK_PASSWORD", ""),
-			From:           getEnv("SMTP_FALLBACK_FROM", ""),
-			UseTLS:         getEnvBool("SMTP_FALLBACK_USE_TLS", false),
-			UseStartTLS:    getEnvBool("SMTP_FALLBACK_USE_STARTTLS", true),
-			SkipTLSVerify:  getEnvBool("SMTP_FALLBACK_SKIP_TLS_VERIFY", false),
-			ConnectTimeout: getEnvDuration("SMTP_FALLBACK_CONNECT_TIMEOUT", 5*time.Second),
-			SendTimeout:    getEnvDuration("SMTP_FALLBACK_SEND_TIMEOUT", 10*time.Second),
+			Host:          getEnv("SMTP_FALLBACK_HOST", ""),
+			Port:          getEnvInt("SMTP_FALLBACK_PORT", 0),
+			Username:      getEnv("SMTP_FALLBACK_USERNAME", ""),
+			Password:      getEnv("SMTP_FALLBACK_PASSWORD", ""),
+			From:          getEnv("SMTP_FALLBACK_FROM", ""),
+			UseStartTLS:   getEnvBool("SMTP_FALLBACK_USE_STARTTLS", false),
+			SkipTLSVerify: getEnvBool("SMTP_FALLBACK_SKIP_TLS_VERIFY", false),
 		},
-
-		RequeueOnFail: getEnvBool("REQUEUE_ON_FAIL", true),
-		TemplateDir:   getEnv("TEMPLATE_DIR", "./templates"),
 	}
 }
 
 func getEnv(key, fallback string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
 	}
-	return v
+	return fallback
 }
 
 func getEnvInt(key string, fallback int) int {
-	v := os.Getenv(key)
+	v := getEnv(key, "")
 	if v == "" {
 		return fallback
 	}
@@ -103,7 +82,7 @@ func getEnvInt(key string, fallback int) int {
 }
 
 func getEnvBool(key string, fallback bool) bool {
-	v := os.Getenv(key)
+	v := getEnv(key, "")
 	if v == "" {
 		return fallback
 	}
@@ -112,16 +91,4 @@ func getEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
-}
-
-func getEnvDuration(key string, fallback time.Duration) time.Duration {
-	v := os.Getenv(key)
-	if v == "" {
-		return fallback
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		return fallback
-	}
-	return d
 }

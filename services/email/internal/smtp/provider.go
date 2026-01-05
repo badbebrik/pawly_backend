@@ -64,14 +64,20 @@ func (p *SMTPProvider) Send(ctx context.Context, msg Message) error {
 
 	addr := fmt.Sprintf("%s:%d", p.cfg.Host, p.cfg.Port)
 
-	dialer := &net.Dialer{Timeout: p.cfg.ConnectTimeout}
+	dialer := &net.Dialer{}
+	if p.cfg.ConnectTimeout > 0 {
+		dialer.Timeout = p.cfg.ConnectTimeout
+	}
+
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("%s: dial %s: %w", p.name, addr, err)
 	}
 	defer conn.Close()
 
-	_ = conn.SetDeadline(time.Now().Add(p.cfg.SendTimeout))
+	if p.cfg.SendTimeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(p.cfg.SendTimeout))
+	}
 
 	c, err := netsmtp.NewClient(conn, p.cfg.Host)
 	if err != nil {
@@ -79,23 +85,11 @@ func (p *SMTPProvider) Send(ctx context.Context, msg Message) error {
 	}
 	defer c.Quit()
 
-	if p.cfg.UseTLS {
-		tlsCfg := &tls.Config{
-			ServerName:         p.cfg.Host,
-			InsecureSkipVerify: p.cfg.SkipTLSVerify,
-		}
-		tlsConn := tls.Client(conn, tlsCfg)
-		if err := tlsConn.Handshake(); err != nil {
-			return fmt.Errorf("%s: tls handshake: %w", p.name, err)
-		}
-		c, err = netsmtp.NewClient(tlsConn, p.cfg.Host)
-		if err != nil {
-			return fmt.Errorf("%s: new client tls: %w", p.name, err)
-		}
-		defer c.Quit()
+	if err := c.Hello("localhost"); err != nil {
+		return fmt.Errorf("%s: hello: %w", p.name, err)
 	}
 
-	if !p.cfg.UseTLS && p.cfg.UseStartTLS {
+	if p.cfg.UseStartTLS {
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			tlsCfg := &tls.Config{
 				ServerName:         p.cfg.Host,
@@ -104,15 +98,17 @@ func (p *SMTPProvider) Send(ctx context.Context, msg Message) error {
 			if err := c.StartTLS(tlsCfg); err != nil {
 				return fmt.Errorf("%s: starttls: %w", p.name, err)
 			}
+
+			if err := c.Hello("localhost"); err != nil {
+				return fmt.Errorf("%s: hello after starttls: %w", p.name, err)
+			}
 		}
 	}
 
 	if p.cfg.Username != "" {
 		auth := netsmtp.PlainAuth("", p.cfg.Username, p.cfg.Password, p.cfg.Host)
-		if ok, _ := c.Extension("AUTH"); ok {
-			if err := c.Auth(auth); err != nil {
-				return fmt.Errorf("%s: auth: %w", p.name, err)
-			}
+		if err := c.Auth(auth); err != nil {
+			return fmt.Errorf("%s: auth: %w", p.name, err)
 		}
 	}
 

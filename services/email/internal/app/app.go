@@ -34,10 +34,10 @@ type App struct {
 func New(cfg *config.Config) (*App, error) {
 	conn, err := amqp091.Dial(fmt.Sprintf(
 		"amqp://%s:%s@%s:%s/",
-		cfg.Rabbit.User,
-		cfg.Rabbit.Password,
-		cfg.Rabbit.Host,
-		cfg.Rabbit.Port,
+		cfg.RabbitUser,
+		cfg.RabbitPassword,
+		cfg.RabbitHost,
+		cfg.RabbitPort,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("rabbit connect: %w", err)
@@ -49,10 +49,10 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("rabbit channel: %w", err)
 	}
 
-	if _, err := ch.QueueDeclare(cfg.Rabbit.Queue, true, false, false, false, nil); err != nil {
+	if _, err := ch.QueueDeclare(cfg.RabbitEmailJobsQueue, true, false, false, false, nil); err != nil {
 		_ = ch.Close()
 		_ = conn.Close()
-		return nil, fmt.Errorf("queue declare %s: %w", cfg.Rabbit.Queue, err)
+		return nil, fmt.Errorf("queue declare %s: %w", cfg.RabbitEmailJobsQueue, err)
 	}
 
 	renderer := template.NewRenderer(cfg.TemplateDir)
@@ -87,7 +87,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	dispatcher := service.NewDispatcher(renderer, primary, fallback, cfg.RequeueOnFail)
-	consumer := queue.NewConsumer(ch, cfg.Rabbit.Queue, dispatcher)
+	consumer := queue.NewConsumer(ch, cfg.RabbitEmailJobsQueue, dispatcher)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -126,7 +126,7 @@ func (a *App) Run() error {
 	if err := a.consumer.Start(a.ctx); err != nil {
 		return err
 	}
-	log.Info().Str("queue", a.config.Rabbit.Queue).Msg("started email.jobs consumer")
+	log.Info().Str("queue", a.config.RabbitEmailJobsQueue).Msg("started email.jobs consumer")
 
 	r := a.setupRoutes()
 	a.httpSrv = &http.Server{

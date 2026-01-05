@@ -10,20 +10,30 @@ type Config struct {
 	RabbitUser     string
 	RabbitPassword string
 
-	EventsQueue    string
-	EmailJobsQueue string
+	RabbitEventsQueue    string
+	RabbitEmailJobsQueue string
+	RabbitPushJobsQueue  string
 }
 
 func Load() *Config {
 	return &Config{
-		AppPort: os.Getenv("APP_PORT"),
+		AppPort: getEnv("APP_PORT", "8081"),
 
-		RabbitHost:     os.Getenv("RABBITMQ_HOST"),
-		RabbitPort:     os.Getenv("RABBITMQ_PORT"),
-		RabbitUser:     os.Getenv("RABBITMQ_USER"),
-		RabbitPassword: os.Getenv("RABBITMQ_PASSWORD"),
+		RabbitHost:     getEnv("RABBITMQ_HOST", ""),
+		RabbitPort:     getEnv("RABBITMQ_PORT", ""),
+		RabbitUser:     getEnv("RABBITMQ_USER", ""),
+		RabbitPassword: getEnv("RABBITMQ_PASSWORD", ""),
 
-		EventsQueue:    os.Getenv("RABBITMQ_EVENTS_QUEUE"),
-		EmailJobsQueue: os.Getenv("RABBITMQ_EMAIL_JOBS_QUEUE"),
+		RabbitEventsQueue:    getEnv("RABBITMQ_EVENTS_QUEUE", ""),
+		RabbitEmailJobsQueue: getEnv("RABBITMQ_EMAIL_JOBS_QUEUE", ""),
+		RabbitPushJobsQueue:  getEnv("RABBITMQ_PUSH_JOBS_QUEUE", ""),
 	}
+}
+
+func getEnv(key, fallback string) string {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	return val
 }

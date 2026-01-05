@@ -22,13 +22,13 @@ import (
 )
 
 type App struct {
-	Config                *config.Config
-	PG                    *db.Postgres
-	Redis                 *redisdb.Redis
-	NotificationPublisher rabbit.Publisher
-	AuthSvc               *authsvc.Service
-	RabbitConn            *amqp091.Connection
-	RabbitCh              *amqp091.Channel
+	Config  *config.Config
+	AuthSvc *authsvc.Service
+
+	pg         *db.Postgres
+	redis      *redisdb.Redis
+	rabbitConn *amqp091.Connection
+	rabbitCh   *amqp091.Channel
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -91,35 +91,34 @@ func New(cfg *config.Config) (*App, error) {
 	)
 
 	return &App{
-		Config:                cfg,
-		PG:                    pg,
-		Redis:                 redis,
-		NotificationPublisher: publisher,
-		AuthSvc:               authSvc,
-		RabbitConn:            conn,
-		RabbitCh:              ch,
+		Config:     cfg,
+		pg:         pg,
+		redis:      redis,
+		AuthSvc:    authSvc,
+		rabbitConn: conn,
+		rabbitCh:   ch,
 	}, nil
 }
 
 func (a *App) Close() {
 	log.Info().Msg("closing App resources...")
 
-	if a.Redis != nil {
-		err := a.Redis.Close()
+	if a.redis != nil {
+		err := a.redis.Close()
 		if err != nil {
 			return
 		}
 	}
 
-	if a.PG != nil {
-		a.PG.Close()
+	if a.pg != nil {
+		a.pg.Close()
 	}
 
-	if a.RabbitCh != nil {
-		_ = a.RabbitCh.Close()
+	if a.rabbitCh != nil {
+		_ = a.rabbitCh.Close()
 	}
-	if a.RabbitConn != nil {
-		_ = a.RabbitConn.Close()
+	if a.rabbitConn != nil {
+		_ = a.rabbitConn.Close()
 	}
 }
 

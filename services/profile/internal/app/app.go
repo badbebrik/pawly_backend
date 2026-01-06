@@ -2,15 +2,19 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"os"
+	"os/signal"
 	"profile/internal/config"
 	"profile/internal/infrastructure/db"
 	pgrepo "profile/internal/infrastructure/db/repository"
 	"profile/internal/queue"
 	"profile/internal/service"
+	"syscall"
 	"time"
 )
 
@@ -99,4 +103,36 @@ func (a *App) Close() {
 	if a.pg != nil {
 		a.pg.Close()
 	}
+}
+
+func (a *App) Run() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := a.userEventsConsumer.Start(ctx); err != nil {
+		return err
+	}
+	log.Info().Str("queue", a.cfg.RabbitUserEventsQueue).Msg("started user events consumer")
+
+	go func() {
+		log.Info().Str("port", a.cfg.AppPort).Msg("starting HTTP server")
+		if err := a.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal().Err(err).Msg("http server crash")
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+
+	log.Info().Msg("shutting down Profile service...")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := a.httpSrv.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
+
+	return nil
 }

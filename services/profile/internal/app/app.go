@@ -82,6 +82,12 @@ func New(cfg *config.Config) (*App, error) {
 		userEventsConsumer: userEventsConsumer,
 	}
 
+	r := app.setupRoutes(profileSvc)
+	app.httpSrv = &http.Server{
+		Addr:    ":" + cfg.AppPort,
+		Handler: r,
+	}
+
 	return app, nil
 }
 

@@ -85,10 +85,6 @@ func (p *SMTPProvider) Send(ctx context.Context, msg Message) error {
 		_ = conn.SetDeadline(time.Now().Add(p.cfg.SendTimeout))
 	}
 
-	if err := c.Hello("localhost"); err != nil {
-		return fmt.Errorf("%s: hello: %w", p.name, err)
-	}
-
 	if p.cfg.UseStartTLS {
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			tlsCfg := &tls.Config{
@@ -97,10 +93,6 @@ func (p *SMTPProvider) Send(ctx context.Context, msg Message) error {
 			}
 			if err := c.StartTLS(tlsCfg); err != nil {
 				return fmt.Errorf("%s: starttls: %w", p.name, err)
-			}
-
-			if err := c.Hello("localhost"); err != nil {
-				return fmt.Errorf("%s: hello after starttls: %w", p.name, err)
 			}
 		}
 	}

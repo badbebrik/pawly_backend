@@ -1,7 +1,147 @@
 <!doctype html>
-<html>
-    <body>
-    <p>Your verification code: <b>{{.code}}</b></p>
-    <p>It is valid for {{.ttl_seconds}} seconds.</p>
-    </body>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pawly — email verification</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5fb;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            color: #222222;
+        }
+        .wrapper {
+            width: 100%;
+            padding: 24px 0;
+        }
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(46, 51, 90, 0.10);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #7c5cff, #ff7ac4);
+            padding: 20px 24px;
+            color: #ffffff;
+            text-align: center;
+        }
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+        .logo span {
+            font-size: 24px;
+        }
+        .subtitle {
+            margin-top: 6px;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 24px 24px 8px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .greeting {
+            margin-bottom: 12px;
+        }
+        .code-box {
+            margin: 20px 0 16px;
+            padding: 16px 18px;
+            background-color: #f3f0ff;
+            border-radius: 12px;
+            border: 1px dashed #c4b8ff;
+            text-align: center;
+        }
+        .code-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #6a5acd;
+            margin-bottom: 4px;
+        }
+        .code-value {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 0.28em;
+        }
+        .info {
+            font-size: 13px;
+            color: #555555;
+        }
+        .info strong {
+            color: #222222;
+        }
+        .paw-note span {
+            font-size: 14px;
+        }
+        .footer {
+            padding: 16px 24px 20px;
+            font-size: 11px;
+            color: #9a9a9a;
+            text-align: center;
+            border-top: 1px solid #f0f0f5;
+        }
+        .muted {
+            color: #b0b0b0;
+        }
+        @media (max-width: 520px) {
+            .container {
+                margin: 0 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <table class="container" role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+            <td class="header">
+                <div class="logo">
+                    <span>🐾</span> Pawly
+                </div>
+                <div class="subtitle">
+                    Profile confirmation
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td class="content">
+                <div class="greeting">
+                    Hi there! 👋
+                </div>
+                <div>
+                    To verify your email address in <strong>Pawly</strong>,
+                    please enter this code in the app:
+                </div>
+
+                <div class="code-box">
+                    <div class="code-label">Verification code</div>
+                    <div class="code-value">{{.code}}</div>
+                </div>
+
+                <div class="info">
+                    This code is valid for <strong>{{.ttl_seconds}} seconds</strong>.
+                    If you didn’t request this email, you can safely ignore it.
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td class="footer">
+                This email was sent automatically.
+                If you received it by mistake, no action is required.
+                <div class="muted">
+                    © Pawly
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
+</body>
 </html>
+

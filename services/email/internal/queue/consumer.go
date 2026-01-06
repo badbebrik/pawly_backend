@@ -22,6 +22,10 @@ func NewConsumer(ch *amqp091.Channel, queueName string, handler Handler) *Consum
 }
 
 func (c *Consumer) Start(ctx context.Context) error {
+	if err := c.ch.Qos(10, 0, false); err != nil {
+		return fmt.Errorf("qos: %w", err)
+	}
+
 	deliveries, err := c.ch.Consume(
 		c.queueName,
 		"",
@@ -35,19 +39,22 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("consume %s: %w", c.queueName, err)
 	}
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case msg, ok := <-deliveries:
-				if !ok {
+	workerCount := 5
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
 					return
+				case msg, ok := <-deliveries:
+					if !ok {
+						return
+					}
+					c.handler.Handle(ctx, msg)
 				}
-				c.handler.Handle(ctx, msg)
 			}
-		}
-	}()
+		}()
+	}
 
 	return nil
 }

@@ -75,15 +75,15 @@ func (p *SMTPProvider) Send(ctx context.Context, msg Message) error {
 	}
 	defer conn.Close()
 
-	if p.cfg.SendTimeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(p.cfg.SendTimeout))
-	}
-
 	c, err := netsmtp.NewClient(conn, p.cfg.Host)
 	if err != nil {
 		return fmt.Errorf("%s: new client: %w", p.name, err)
 	}
 	defer c.Quit()
+
+	if p.cfg.SendTimeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(p.cfg.SendTimeout))
+	}
 
 	if err := c.Hello("localhost"); err != nil {
 		return fmt.Errorf("%s: hello: %w", p.name, err)

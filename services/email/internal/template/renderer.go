@@ -28,6 +28,7 @@ func (r *Renderer) Render(locale, tplName string, data map[string]any) (string, 
 	}
 
 	var buf bytes.Buffer
+
 	if err := tpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("execute template %s: %w", path, err)
 	}

@@ -15,10 +15,10 @@ func (a *App) setupRoutes() http.Handler {
 			return
 		}
 	})
-
 	authHandlers := handlers.NewAuthHandlers(a.AuthSvc)
 
 	r.Post("/auth/register/email", authHandlers.RegisterEmail)
+	r.Post("/auth/verify/email", authHandlers.VerifyEmail)
 
 	return r
 }

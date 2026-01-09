@@ -25,7 +25,7 @@ type VerifyEmailOutput struct {
 	ExpiresIn    int
 }
 
-func (s *Service) VerifyEmail(ctx context.Context, in *VerifyEmailInput) (*VerifyEmailOutput, error) {
+func (s *Service) VerifyEmail(ctx context.Context, in VerifyEmailInput) (*VerifyEmailOutput, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) || in.Code == "" {
 		return nil, ErrIncorrectFormat

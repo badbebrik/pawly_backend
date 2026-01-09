@@ -17,4 +17,8 @@ var (
 	ErrSessionExpired   = errors.New("session_expired")
 	ErrUserBlocked      = errors.New("user_blocked")
 	ErrEmailNotVerified = errors.New("email_not_verified")
+
+	ErrVerificationCodeInvalid = errors.New("verification_code_invalid")
+	ErrVerificationCodeExpired = errors.New("verification_code_expired")
+	ErrVerificationTooMany     = errors.New("verification_too_many_attempts")
 )

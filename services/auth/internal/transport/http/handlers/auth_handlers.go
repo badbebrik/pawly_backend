@@ -4,6 +4,8 @@ import (
 	authsvc "auth/internal/service"
 	"auth/internal/transport/http/dto"
 	"encoding/json"
+	"errors"
+	"github.com/rs/zerolog/log"
 	"net/http"
 )
 
@@ -28,51 +30,51 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//resp, err := h.svc.RegisterEmail(
-	//	r.Context(),
-	//	authsvc.RegisterEmailInput{
-	//		Email:     req.Email,
-	//		Password:  req.Password,
-	//		FirstName: req.FirstName,
-	//		LastName:  req.LastName,
-	//		Locale:    req.Locale,
-	//	},
-	//)
+	resp, err := h.svc.RegisterEmail(r.Context(), authsvc.RegisterEmailInput{
+		Email:     req.Email,
+		Password:  req.Password,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Locale:    req.Locale,
+	})
 
-	//if err != nil {
-	//	log.Warn().Err(err).Msg("RegisterEmail failed")
-	//
-	//	switch {
-	//	case errors.Is(err, authsvc.ErrEmailAlreadyTaken):
-	//		http.Error(w, err.Error(), http.StatusConflict)
-	//		return
-	//	case errors.Is(err, authsvc.ErrWeakPassword):
-	//		http.Error(w, err.Error(), http.StatusBadRequest)
-	//		return
-	//	case errors.Is(err, authsvc.ErrProfileCreateFailed):
-	//		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-	//		return
-	//	case errors.Is(err, authsvc.ErrCannotResendYet):
-	//		writeJSON(w, http.StatusTooManyRequests, map[string]any{
-	//			"error":            err.Error(),
-	//			"can_resend_in":    resp.Verification.CanResendInSeconds,
-	//			"code_ttl_seconds": resp.Verification.CodeTTLSeconds,
-	//			"channel":          "email",
-	//		})
-	//		return
-	//	default:
-	//		http.Error(w, "internal server error", http.StatusInternalServerError)
-	//		return
-	//	}
-	//}
-	//
-	//var out dto.RegisterEmailResponse
-	//out.UserID = resp.UserID
-	//out.Verification.Channel = "email"
-	//out.Verification.CodeTTLSeconds = resp.Verification.CodeTTLSeconds
-	//out.Verification.CanResendInSeconds = resp.Verification.CanResendInSeconds
-	//
-	//writeJSON(w, http.StatusCreated, out)
+	if err != nil {
+		log.Warn().Err(err).Msg("RegisterEmail failed")
+
+		switch {
+		case errors.Is(err, authsvc.ErrEmailAlreadyTaken):
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		case errors.Is(err, authsvc.ErrWeakPassword),
+			errors.Is(err, authsvc.ErrIncorrectFormat):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		case errors.Is(err, authsvc.ErrCannotResendYet):
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{
+				"error":            err.Error(),
+				"user_id":          resp.UserID,
+				"channel":          resp.Verification.Channel,
+				"code_ttl_seconds": resp.Verification.CodeTTLSeconds,
+				"can_resend_in":    resp.Verification.CanResendInSeconds,
+			})
+			return
+		case errors.Is(err, authsvc.ErrVerificationFailed):
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	var out dto.RegisterEmailResponse
+	out.UserID = resp.UserID
+	out.Verification.Channel = resp.Verification.Channel
+	out.Verification.CodeTTLSeconds = resp.Verification.CodeTTLSeconds
+	out.Verification.CanResendInSeconds = resp.Verification.CanResendInSeconds
+
+	writeJSON(w, http.StatusCreated, out)
+
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

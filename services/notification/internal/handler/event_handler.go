@@ -35,6 +35,8 @@ func (h *EventHandler) Handle(ctx context.Context, msg amqp091.Delivery) {
 		h.handleEmailVerification(ctx, ev, msg)
 	case "PASSWORD_RESET_REQUESTED":
 		h.handlePasswordReset(ctx, ev, msg)
+	case "WELCOME_EMAIL":
+		h.handleWelcomeEmail(ctx, ev, msg)
 	default:
 		log.Info().Str("event", ev.Event).Msg("unknown event, skipping")
 		_ = msg.Ack(false)
@@ -109,6 +111,40 @@ func (h *EventHandler) handlePasswordReset(ctx context.Context, ev model.Notific
 	_ = msg.Ack(false)
 }
 
+func (h *EventHandler) handleWelcomeEmail(ctx context.Context, ev model.NotificationEvent, msg amqp091.Delivery) {
+	if !hasChannel(ev.Channels, "email") {
+		_ = msg.Ack(false)
+		return
+	}
+
+	email, _ := ev.Data["email"].(string)
+	if email == "" {
+		log.Warn().Msg("WELCOME_EMAIL missing data.email")
+		_ = msg.Ack(false)
+		return
+	}
+
+	job := model.EmailJob{
+		Email:    email,
+		Template: "welcome_email",
+		Locale:   defaultLocale(ev.Locale),
+		Subject:  subjectFor(ev.Event, defaultLocale(ev.Locale)),
+		Data:     ev.Data,
+		Meta: map[string]any{
+			"event":   ev.Event,
+			"user_id": ev.UserID.String(),
+		},
+	}
+
+	if err := h.email.Publish(ctx, job); err != nil {
+		log.Error().Err(err).Msg("publish email job failed")
+		_ = msg.Nack(false, true)
+		return
+	}
+
+	_ = msg.Ack(false)
+}
+
 func hasChannel(channels []string, want string) bool {
 	if len(channels) == 0 {
 		return true
@@ -135,6 +171,8 @@ func subjectFor(event, locale string) string {
 			return "Email verification"
 		case "PASSWORD_RESET_REQUESTED":
 			return "Password reset"
+		case "WELCOME_EMAIL":
+			return "Welcome to Pawly"
 		default:
 			return "Notification"
 		}
@@ -145,6 +183,8 @@ func subjectFor(event, locale string) string {
 		return "Подтверждение почты"
 	case "PASSWORD_RESET_REQUESTED":
 		return "Сброс пароля"
+	case "WELCOME_EMAIL":
+		return "Добро пожаловать в Pawly"
 	default:
 		return "Уведомление"
 	}

@@ -54,8 +54,15 @@ func parsePayload(claims jwt.MapClaims) (*Payload, error) {
 		return nil, ErrPayloadMalformed
 	}
 
-	exp, ok := claims["exp"].(int64)
-	if !ok {
+	var exp int64
+	switch v := claims["exp"].(type) {
+	case float64:
+		exp = int64(v)
+	case int64:
+		exp = v
+	case int:
+		exp = int64(v)
+	default:
 		return nil, ErrPayloadMalformed
 	}
 

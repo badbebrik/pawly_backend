@@ -91,6 +91,10 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("email", req.Email).
+			Msg("VerifyEmail failed")
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
 			http.Error(w, err.Error(), http.StatusBadRequest)

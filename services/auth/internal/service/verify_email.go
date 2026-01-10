@@ -89,7 +89,7 @@ func (s *Service) VerifyEmail(ctx context.Context, in VerifyEmailInput) (*Verify
 	}
 
 	hash := security.HashTokenSHA256(refreshToken)
-	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	expiresAt := time.Now().Add(time.Duration(s.refreshTTLDays) * 24 * time.Hour)
 
 	sess := &model.Session{
 		ID:               sessionID,
@@ -109,6 +109,6 @@ func (s *Service) VerifyEmail(ctx context.Context, in VerifyEmailInput) (*Verify
 		UserID:       u.ID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    15 * 60,
+		ExpiresIn:    s.accessTTLSeconds,
 	}, nil
 }

@@ -15,6 +15,9 @@ type Service struct {
 	verification verification.Store
 	notifier     rabbit.Publisher
 	jwt          tokens.TokenManager
+
+	accessTTLSeconds int
+	refreshTTLDays   int
 }
 
 func NewService(
@@ -25,14 +28,18 @@ func NewService(
 	verification verification.Store,
 	notifier rabbit.Publisher,
 	jwt tokens.TokenManager,
+	accessTTLSeconds int,
+	refreshTTLDays int,
 ) *Service {
 	return &Service{
-		users:        users,
-		sessions:     sessions,
-		oauth:        oauth,
-		devices:      devices,
-		verification: verification,
-		notifier:     notifier,
-		jwt:          jwt,
+		users:            users,
+		sessions:         sessions,
+		oauth:            oauth,
+		devices:          devices,
+		verification:     verification,
+		notifier:         notifier,
+		jwt:              jwt,
+		accessTTLSeconds: accessTTLSeconds,
+		refreshTTLDays:   refreshTTLDays,
 	}
 }

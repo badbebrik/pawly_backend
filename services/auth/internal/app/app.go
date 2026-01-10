@@ -88,6 +88,8 @@ func New(cfg *config.Config) (*App, error) {
 		verificationRepo,
 		publisher,
 		jwtSvc,
+		cfg.AccessTokenTTLMin*60,
+		cfg.RefreshTokenTTLDays,
 	)
 
 	return &App{

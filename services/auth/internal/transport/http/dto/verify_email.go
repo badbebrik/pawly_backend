@@ -3,9 +3,8 @@ package dto
 import "github.com/google/uuid"
 
 type VerifyEmailRequest struct {
-	Email  string `json:"email"`
-	Code   string `json:"code"`
-	Locale string `json:"locale"`
+	Email string `json:"email"`
+	Code  string `json:"code"`
 }
 
 type VerifyEmailResponse struct {

@@ -5,6 +5,7 @@ import (
 	"auth/internal/infrastructure/rabbit"
 	"auth/internal/repository"
 	"auth/internal/security"
+	"auth/internal/transport/http/middleware"
 	"auth/internal/verification"
 	"context"
 	"errors"
@@ -13,9 +14,8 @@ import (
 )
 
 type VerifyEmailInput struct {
-	Email  string
-	Code   string
-	Locale string
+	Email string
+	Code  string
 }
 
 type VerifyEmailOutput struct {
@@ -31,9 +31,7 @@ func (s *Service) VerifyEmail(ctx context.Context, in VerifyEmailInput) (*Verify
 		return nil, ErrIncorrectFormat
 	}
 
-	if in.Locale == "" {
-		in.Locale = "en"
-	}
+	loc := middleware.LocaleFromCtx(ctx, "ru")
 
 	u, err := s.users.GetByEmail(ctx, in.Email)
 	if err != nil {
@@ -74,7 +72,7 @@ func (s *Service) VerifyEmail(ctx context.Context, in VerifyEmailInput) (*Verify
 			Email:     u.Email,
 			FirstName: "",
 			LastName:  "",
-			Locale:    in.Locale,
+			Locale:    loc,
 		})
 	}
 

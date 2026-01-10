@@ -7,7 +7,6 @@ type RegisterEmailRequest struct {
 	Password  string
 	FirstName string
 	LastName  string
-	Locale    string
 }
 
 type RegisterEmailResponse struct {

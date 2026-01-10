@@ -5,6 +5,7 @@ import (
 	"auth/internal/infrastructure/rabbit"
 	"auth/internal/repository"
 	"auth/internal/security"
+	"auth/internal/transport/http/middleware"
 	"auth/internal/verification"
 	"context"
 	"errors"
@@ -16,7 +17,6 @@ type RegisterEmailInput struct {
 	Password  string
 	FirstName string
 	LastName  string
-	Locale    string
 }
 
 type RegisterEmailOutput struct {
@@ -37,15 +37,12 @@ func (s *Service) RegisterEmail(ctx context.Context, in RegisterEmailInput) (*Re
 		return nil, ErrWeakPassword
 	}
 
-	locale := in.Locale
-	if locale == "" {
-		locale = "en"
-	}
-
 	existing, err := s.users.GetByEmail(ctx, email)
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
+
+	loc := middleware.LocaleFromCtx(ctx, "ru")
 
 	var user *model.User
 
@@ -92,7 +89,7 @@ func (s *Service) RegisterEmail(ctx context.Context, in RegisterEmailInput) (*Re
 		LastName:   in.LastName,
 		Code:       code,
 		TTLSeconds: ttlSeconds,
-		Locale:     locale,
+		Locale:     loc,
 	}); err != nil {
 		return nil, ErrVerificationFailed
 	}

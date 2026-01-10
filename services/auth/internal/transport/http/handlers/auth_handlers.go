@@ -35,7 +35,6 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 		Password:  req.Password,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Locale:    req.Locale,
 	})
 
 	if err != nil {
@@ -85,9 +84,8 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := h.svc.VerifyEmail(r.Context(), authsvc.VerifyEmailInput{
-		Email:  req.Email,
-		Code:   req.Code,
-		Locale: req.Locale,
+		Email: req.Email,
+		Code:  req.Code,
 	})
 
 	if err != nil {

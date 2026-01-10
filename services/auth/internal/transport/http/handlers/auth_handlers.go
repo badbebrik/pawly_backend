@@ -2,6 +2,7 @@ package handlers
 
 import (
 	authsvc "auth/internal/service"
+	"auth/internal/transport/http/authz"
 	"auth/internal/transport/http/dto"
 	"encoding/json"
 	"errors"
@@ -120,9 +121,95 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		UserID:       resp.UserID,
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
-		ExpiresIn:    resp.ExpiresIn,
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *AuthHandlers) LoginEmail(w http.ResponseWriter, r *http.Request) {
+	var req dto.LoginEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.svc.LoginEmail(r.Context(), authsvc.LoginEmailInput{
+		Email:    req.Email,
+		Password: req.Password,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("email", req.Email).Msg("LoginEmail failed")
+
+		switch {
+		case errors.Is(err, authsvc.ErrIncorrectFormat):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		case errors.Is(err, authsvc.ErrInvalidEmailOrPassword):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		case errors.Is(err, authsvc.ErrEmailNotVerified):
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		case errors.Is(err, authsvc.ErrUserBlocked):
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.LoginEmailResponse{
+		UserID:       resp.UserID,
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+	})
+}
+
+func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
+	tok, err := authz.BearerToken(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.svc.Logout(r.Context(), tok); err != nil {
+		log.Error().Err(err).Msg("Logout failed")
+		switch {
+		case errors.Is(err, authsvc.ErrUnauthorized):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		case errors.Is(err, authsvc.ErrSessionNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.LogoutResponse{})
+}
+
+func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
+	tok, err := authz.BearerToken(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.svc.LogoutAll(r.Context(), tok); err != nil {
+		log.Error().Err(err).Msg("LogoutAll failed")
+		switch {
+		case errors.Is(err, authsvc.ErrUnauthorized):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.LogoutResponse{})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

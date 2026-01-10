@@ -14,6 +14,8 @@ var (
 	ErrUserNotFound     = errors.New("user_not_found")
 	ErrSessionNotFound  = errors.New("session_not_found")
 	ErrSessionExpired   = errors.New("session_expired")
+	ErrSessionRevoked   = errors.New("session_revoked")
+	ErrRefreshMismatch  = errors.New("refresh_token_mismatch")
 	ErrUserBlocked      = errors.New("user_blocked")
 	ErrEmailNotVerified = errors.New("email_not_verified")
 

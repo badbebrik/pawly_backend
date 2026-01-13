@@ -1,8 +1,11 @@
 package app
 
 import (
-	"catalog/infrastructure/db"
 	"catalog/internal/config"
+	"catalog/internal/infrastructure/db"
+	dbrepo "catalog/internal/infrastructure/db/repository"
+	"catalog/internal/service"
+	"catalog/internal/transport/http/handlers"
 	"context"
 	"errors"
 	"github.com/rs/zerolog/log"
@@ -13,9 +16,16 @@ import (
 	"time"
 )
 
+type Dependencies struct {
+}
+
 type App struct {
-	cfg *config.Config
-	pg  *db.Postgres
+	cfg        *config.Config
+	pg         *db.Postgres
+	CatalogSvc *service.CatalogService
+
+	PublicHandler *handlers.PublicHandler
+	AdminSpecies  *handlers.AdminSpeciesHandler
 
 	httpSrv *http.Server
 }
@@ -26,9 +36,20 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	versionRepo := dbrepo.NewVersionRepo(pg.Pool)
+	speciesRepo := dbrepo.NewSpeciesRepo(pg.Pool)
+
+	catalogSvc := service.NewCatalogService(pg.Pool, versionRepo, speciesRepo)
+
+	publicHandler := handlers.NewPublicHandler(catalogSvc)
+	adminSpeciesHandler := handlers.NewAdminSpeciesHandler(catalogSvc, speciesRepo)
+
 	return &App{
-		cfg: cfg,
-		pg:  pg,
+		cfg:           cfg,
+		pg:            pg,
+		CatalogSvc:    catalogSvc,
+		PublicHandler: publicHandler,
+		AdminSpecies:  adminSpeciesHandler,
 	}, nil
 }
 

@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"catalog/internal/repository"
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,7 +22,7 @@ func (r *VersionRepo) Get(ctx context.Context) (int, error) {
 	return v, err
 }
 
-func (r *VersionRepo) BumpTx(ctx context.Context, tx repository.Tx) (int, error) {
+func (r *VersionRepo) BumpTx(ctx context.Context, tx pgx.Tx) (int, error) {
 	var v int
 	err := tx.QueryRow(ctx, `
 		UPDATE catalog_version

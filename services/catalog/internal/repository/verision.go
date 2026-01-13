@@ -1,16 +1,11 @@
 package repository
 
-import "context"
+import (
+	"context"
+	"github.com/jackc/pgx/v5"
+)
 
 type VersionRepository interface {
 	Get(ctx context.Context) (int, error)
-	BumpTx(ctx context.Context, tx Tx) (newVersion int, err error)
-}
-
-type Tx interface {
-	QueryRow(ctx context.Context, sql string, args ...any) Row
-}
-
-type Row interface {
-	Scan(dest ...any) error
+	BumpTx(ctx context.Context, tx pgx.Tx) (newVersion int, err error)
 }

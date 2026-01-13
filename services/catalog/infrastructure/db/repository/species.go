@@ -2,7 +2,6 @@ package repository
 
 import (
 	"catalog/internal/model"
-	"catalog/internal/repository"
 	"context"
 	"errors"
 	"fmt"
@@ -61,7 +60,7 @@ func (r *SpeciesRepo) GetByID(ctx context.Context, id int) (*model.Species, erro
 	return &s, err
 }
 
-func (r *SpeciesRepo) CreateTx(ctx context.Context, tx repository.TxExec, s *model.Species) error {
+func (r *SpeciesRepo) CreateTx(ctx context.Context, tx pgx.Tx, s *model.Species) error {
 	row := tx.QueryRow(ctx, `
 		INSERT INTO species (name_ru, name_en, is_active, version, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -74,7 +73,7 @@ func (r *SpeciesRepo) CreateTx(ctx context.Context, tx repository.TxExec, s *mod
 	return nil
 }
 
-func (r *SpeciesRepo) UpdateTx(ctx context.Context, tx repository.TxExec, s *model.Species) error {
+func (r *SpeciesRepo) UpdateTx(ctx context.Context, tx pgx.Tx, s *model.Species) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE species
 		SET name_ru = $2,

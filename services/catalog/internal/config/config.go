@@ -12,6 +12,8 @@ type Config struct {
 	PostgresDB       string
 	PostgresHost     string
 	PostgresPort     string
+
+	AdminToken string
 }
 
 func Load() *Config {
@@ -23,6 +25,7 @@ func Load() *Config {
 		PostgresDB:       getEnv("POSTGRES_DB", ""),
 		PostgresHost:     getEnv("POSTGRES_HOST", ""),
 		PostgresPort:     getEnv("POSTGRES_PORT", ""),
+		AdminToken:       getEnv("ADMIN_TOKEN", ""),
 	}
 }
 

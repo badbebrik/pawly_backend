@@ -59,6 +59,70 @@ func (h *PublicHandler) ListSpecies(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (h *PublicHandler) ListColors(w http.ResponseWriter, r *http.Request) {
+	locale := appmw.LocaleFromCtx(r.Context(), "ru")
+
+	activeOnly := true
+	if r.URL.Query().Get("active") == "0" {
+		activeOnly = false
+	}
+
+	items, err := h.svc.ListColors(r.Context(), activeOnly)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]dto.ColorItem, 0, len(items))
+	for _, c := range items {
+		name := c.NameRu
+		if locale == "en" {
+			name = c.NameEn
+		}
+		out = append(out, dto.ColorItem{
+			ID:       c.ID,
+			Name:     name,
+			Hex:      c.Hex,
+			IsActive: c.IsActive,
+			Version:  c.Version,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *PublicHandler) ListPatterns(w http.ResponseWriter, r *http.Request) {
+	locale := appmw.LocaleFromCtx(r.Context(), "ru")
+
+	activeOnly := true
+	if r.URL.Query().Get("active") == "0" {
+		activeOnly = false
+	}
+
+	items, err := h.svc.ListPatterns(r.Context(), activeOnly)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]dto.PatternItem, 0, len(items))
+	for _, p := range items {
+		name := p.NameRu
+		if locale == "en" {
+			name = p.NameEn
+		}
+		out = append(out, dto.PatternItem{
+			ID:       p.ID,
+			Name:     name,
+			IconKey:  p.IconKey,
+			IsActive: p.IsActive,
+			Version:  p.Version,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, out)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

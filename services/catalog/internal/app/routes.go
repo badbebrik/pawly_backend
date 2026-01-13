@@ -19,16 +19,20 @@ func (a *App) routes() http.Handler {
 
 	r.Get("/catalog/version", a.PublicHandler.GetVersion)
 	r.Get("/catalog/species", a.PublicHandler.ListSpecies)
+	r.Get("/catalog/colors", a.PublicHandler.ListColors)
+	r.Get("/catalog/patterns", a.PublicHandler.ListPatterns)
 
 	admin := chi.NewRouter()
 	admin.Use(appmw.RequireAdminToken(a.cfg.AdminToken))
 
 	admin.Post("/species", a.AdminSpecies.Create)
-	admin.Patch("/species/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		r.URL.RawQuery = "id=" + id
-		a.AdminSpecies.Update(w, r)
-	})
+	admin.Patch("/species/{id}", a.AdminSpecies.Update)
+
+	admin.Post("/colors", a.AdminColors.Create)
+	admin.Patch("/colors/{id}", a.AdminColors.Update)
+
+	admin.Post("/patterns", a.AdminPatterns.Create)
+	admin.Patch("/patterns/{id}", a.AdminPatterns.Update)
 
 	r.Mount("/admin", admin)
 

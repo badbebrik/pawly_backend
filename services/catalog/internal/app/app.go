@@ -16,16 +16,16 @@ import (
 	"time"
 )
 
-type Dependencies struct {
-}
-
 type App struct {
-	cfg        *config.Config
-	pg         *db.Postgres
+	cfg *config.Config
+	pg  *db.Postgres
+
 	CatalogSvc *service.CatalogService
 
 	PublicHandler *handlers.PublicHandler
 	AdminSpecies  *handlers.AdminSpeciesHandler
+	AdminColors   *handlers.AdminColorHandler
+	AdminPatterns *handlers.AdminPatternHandler
 
 	httpSrv *http.Server
 }
@@ -38,11 +38,15 @@ func New(cfg *config.Config) (*App, error) {
 
 	versionRepo := dbrepo.NewVersionRepo(pg.Pool)
 	speciesRepo := dbrepo.NewSpeciesRepo(pg.Pool)
+	colorRepo := dbrepo.NewColorRepo(pg.Pool)
+	patternRepo := dbrepo.NewPatternRepo(pg.Pool)
 
-	catalogSvc := service.NewCatalogService(pg.Pool, versionRepo, speciesRepo)
+	catalogSvc := service.NewCatalogService(pg.Pool, versionRepo, speciesRepo, colorRepo, patternRepo)
 
 	publicHandler := handlers.NewPublicHandler(catalogSvc)
 	adminSpeciesHandler := handlers.NewAdminSpeciesHandler(catalogSvc, speciesRepo)
+	adminColorHandler := handlers.NewAdminColorHandler(catalogSvc, colorRepo)
+	adminPatternHandler := handlers.NewAdminPatternHandler(catalogSvc, patternRepo)
 
 	return &App{
 		cfg:           cfg,
@@ -50,6 +54,8 @@ func New(cfg *config.Config) (*App, error) {
 		CatalogSvc:    catalogSvc,
 		PublicHandler: publicHandler,
 		AdminSpecies:  adminSpeciesHandler,
+		AdminColors:   adminColorHandler,
+		AdminPatterns: adminPatternHandler,
 	}, nil
 }
 

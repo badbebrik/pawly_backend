@@ -11,3 +11,10 @@ type UpdateSpeciesRequest struct {
 	NameEn   *string `json:"name_en"`
 	IsActive *bool   `json:"is_active"`
 }
+
+type SpeciesItem struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	IsActive bool   `json:"is_active"`
+	Version  int    `json:"version"`
+}

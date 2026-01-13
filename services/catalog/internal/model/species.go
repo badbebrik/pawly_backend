@@ -1,8 +1,13 @@
 package model
 
-type SpeciesItem struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	IsActive bool   `json:"is_active"`
-	Version  int    `json:"version"`
+import "time"
+
+type Species struct {
+	ID        int
+	NameRu    string
+	NameEn    string
+	IsActive  bool
+	Version   int
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

@@ -29,6 +29,7 @@ func (a *App) setupRoutes() http.Handler {
 	r.Post("/auth/login/email", authHandlers.LoginEmail)
 	r.Post("/auth/logout", authHandlers.Logout)
 	r.Post("/auth/logout-all", authHandlers.LogoutAll)
+	r.Post("/auth/refresh", authHandlers.Refresh)
 
 	return r
 }

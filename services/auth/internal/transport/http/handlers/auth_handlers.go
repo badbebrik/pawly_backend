@@ -212,6 +212,47 @@ func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto.LogoutResponse{})
 }
 
+func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req dto.RefreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.svc.Refresh(r.Context(), authsvc.RefreshInput{
+		RefreshToken: req.RefreshToken,
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Refresh failed")
+		switch {
+		case errors.Is(err, authsvc.ErrIncorrectFormat):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		case errors.Is(err, authsvc.ErrUnauthorized),
+			errors.Is(err, authsvc.ErrRefreshMismatch):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		case errors.Is(err, authsvc.ErrSessionNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		case errors.Is(err, authsvc.ErrSessionExpired),
+			errors.Is(err, authsvc.ErrSessionRevoked):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.RefreshResponse{
+		UserID:       resp.UserID,
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+	})
+}
+
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

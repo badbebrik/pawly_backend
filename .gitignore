@@ -102,3 +102,4 @@ fabric.properties
 
 .DS_Store
 *.pdf
+services/docs/

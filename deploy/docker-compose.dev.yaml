@@ -10,6 +10,17 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  file_postgres:
+    image: postgres:16
+    container_name: file_postgres
+    environment:
+      POSTGRES_USER: file_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: file_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - file_postgres_data:/var/lib/postgresql/data
   redis:
     image: redis:7
     container_name: auth_redis
@@ -43,6 +54,7 @@ services:
 
 volumes:
   postgres_data:
+  file_postgres_data:
   redis_data:
   rabbitmq_data:
   minio_data:

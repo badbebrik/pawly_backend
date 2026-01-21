@@ -5,12 +5,14 @@ import (
 	"errors"
 	"file/internal/config"
 	"file/internal/infrastructure/db"
-	"github.com/rs/zerolog/log"
+	"file/internal/storage"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type App struct {
@@ -18,6 +20,7 @@ type App struct {
 
 	pg      *db.Postgres
 	httpSrv *http.Server
+	minio   *storage.MinioClient
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -26,9 +29,23 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	minioClient, err := storage.NewMinio(cfg)
+	if err != nil {
+		pg.Close()
+		return nil, err
+	}
+
+	if err := minioClient.EnsureBucket(context.Background()); err != nil {
+		log.Error().Err(err).Msg("minio bucket init failed")
+		pg.Close()
+		return nil, err
+	}
+	log.Info().Str("bucket", minioClient.Bucket).Msg("minio bucket ready")
+
 	app := &App{
-		cfg: cfg,
-		pg:  pg,
+		cfg:   cfg,
+		pg:    pg,
+		minio: minioClient,
 	}
 
 	r := app.setupRoutes()

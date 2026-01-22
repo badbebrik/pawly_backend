@@ -4,7 +4,6 @@ CREATE TABLE profiles (
     first_name    TEXT,
     last_name     TEXT,
     avatar_file_id UUID NULL,
-    notification_settings JSONB NOT NULL DEFAULT '{}'::jsonb,
     public_contact_settings JSONB NOT NULL DEFAULT '{}'::jsonb,
     extra_contacts JSONB NOT NULL DEFAULT '{}'::jsonb,
     phone         TEXT,

@@ -181,3 +181,11 @@ func (s *FileService) Link(ctx context.Context, p LinkParams) (*model.FileLink, 
 func (s *FileService) Unlink(ctx context.Context, fileID uuid.UUID, ownerService model.OwnerService, ownerType string, ownerID uuid.UUID) (bool, error) {
 	return s.links.Delete(ctx, fileID, ownerService, ownerType, ownerID)
 }
+
+func (s *FileService) GetFile(ctx context.Context, id uuid.UUID) (*model.FileObject, error) {
+	return s.objects.GetByID(ctx, id)
+}
+
+func (s *FileService) ListLinksByFileID(ctx context.Context, fileID uuid.UUID) ([]model.FileLink, error) {
+	return s.links.ListByFileID(ctx, fileID)
+}

@@ -1343,7 +1343,7 @@ const file_file_proto_rawDesc = "" +
 	"\n" +
 	"UnlinkFile\x12\x17.file.UnlinkFileRequest\x1a\x18.file.UnlinkFileResponse\x126\n" +
 	"\aGetFile\x12\x14.file.GetFileRequest\x1a\x15.file.GetFileResponse\x12H\n" +
-	"\rListFileLinks\x12\x1a.file.ListFileLinksRequest\x1a\x1b.file.ListFileLinksResponseB&Z$file/internal/transport/proto;filepbb\x06proto3"
+	"\rListFileLinks\x12\x1a.file.ListFileLinksRequest\x1a\x1b.file.ListFileLinksResponseB\x13Z\x11file/proto;filepbb\x06proto3"
 
 var (
 	file_file_proto_rawDescOnce sync.Once

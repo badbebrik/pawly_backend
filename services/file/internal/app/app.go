@@ -2,28 +2,30 @@ package app
 
 import (
 	"context"
-	"errors"
 	"file/internal/config"
 	"file/internal/infrastructure/db"
 	pgrepo "file/internal/infrastructure/repository"
 	"file/internal/service"
 	"file/internal/storage"
-	"net/http"
+	grpcserver "file/internal/transport/grpc"
+	filepb "file/proto"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
 )
 
 type App struct {
 	cfg *config.Config
 
-	pg      *db.Postgres
-	httpSrv *http.Server
-	minio   *storage.MinioClient
-	fileSvc *service.FileService
+	pg       *db.Postgres
+	minio    *storage.MinioClient
+	fileSvc  *service.FileService
+	grpcSrv  *grpc.Server
+	listener net.Listener
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -59,11 +61,17 @@ func New(cfg *config.Config) (*App, error) {
 		fileSvc: fileSvc,
 	}
 
-	r := app.setupRoutes()
-	app.httpSrv = &http.Server{
-		Addr:    ":" + cfg.AppPort,
-		Handler: r,
+	listener, err := net.Listen("tcp", ":"+cfg.AppPort)
+	if err != nil {
+		pg.Close()
+		return nil, err
 	}
+
+	grpcSrv := grpc.NewServer()
+	filepb.RegisterFileServiceServer(grpcSrv, grpcserver.NewServer(fileSvc))
+
+	app.grpcSrv = grpcSrv
+	app.listener = listener
 
 	return app, nil
 }
@@ -71,10 +79,11 @@ func New(cfg *config.Config) (*App, error) {
 func (a *App) Close() {
 	log.Info().Msg("closing File App resources...")
 
-	if a.httpSrv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = a.httpSrv.Shutdown(ctx)
-		cancel()
+	if a.grpcSrv != nil {
+		a.grpcSrv.GracefulStop()
+	}
+	if a.listener != nil {
+		_ = a.listener.Close()
 	}
 
 	if a.pg != nil {
@@ -84,9 +93,9 @@ func (a *App) Close() {
 
 func (a *App) Run() error {
 	go func() {
-		log.Info().Str("port", a.cfg.AppPort).Msg("starting HTTP server")
-		if err := a.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal().Err(err).Msg("http server crash")
+		log.Info().Str("port", a.cfg.AppPort).Msg("starting gRPC server")
+		if err := a.grpcSrv.Serve(a.listener); err != nil {
+			log.Fatal().Err(err).Msg("grpc server crash")
 		}
 	}()
 
@@ -95,13 +104,6 @@ func (a *App) Run() error {
 	<-quit
 
 	log.Info().Msg("shutting down File service...")
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer shutdownCancel()
-
-	if err := a.httpSrv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
 
 	return nil
 }

@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE file_objects (
     id               UUID PRIMARY KEY,
     bucket           TEXT        NOT NULL,
@@ -22,3 +23,7 @@ CREATE TABLE file_links (
     created_by_user_id UUID       NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- +goose Down
+DROP TABLE IF EXISTS file_links;
+DROP TABLE IF EXISTS file_objects;

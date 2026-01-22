@@ -108,6 +108,10 @@ func (s *FileService) ConfirmUpload(ctx context.Context, p ConfirmUploadParams) 
 		return nil, ErrInvalidState
 	}
 
+	if f.SizeBytes != nil && *f.SizeBytes != p.SizeBytes {
+		return nil, ErrInvalidInput
+	}
+
 	if time.Now().UTC().After(f.UploadExpiresAt) {
 		return nil, ErrUploadExpired
 	}

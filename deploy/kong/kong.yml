@@ -1,0 +1,58 @@
+_format_version: "3.0"
+
+services:
+  - name: auth-service
+    url: http://host.docker.internal:8080
+    routes:
+      - name: auth-routes
+        paths:
+          - /auth
+        strip_path: false
+
+  - name: profile-service
+    url: http://host.docker.internal:8081
+    routes:
+      - name: profile-routes
+        paths:
+          - /v1/profile
+          - /internal/v1/profile
+        strip_path: false
+
+  - name: catalog-service
+    url: http://host.docker.internal:8082
+    routes:
+      - name: catalog-routes
+        paths:
+          - /v1/catalog
+        strip_path: false
+
+  - name: notification-service
+    url: http://host.docker.internal:8083
+    routes:
+      - name: notification-routes
+        paths:
+          - /v1/notifications
+        strip_path: false
+
+  - name: email-service
+    url: http://host.docker.internal:8084
+    routes:
+      - name: email-routes
+        paths:
+          - /internal/v1/email
+        strip_path: false
+
+plugins:
+  - name: jwt
+    config:
+      key_claim_name: sub
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+
+consumers:
+  - username: pawly-gateway
+    jwt_secrets:
+      - key: pawly
+        secret: DEFAULT
+        algorithm: HS256

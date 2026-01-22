@@ -5,6 +5,8 @@ import (
 	"errors"
 	"file/internal/config"
 	"file/internal/infrastructure/db"
+	pgrepo "file/internal/infrastructure/repository"
+	"file/internal/service"
 	"file/internal/storage"
 	"net/http"
 	"os"
@@ -21,6 +23,7 @@ type App struct {
 	pg      *db.Postgres
 	httpSrv *http.Server
 	minio   *storage.MinioClient
+	fileSvc *service.FileService
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -35,6 +38,13 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	storageAdapter := storage.NewMinioStorageAdapter(minioClient)
+
+	fileObjRepo := pgrepo.NewFileObjectRepository(pg.Pool)
+	fileLinkRepo := pgrepo.NewFileLinkRepository(pg.Pool)
+
+	fileSvc := service.NewFileService(fileObjRepo, fileLinkRepo, storageAdapter)
+
 	if err := minioClient.EnsureBucket(context.Background()); err != nil {
 		log.Error().Err(err).Msg("minio bucket init failed")
 		pg.Close()
@@ -43,9 +53,10 @@ func New(cfg *config.Config) (*App, error) {
 	log.Info().Str("bucket", minioClient.Bucket).Msg("minio bucket ready")
 
 	app := &App{
-		cfg:   cfg,
-		pg:    pg,
-		minio: minioClient,
+		cfg:     cfg,
+		pg:      pg,
+		minio:   minioClient,
+		fileSvc: fileSvc,
 	}
 
 	r := app.setupRoutes()

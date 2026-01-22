@@ -2,12 +2,9 @@ package storage
 
 import (
 	"context"
-	"file/internal/service"
 	"fmt"
 	"net/url"
 	"time"
-
-	"github.com/docker/docker/libnetwork/ipams/null"
 )
 
 type MinioStorageAdapter struct {
@@ -24,6 +21,10 @@ func (m *MinioStorageAdapter) Bucket() string {
 
 func (m *MinioStorageAdapter) DownloadTTL() time.Duration {
 	return m.client.DownloadTTL()
+}
+
+func (m *MinioStorageAdapter) UploadTTL() time.Duration {
+	return m.client.UploadTTL()
 }
 
 func (m *MinioStorageAdapter) PresignPut(ctx context.Context, bucket, objectKey, contentType string, expires time.Duration) (string, error) {
@@ -43,5 +44,3 @@ func (m *MinioStorageAdapter) PresignGet(ctx context.Context, bucket, objectKey 
 	}
 	return u.String(), nil
 }
-
-var _ service.Storage = (*MinioStorageAdapter)(nil)

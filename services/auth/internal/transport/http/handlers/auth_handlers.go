@@ -297,6 +297,98 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *AuthHandlers) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
+	var req dto.PasswordResetRequestRequest
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.RequestPasswordReset(r.Context(), authsvc.PasswordResetRequestInput{Email: req.Email})
+	if err != nil {
+		switch {
+		case errors.Is(err, authsvc.ErrIncorrectFormat):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		case errors.Is(err, authsvc.ErrCannotResendYet):
+			http.Error(w, err.Error(), http.StatusTooManyRequests)
+			return
+		case errors.Is(err, authsvc.ErrVerificationFailed):
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.PasswordResetRequestResponse{Status: "ok"})
+}
+
+func (h *AuthHandlers) PasswordResetVerify(w http.ResponseWriter, r *http.Request) {
+	var req dto.PasswordResetVerifyRequest
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.svc.VerifyPasswordResetCode(r.Context(), authsvc.PasswordResetVerifyInput{Email: req.Email, Code: req.Code})
+	if err != nil {
+		switch {
+		case errors.Is(err, authsvc.ErrIncorrectFormat):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		case errors.Is(err, authsvc.ErrVerificationCodeInvalid),
+			errors.Is(err, authsvc.ErrVerificationCodeExpired),
+			errors.Is(err, authsvc.ErrVerificationTooMany):
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		case errors.Is(err, authsvc.ErrUserBlocked):
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.PasswordResetVerifyResponse{ResetToken: resp.ResetToken})
+}
+
+func (h *AuthHandlers) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
+	var req dto.PasswordResetConfirmRequest
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err := h.svc.ConfirmPasswordReset(r.Context(), authsvc.PasswordResetConfirmInput{
+		ResetToken:  req.ResetToken,
+		NewPassword: req.NewPassword,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, authsvc.ErrIncorrectFormat):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		case errors.Is(err, authsvc.ErrUnauthorized):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		case errors.Is(err, authsvc.ErrUserNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		case errors.Is(err, authsvc.ErrUserBlocked):
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.PasswordResetConfirmResponse{Status: "ok"})
+}
+
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

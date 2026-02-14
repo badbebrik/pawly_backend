@@ -31,6 +31,9 @@ func (a *App) setupRoutes() http.Handler {
 	r.Post("/auth/logout", authHandlers.Logout)
 	r.Post("/auth/logout-all", authHandlers.LogoutAll)
 	r.Post("/auth/refresh", authHandlers.Refresh)
+	r.Post("/auth/password/reset/request", authHandlers.PasswordResetRequest)
+	r.Post("/auth/password/reset/verify", authHandlers.PasswordResetVerify)
+	r.Post("/auth/password/reset/confirm", authHandlers.PasswordResetConfirm)
 
 	return r
 }

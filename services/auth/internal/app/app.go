@@ -77,7 +77,6 @@ func New(cfg *config.Config) (*App, error) {
 	userRepo := pgrepo.NewUserRepo(pg.Pool)
 	sessionRepo := pgrepo.NewSessionRepo(pg.Pool)
 	oauthRepo := pgrepo.NewOAuthIdentityRepo(pg.Pool)
-	deviceRepo := pgrepo.NewUserDeviceRepo(pg.Pool)
 	verificationRepo := redisstore.NewRedisStore(redis.Client())
 
 	jwtSvc := tokens.NewJWTService(*cfg)
@@ -88,7 +87,6 @@ func New(cfg *config.Config) (*App, error) {
 		userRepo,
 		sessionRepo,
 		oauthRepo,
-		deviceRepo,
 		verificationRepo,
 		publisher,
 		jwtSvc,

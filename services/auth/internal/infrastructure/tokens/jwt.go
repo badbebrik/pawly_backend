@@ -15,6 +15,7 @@ type JWTService struct {
 type TokenManager interface {
 	GenerateAccessToken(userID, sessionID string) (string, error)
 	GenerateRefreshToken(userID, sessionID string) (string, error)
+	GeneratePasswordResetToken(userID, email string) (string, error)
 	ValidateToken(tokenStr string) (*Payload, error)
 	EnsureTokenType(p *Payload, tType string) error
 }

@@ -60,6 +60,10 @@ func (s *Service) LoginEmail(ctx context.Context, in LoginEmailInput) (*LoginEma
 		return nil, ErrEmailNotVerified
 	}
 
+	if !u.HasPassword() {
+		return nil, ErrInvalidEmailOrPassword
+	}
+
 	if err := security.ComparePassword(*u.PasswordHash, in.Password); err != nil {
 		return nil, ErrInvalidEmailOrPassword
 	}

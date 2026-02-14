@@ -3,10 +3,13 @@ package redisstore
 import (
 	"auth/internal/verification"
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"math/big"
 	"time"
 )
 
@@ -39,7 +42,11 @@ func (s *Store) RequestCode(ctx context.Context, email, purpose string) (string,
 		return "", 0, 0, err
 	}
 
-	code := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", 0, 0, err
+	}
+	code := fmt.Sprintf("%06d", n.Int64())
 
 	rec := verification.CodeRecord{
 		Code:              code,
@@ -88,7 +95,7 @@ func (s *Store) VerifyCode(ctx context.Context, email, purpose, inputCode string
 		return verification.ErrTooManyAttempts
 	}
 
-	if inputCode != rec.Code {
+	if subtle.ConstantTimeCompare([]byte(inputCode), []byte(rec.Code)) != 1 {
 		rec.Attempts++
 
 		jsonData, _ := json.Marshal(rec)

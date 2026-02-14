@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/rs/zerolog/log"
+	"io"
 	"net/http"
 )
 
@@ -21,7 +22,7 @@ func NewAuthHandlers(svc *authsvc.Service) *AuthHandlers {
 func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterEmailRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -61,6 +62,9 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, authsvc.ErrVerificationFailed):
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
+		case errors.Is(err, authsvc.ErrProfileCreationFailed):
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
 		default:
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
@@ -79,7 +83,7 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.VerifyEmailRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -127,7 +131,7 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) LoginEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginEmailRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -159,6 +163,46 @@ func (h *AuthHandlers) LoginEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, dto.LoginEmailResponse{
+		UserID:       resp.UserID,
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+	})
+}
+
+func (h *AuthHandlers) LoginOAuth(w http.ResponseWriter, r *http.Request) {
+	var req dto.LoginOAuthRequest
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.svc.LoginOAuth(r.Context(), authsvc.LoginOAuthInput{
+		Provider: req.Provider,
+		IDToken:  req.IDToken,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("provider", req.Provider).Msg("LoginOAuth failed")
+		switch {
+		case errors.Is(err, authsvc.ErrIncorrectFormat):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		case errors.Is(err, authsvc.ErrOAuthInvalidToken):
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		case errors.Is(err, authsvc.ErrOAuthProviderUnavailable),
+			errors.Is(err, authsvc.ErrProfileCreationFailed):
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		case errors.Is(err, authsvc.ErrUserBlocked):
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.LoginOAuthResponse{
 		UserID:       resp.UserID,
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
@@ -214,7 +258,7 @@ func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req dto.RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -257,4 +301,10 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func decodeJSON(r *http.Request, dst any) error {
+	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	return dec.Decode(dst)
 }

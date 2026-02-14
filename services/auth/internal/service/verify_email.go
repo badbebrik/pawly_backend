@@ -10,8 +10,11 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
+	"regexp"
 	"time"
 )
+
+var verificationCodeRe = regexp.MustCompile(`^\d{6}$`)
 
 type VerifyEmailInput struct {
 	Email string
@@ -27,13 +30,13 @@ type VerifyEmailOutput struct {
 
 func (s *Service) VerifyEmail(ctx context.Context, in VerifyEmailInput) (*VerifyEmailOutput, error) {
 	email := security.NormalizeEmail(in.Email)
-	if !security.ValidateEmail(email) || in.Code == "" {
+	if !security.ValidateEmail(email) || !verificationCodeRe.MatchString(in.Code) {
 		return nil, ErrIncorrectFormat
 	}
 
 	loc := middleware.LocaleFromCtx(ctx, "ru")
 
-	u, err := s.users.GetByEmail(ctx, in.Email)
+	u, err := s.users.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, ErrUserNotFound

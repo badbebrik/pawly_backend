@@ -67,6 +67,11 @@ func (s *Service) RegisterEmail(ctx context.Context, in RegisterEmailInput) (*Re
 		return nil, ErrEmailAlreadyTaken
 	}
 
+	if err := s.profile.CreateProfile(ctx, user.ID, loc); err != nil {
+		_ = s.users.Delete(ctx, user.ID)
+		return nil, ErrProfileCreationFailed
+	}
+
 	code, ttlSeconds, resendInSeconds, verr := s.verification.RequestCode(ctx, email, "registration")
 	out := &RegisterEmailOutput{
 		UserID: user.ID,

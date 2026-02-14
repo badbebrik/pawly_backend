@@ -30,6 +30,14 @@ func (a *App) setupRoutes(svc *service.ProfileService) http.Handler {
 	})
 
 	r.Get("/internal/v1/profile/users/{user_id}/public-contact", hs.GetPublicContact)
+	r.Post("/internal/v1/profile/users", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("X-Internal-Token")
+		if a.cfg.InternalServiceToken == "" || token != a.cfg.InternalServiceToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		hs.CreateProfileInternal(w, r)
+	})
 
 	return r
 }

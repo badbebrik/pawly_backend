@@ -21,25 +21,27 @@ type Config struct {
 	DefaultTimezone string
 	DefaultDateFmt  string
 
-	FileServiceGRPCAddr string
+	FileServiceGRPCAddr  string
+	InternalServiceToken string
 }
 
 func Load() *Config {
 	return &Config{
-		AppPort:             getEnv("APP_PORT", ""),
-		RabbitHost:          getEnv("RABBITMQ_HOST", ""),
-		RabbitPort:          getEnv("RABBITMQ_PORT", ""),
-		RabbitUser:          getEnv("RABBITMQ_USER", ""),
-		RabbitPassword:      getEnv("RABBITMQ_PASSWORD", ""),
-		PostgresUser:        getEnv("POSTGRES_USER", ""),
-		PostgresPassword:    getEnv("POSTGRES_PASSWORD", ""),
-		PostgresDB:          getEnv("POSTGRES_DB", ""),
-		PostgresHost:        getEnv("POSTGRES_HOST", ""),
-		PostgresPort:        getEnv("POSTGRES_PORT", ""),
-		DefaultLocale:       getEnv("PROFILE_DEFAULT_LOCALE", ""),
-		DefaultTimezone:     getEnv("PROFILE_DEFAULT_TIMEZONE", ""),
-		DefaultDateFmt:      getEnv("PROFILE_DEFAULT_DATE_FORMAT", ""),
-		FileServiceGRPCAddr: getEnv("FILE_SERVICE_GRPC_ADDR", ""),
+		AppPort:              getEnv("APP_PORT", ""),
+		RabbitHost:           getEnv("RABBITMQ_HOST", ""),
+		RabbitPort:           getEnv("RABBITMQ_PORT", ""),
+		RabbitUser:           getEnv("RABBITMQ_USER", ""),
+		RabbitPassword:       getEnv("RABBITMQ_PASSWORD", ""),
+		PostgresUser:         getEnv("POSTGRES_USER", ""),
+		PostgresPassword:     getEnv("POSTGRES_PASSWORD", ""),
+		PostgresDB:           getEnv("POSTGRES_DB", ""),
+		PostgresHost:         getEnv("POSTGRES_HOST", ""),
+		PostgresPort:         getEnv("POSTGRES_PORT", ""),
+		DefaultLocale:        getEnv("PROFILE_DEFAULT_LOCALE", ""),
+		DefaultTimezone:      getEnv("PROFILE_DEFAULT_TIMEZONE", ""),
+		DefaultDateFmt:       getEnv("PROFILE_DEFAULT_DATE_FORMAT", ""),
+		FileServiceGRPCAddr:  getEnv("FILE_SERVICE_GRPC_ADDR", ""),
+		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}
 }
 

@@ -27,6 +27,7 @@ func (a *App) setupRoutes() http.Handler {
 	r.Post("/auth/register/email", authHandlers.RegisterEmail)
 	r.Post("/auth/verify/email", authHandlers.VerifyEmail)
 	r.Post("/auth/login/email", authHandlers.LoginEmail)
+	r.Post("/auth/login/oauth", authHandlers.LoginOAuth)
 	r.Post("/auth/logout", authHandlers.Logout)
 	r.Post("/auth/logout-all", authHandlers.LogoutAll)
 	r.Post("/auth/refresh", authHandlers.Refresh)

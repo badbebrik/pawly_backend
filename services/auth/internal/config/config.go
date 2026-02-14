@@ -29,6 +29,11 @@ type Config struct {
 	RabbitUser               string
 	RabbitPassword           string
 	RabbitNotificationsQueue string
+
+	ProfileServiceURL       string
+	InternalServiceToken    string
+	GoogleOAuthClientID     string
+	OAuthHTTPTimeoutSeconds int
 }
 
 func Load() *Config {
@@ -51,6 +56,10 @@ func Load() *Config {
 		RabbitUser:               getEnv("RABBITMQ_USER", ""),
 		RabbitPassword:           getEnv("RABBITMQ_PASSWORD", ""),
 		RabbitNotificationsQueue: getEnv("RABBITMQ_NOTIFICATIONS_QUEUE", ""),
+		ProfileServiceURL:        getEnv("PROFILE_SERVICE_URL", "http://localhost:8001"),
+		InternalServiceToken:     getEnv("INTERNAL_SERVICE_TOKEN", ""),
+		GoogleOAuthClientID:      getEnv("GOOGLE_OAUTH_CLIENT_ID", ""),
+		OAuthHTTPTimeoutSeconds:  getEnvInt("OAUTH_HTTP_TIMEOUT_SECONDS", 5),
 	}
 
 	return cfg

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"auth/internal/infrastructure/oauth"
+	"auth/internal/infrastructure/profileclient"
 	"auth/internal/infrastructure/rabbit"
 	"auth/internal/infrastructure/tokens"
 	"auth/internal/repository"
@@ -15,6 +17,8 @@ type Service struct {
 	verification verification.Store
 	notifier     rabbit.Publisher
 	jwt          tokens.TokenManager
+	profile      profileclient.Client
+	oauthVerify  oauth.Verifier
 
 	accessTTLSeconds int
 	refreshTTLDays   int
@@ -28,6 +32,8 @@ func NewService(
 	verification verification.Store,
 	notifier rabbit.Publisher,
 	jwt tokens.TokenManager,
+	profile profileclient.Client,
+	oauthVerify oauth.Verifier,
 	accessTTLSeconds int,
 	refreshTTLDays int,
 ) *Service {
@@ -39,6 +45,8 @@ func NewService(
 		verification:     verification,
 		notifier:         notifier,
 		jwt:              jwt,
+		profile:          profile,
+		oauthVerify:      oauthVerify,
 		accessTTLSeconds: accessTTLSeconds,
 		refreshTTLDays:   refreshTTLDays,
 	}

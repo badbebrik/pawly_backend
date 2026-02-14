@@ -4,6 +4,8 @@ import (
 	"auth/internal/config"
 	"auth/internal/infrastructure/db"
 	pgrepo "auth/internal/infrastructure/db/repository"
+	"auth/internal/infrastructure/oauth"
+	"auth/internal/infrastructure/profileclient"
 	"auth/internal/infrastructure/rabbit"
 	"auth/internal/infrastructure/redis"
 	"auth/internal/infrastructure/redis/redisstore"
@@ -79,6 +81,8 @@ func New(cfg *config.Config) (*App, error) {
 	verificationRepo := redisstore.NewRedisStore(redis.Client())
 
 	jwtSvc := tokens.NewJWTService(*cfg)
+	profileSvc := profileclient.New(cfg.ProfileServiceURL, cfg.InternalServiceToken, 5*time.Second)
+	oauthVerifier := oauth.NewGoogleVerifier(time.Duration(cfg.OAuthHTTPTimeoutSeconds)*time.Second, cfg.GoogleOAuthClientID)
 
 	authSvc := authsvc.NewService(
 		userRepo,
@@ -88,6 +92,8 @@ func New(cfg *config.Config) (*App, error) {
 		verificationRepo,
 		publisher,
 		jwtSvc,
+		profileSvc,
+		oauthVerifier,
 		cfg.AccessTokenTTLMin*60,
 		cfg.RefreshTokenTTLDays,
 	)

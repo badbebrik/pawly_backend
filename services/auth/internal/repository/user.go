@@ -17,4 +17,5 @@ type UserRepository interface {
 	SetActive(ctx context.Context, id uuid.UUID, active bool) error
 	UpdateLastLoginAt(ctx context.Context, id uuid.UUID, t time.Time) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }

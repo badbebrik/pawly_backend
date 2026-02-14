@@ -198,6 +198,18 @@ func (ur *UserRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (ur *UserRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	query := `DELETE FROM users WHERE id = $1`
+	cmd, err := ur.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return repository.ErrNotFound
+	}
+	return nil
+}
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

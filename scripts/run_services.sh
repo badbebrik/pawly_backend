@@ -5,11 +5,11 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 services=(
   "auth"
-  "profile"
   "catalog"
   "notification"
   "email"
   "file"
+  "profile"
 )
 
 pids=()

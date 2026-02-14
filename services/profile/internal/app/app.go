@@ -4,18 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
+
 	"profile/internal/config"
 	"profile/internal/infrastructure/db"
 	pgrepo "profile/internal/infrastructure/db/repository"
+	"profile/internal/infrastructure/fileclient"
 	"profile/internal/queue"
 	"profile/internal/service"
-	"syscall"
-	"time"
 )
 
 type App struct {
@@ -28,11 +31,18 @@ type App struct {
 	rabbitCh   *amqp091.Channel
 
 	userEventsConsumer *queue.UserEventsConsumer
+	fileClient         *fileclient.Client
 }
 
 func New(cfg *config.Config) (*App, error) {
 	pg, err := db.NewPostgres(cfg)
 	if err != nil {
+		return nil, err
+	}
+
+	fileClient, err := fileclient.New(cfg.FileServiceGRPCAddr)
+	if err != nil {
+		pg.Close()
 		return nil, err
 	}
 
@@ -44,12 +54,14 @@ func New(cfg *config.Config) (*App, error) {
 		cfg.RabbitPort,
 	))
 	if err != nil {
+		fileClient.Close()
 		pg.Close()
 		return nil, fmt.Errorf("rabbit connect: %w", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
+		fileClient.Close()
 		pg.Close()
 		_ = conn.Close()
 		return nil, fmt.Errorf("rabbit channel: %w", err)
@@ -63,6 +75,7 @@ func New(cfg *config.Config) (*App, error) {
 		false,
 		nil,
 	); err != nil {
+		fileClient.Close()
 		pg.Close()
 		_ = ch.Close()
 		_ = conn.Close()
@@ -70,13 +83,14 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	profileRepo := pgrepo.NewProfileRepository(pg.Pool)
-	profileSvc := service.NewService(profileRepo, cfg)
+	profileSvc := service.NewService(profileRepo, cfg, fileClient)
 
 	userEventsConsumer := queue.NewUserEventsConsumer(ch, cfg.RabbitUserEventsQueue, profileSvc, cfg)
 
 	app := &App{
 		cfg:                cfg,
 		pg:                 pg,
+		fileClient:         fileClient,
 		rabbitConn:         conn,
 		rabbitCh:           ch,
 		userEventsConsumer: userEventsConsumer,
@@ -105,6 +119,9 @@ func (a *App) Close() {
 	}
 	if a.rabbitConn != nil {
 		_ = a.rabbitConn.Close()
+	}
+	if a.fileClient != nil {
+		a.fileClient.Close()
 	}
 	if a.pg != nil {
 		a.pg.Close()

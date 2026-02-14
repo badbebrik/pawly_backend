@@ -21,8 +21,9 @@ func NewProfileRepository(db *pgxpool.Pool) *ProfileRepository {
 
 func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.Profile, error) {
 	const query = `
-        SELECT user_id, first_name, last_name, avatar_url, phone,
-               locale, timezone, date_format, notifications,
+        SELECT user_id, first_name, last_name, phone, avatar_file_id,
+               locale, timezone, date_format,
+               public_contact_settings, extra_contacts,
                created_at, updated_at
         FROM profiles
         WHERE user_id = $1
@@ -31,18 +32,20 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	row := r.db.QueryRow(ctx, query, userID)
 
 	var p model.Profile
-	var notifBytes []byte
+	var publicBytes []byte
+	var extraBytes []byte
 
 	err := row.Scan(
 		&p.UserID,
 		&p.FirstName,
 		&p.LastName,
-		&p.AvatarURL,
 		&p.Phone,
+		&p.AvatarFileID,
 		&p.Locale,
 		&p.Timezone,
 		&p.DateFormat,
-		&notifBytes,
+		&publicBytes,
+		&extraBytes,
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
@@ -53,35 +56,39 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 		return nil, err
 	}
 
-	if len(notifBytes) > 0 {
-		var m map[string]any
-		if err := json.Unmarshal(notifBytes, &m); err == nil {
-			p.Notifications = m
-		}
-	} else {
-		p.Notifications = map[string]any{}
+	if len(publicBytes) > 0 {
+		_ = json.Unmarshal(publicBytes, &p.PublicContact)
+	}
+	if len(extraBytes) > 0 {
+		_ = json.Unmarshal(extraBytes, &p.ExtraContacts)
+	}
+	if p.ExtraContacts == nil {
+		p.ExtraContacts = model.ExtraContacts{}
 	}
 
 	return &p, nil
 }
 
 func (r *ProfileRepository) Create(ctx context.Context, p *model.Profile) error {
-	if p.Notifications == nil {
-		p.Notifications = map[string]any{}
+	publicJSON, err := json.Marshal(p.PublicContact)
+	if err != nil {
+		return err
 	}
-	notifJSON, err := json.Marshal(p.Notifications)
+	extraJSON, err := json.Marshal(p.ExtraContacts)
 	if err != nil {
 		return err
 	}
 
 	const query = `
         INSERT INTO profiles (
-            user_id, first_name, last_name, avatar_url, phone,
-            locale, timezone, date_format, notifications,
+            user_id, first_name, last_name, phone, avatar_file_id,
+            locale, timezone, date_format,
+            public_contact_settings, extra_contacts,
             created_at, updated_at
         ) VALUES (
             $1, $2, $3, $4, $5,
-            $6, $7, $8, $9,
+            $6, $7, $8,
+            $9, $10,
             NOW(), NOW()
         )
     `
@@ -90,36 +97,39 @@ func (r *ProfileRepository) Create(ctx context.Context, p *model.Profile) error 
 		p.UserID,
 		p.FirstName,
 		p.LastName,
-		p.AvatarURL,
 		p.Phone,
+		p.AvatarFileID,
 		p.Locale,
 		p.Timezone,
 		p.DateFormat,
-		notifJSON,
+		publicJSON,
+		extraJSON,
 	)
 	return err
 }
 
 func (r *ProfileRepository) Update(ctx context.Context, p *model.Profile) error {
-	if p.Notifications == nil {
-		p.Notifications = map[string]any{}
+	publicJSON, err := json.Marshal(p.PublicContact)
+	if err != nil {
+		return err
 	}
-	notifJSON, err := json.Marshal(p.Notifications)
+	extraJSON, err := json.Marshal(p.ExtraContacts)
 	if err != nil {
 		return err
 	}
 
 	const query = `
         UPDATE profiles
-        SET first_name    = $2,
-            last_name     = $3,
-            avatar_url    = $4,
-            phone         = $5,
-            locale        = $6,
-            timezone      = $7,
-            date_format   = $8,
-            notifications = $9,
-            updated_at    = NOW()
+        SET first_name              = $2,
+            last_name               = $3,
+            phone                   = $4,
+            avatar_file_id          = $5,
+            locale                  = $6,
+            timezone                = $7,
+            date_format             = $8,
+            public_contact_settings = $9,
+            extra_contacts          = $10,
+            updated_at              = NOW()
         WHERE user_id = $1
     `
 
@@ -127,12 +137,13 @@ func (r *ProfileRepository) Update(ctx context.Context, p *model.Profile) error 
 		p.UserID,
 		p.FirstName,
 		p.LastName,
-		p.AvatarURL,
 		p.Phone,
+		p.AvatarFileID,
 		p.Locale,
 		p.Timezone,
 		p.DateFormat,
-		notifJSON,
+		publicJSON,
+		extraJSON,
 	)
 	if err != nil {
 		return err

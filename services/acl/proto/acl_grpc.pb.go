@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v4.25.3
-// source: proto/acl.proto
+// source: acl.proto
 
 package aclpb
 
@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ACLService_IsMember_FullMethodName        = "/acl.ACLService/IsMember"
-	ACLService_GetPolicy_FullMethodName       = "/acl.ACLService/GetPolicy"
-	ACLService_Check_FullMethodName           = "/acl.ACLService/Check"
-	ACLService_ListPetsForUser_FullMethodName = "/acl.ACLService/ListPetsForUser"
+	ACLService_IsMember_FullMethodName              = "/acl.ACLService/IsMember"
+	ACLService_GetPolicy_FullMethodName             = "/acl.ACLService/GetPolicy"
+	ACLService_Check_FullMethodName                 = "/acl.ACLService/Check"
+	ACLService_ListPetsForUser_FullMethodName       = "/acl.ACLService/ListPetsForUser"
+	ACLService_CreateOwnerMembership_FullMethodName = "/acl.ACLService/CreateOwnerMembership"
 )
 
 // ACLServiceClient is the client API for ACLService service.
@@ -33,6 +34,7 @@ type ACLServiceClient interface {
 	GetPolicy(ctx context.Context, in *GetPolicyRequest, opts ...grpc.CallOption) (*GetPolicyResponse, error)
 	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error)
 	ListPetsForUser(ctx context.Context, in *ListPetsForUserRequest, opts ...grpc.CallOption) (*ListPetsForUserResponse, error)
+	CreateOwnerMembership(ctx context.Context, in *CreateOwnerMembershipRequest, opts ...grpc.CallOption) (*CreateOwnerMembershipResponse, error)
 }
 
 type aCLServiceClient struct {
@@ -83,6 +85,16 @@ func (c *aCLServiceClient) ListPetsForUser(ctx context.Context, in *ListPetsForU
 	return out, nil
 }
 
+func (c *aCLServiceClient) CreateOwnerMembership(ctx context.Context, in *CreateOwnerMembershipRequest, opts ...grpc.CallOption) (*CreateOwnerMembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateOwnerMembershipResponse)
+	err := c.cc.Invoke(ctx, ACLService_CreateOwnerMembership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ACLServiceServer is the server API for ACLService service.
 // All implementations must embed UnimplementedACLServiceServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type ACLServiceServer interface {
 	GetPolicy(context.Context, *GetPolicyRequest) (*GetPolicyResponse, error)
 	Check(context.Context, *CheckRequest) (*CheckResponse, error)
 	ListPetsForUser(context.Context, *ListPetsForUserRequest) (*ListPetsForUserResponse, error)
+	CreateOwnerMembership(context.Context, *CreateOwnerMembershipRequest) (*CreateOwnerMembershipResponse, error)
 	mustEmbedUnimplementedACLServiceServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedACLServiceServer) Check(context.Context, *CheckRequest) (*Che
 }
 func (UnimplementedACLServiceServer) ListPetsForUser(context.Context, *ListPetsForUserRequest) (*ListPetsForUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPetsForUser not implemented")
+}
+func (UnimplementedACLServiceServer) CreateOwnerMembership(context.Context, *CreateOwnerMembershipRequest) (*CreateOwnerMembershipResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateOwnerMembership not implemented")
 }
 func (UnimplementedACLServiceServer) mustEmbedUnimplementedACLServiceServer() {}
 func (UnimplementedACLServiceServer) testEmbeddedByValue()                    {}
@@ -206,6 +222,24 @@ func _ACLService_ListPetsForUser_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ACLService_CreateOwnerMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOwnerMembershipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ACLServiceServer).CreateOwnerMembership(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ACLService_CreateOwnerMembership_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ACLServiceServer).CreateOwnerMembership(ctx, req.(*CreateOwnerMembershipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ACLService_ServiceDesc is the grpc.ServiceDesc for ACLService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -229,7 +263,11 @@ var ACLService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListPetsForUser",
 			Handler:    _ACLService_ListPetsForUser_Handler,
 		},
+		{
+			MethodName: "CreateOwnerMembership",
+			Handler:    _ACLService_CreateOwnerMembership_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/acl.proto",
+	Metadata: "acl.proto",
 }

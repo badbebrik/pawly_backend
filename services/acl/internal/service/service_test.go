@@ -16,6 +16,8 @@ type fakeMembershipRepo struct {
 	activeView      *repository.MemberView
 	activeViews     []repository.MemberView
 	petIDs          []uuid.UUID
+	ownerResult     *repository.MemberView
+	ownerErr        error
 	updateResult    *repository.MemberView
 	removeResult    *repository.MemberView
 	updateErr       error
@@ -41,6 +43,16 @@ func (f *fakeMembershipRepo) GetActiveByPetAndUser(_ context.Context, _, _ uuid.
 		return nil, repository.ErrNotFound
 	}
 	return f.activeByPetUser, nil
+}
+
+func (f *fakeMembershipRepo) CreateOwner(_ context.Context, _, _ uuid.UUID, _ model.Policy) (*repository.MemberView, error) {
+	if f.ownerErr != nil {
+		return nil, f.ownerErr
+	}
+	if f.ownerResult == nil {
+		return nil, repository.ErrNotFound
+	}
+	return f.ownerResult, nil
 }
 
 func (f *fakeMembershipRepo) GetActiveViewByPetAndUser(_ context.Context, _, _ uuid.UUID) (*repository.MemberView, error) {
@@ -261,6 +273,19 @@ func TestCheckInvalidAction(t *testing.T) {
 	_, err := svc.Check(context.Background(), CheckParams{PetID: uuid.New(), UserID: uuid.New(), Action: "unknown_action"})
 	if err != ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestCreateOwnerMembershipMapsConflict(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{
+		ownerErr: repository.ErrConflict,
+	}, &fakeRoleRepo{}, nil, nil)
+
+	_, err := svc.CreateOwnerMembership(context.Background(), uuid.New(), uuid.New())
+	if err != ErrConflict {
+		t.Fatalf("expected ErrConflict, got %v", err)
 	}
 }
 

@@ -39,6 +39,7 @@ type MemberView struct {
 type MembershipRepository interface {
 	GetByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*MembershipAccess, error)
 	GetActiveByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*MembershipAccess, error)
+	CreateOwner(ctx context.Context, petID, ownerUserID uuid.UUID, policy model.Policy) (*MemberView, error)
 	GetActiveViewByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*MemberView, error)
 	GetByIDAndPet(ctx context.Context, petID, memberID uuid.UUID) (*MemberView, error)
 	ListActiveViewsByPet(ctx context.Context, petID uuid.UUID) ([]MemberView, error)

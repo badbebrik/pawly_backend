@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -82,6 +83,75 @@ func (r *MembershipRepository) GetActiveByPetAndUser(ctx context.Context, petID,
 	}
 
 	return &access, nil
+}
+
+func (r *MembershipRepository) CreateOwner(ctx context.Context, petID, ownerUserID uuid.UUID, policy model.Policy) (*repository.MemberView, error) {
+	policyRaw, err := json.Marshal(policy)
+	if err != nil {
+		return nil, err
+	}
+
+	memberID := uuid.New()
+	const query = `
+		WITH owner_role AS (
+			SELECT id
+			FROM roles
+			WHERE kind = 'SYSTEM' AND code = 'OWNER'
+			LIMIT 1
+		),
+		owner_preset AS (
+			SELECT id
+			FROM permission_presets
+			WHERE is_system = TRUE AND role_code = 'OWNER'
+			ORDER BY created_at ASC
+			LIMIT 1
+		)
+		INSERT INTO pet_memberships (
+			id, pet_id, user_id, status, role_id, policy, base_preset_id,
+			is_primary_owner, created_by_user_id, created_at, updated_at, removed_at, removed_by_user_id
+		)
+		SELECT
+			$1, $2, $3, 'ACTIVE', owner_role.id, $4, owner_preset.id,
+			TRUE, $3, NOW(), NOW(), NULL, NULL
+		FROM owner_role
+		LEFT JOIN owner_preset ON TRUE
+		ON CONFLICT (pet_id, user_id) DO UPDATE
+		SET status = 'ACTIVE',
+		    role_id = EXCLUDED.role_id,
+		    policy = EXCLUDED.policy,
+		    base_preset_id = EXCLUDED.base_preset_id,
+		    is_primary_owner = TRUE,
+		    updated_at = NOW(),
+		    removed_at = NULL,
+		    removed_by_user_id = NULL
+		WHERE pet_memberships.is_primary_owner = TRUE
+		RETURNING id
+	`
+
+	if err := r.db.QueryRow(ctx, query, memberID, petID, ownerUserID, policyRaw).Scan(&memberID); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, repository.ErrConflict
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, repository.ErrConflict
+		}
+		return nil, err
+	}
+
+	member, err := r.getActiveByIDAndPet(ctx, memberID, petID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, repository.ErrConflict
+		}
+		return nil, err
+	}
+
+	if member.Role.Code == "" {
+		return nil, repository.ErrNotFound
+	}
+
+	return member, nil
 }
 
 func (r *MembershipRepository) ListActivePetIDsByUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {

@@ -36,6 +36,14 @@ services:
           - /v1/catalog
         strip_path: false
 
+  - name: pet-service
+    url: http://host.docker.internal:8085
+    routes:
+      - name: pet-routes
+        paths:
+          - /v1/pets
+        strip_path: false
+
   - name: notification-service
     url: http://host.docker.internal:8083
     routes:

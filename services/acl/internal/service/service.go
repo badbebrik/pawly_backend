@@ -180,6 +180,25 @@ func (s *ACLService) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]u
 	return s.memberships.ListActivePetIDsByUser(ctx, userID)
 }
 
+func (s *ACLService) CreateOwnerMembership(ctx context.Context, petID, ownerUserID uuid.UUID) (*repository.MemberView, error) {
+	if petID == uuid.Nil || ownerUserID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	member, err := s.memberships.CreateOwner(ctx, petID, ownerUserID, ownerFullAccessPolicy())
+	if err != nil {
+		switch err {
+		case repository.ErrConflict:
+			return nil, ErrConflict
+		case repository.ErrNotFound:
+			return nil, ErrNotFound
+		default:
+			return nil, err
+		}
+	}
+	return member, nil
+}
+
 func (s *ACLService) GetMyAccess(ctx context.Context, petID, userID uuid.UUID) (*repository.MemberView, error) {
 	member, err := s.memberships.GetActiveViewByPetAndUser(ctx, petID, userID)
 	if err != nil {
@@ -542,6 +561,28 @@ func criticalOwnerPolicy(p model.Policy) bool {
 		p.MembersInvite &&
 		p.MembersRemove &&
 		p.MembersEditPermissions
+}
+
+func ownerFullAccessPolicy() model.Policy {
+	return model.Policy{
+		PetRead:                true,
+		PetEdit:                true,
+		PetStatusChange:        true,
+		PetDelete:              true,
+		LogRead:                true,
+		LogCreate:              true,
+		LogEdit:                true,
+		LogDelete:              true,
+		LogAttachmentsRead:     true,
+		HealthRead:             true,
+		HealthWrite:            true,
+		TaskRead:               true,
+		TaskWrite:              true,
+		MembersView:            true,
+		MembersInvite:          true,
+		MembersRemove:          true,
+		MembersEditPermissions: true,
+	}
 }
 
 func generateNumericCode(length int) (string, error) {

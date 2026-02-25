@@ -60,6 +60,7 @@ service ACLService {
   rpc GetPolicy(GetPolicyRequest) returns (GetPolicyResponse);
   rpc Check(CheckRequest) returns (CheckResponse);
   rpc ListPetsForUser(ListPetsForUserRequest) returns (ListPetsForUserResponse);
+  rpc CreateOwnerMembership(CreateOwnerMembershipRequest) returns (CreateOwnerMembershipResponse);
 }
 
 message IsMemberRequest {
@@ -99,4 +100,13 @@ message ListPetsForUserRequest {
 
 message ListPetsForUserResponse {
   repeated string pet_ids = 1;
+}
+
+message CreateOwnerMembershipRequest {
+  string pet_id = 1;
+  string user_id = 2;
+}
+
+message CreateOwnerMembershipResponse {
+  string member_id = 1;
 }

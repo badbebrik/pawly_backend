@@ -99,6 +99,20 @@ func (s *Server) ListPetsForUser(ctx context.Context, req *aclpb.ListPetsForUser
 	return &aclpb.ListPetsForUserResponse{PetIds: items}, nil
 }
 
+func (s *Server) CreateOwnerMembership(ctx context.Context, req *aclpb.CreateOwnerMembershipRequest) (*aclpb.CreateOwnerMembershipResponse, error) {
+	petID, userID, err := parsePetAndUser(req.GetPetId(), req.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+
+	member, err := s.svc.CreateOwnerMembership(ctx, petID, userID)
+	if err != nil {
+		return nil, mapSvcErr(err)
+	}
+
+	return &aclpb.CreateOwnerMembershipResponse{MemberId: member.ID.String()}, nil
+}
+
 func parsePetAndUser(petRaw, userRaw string) (uuid.UUID, uuid.UUID, error) {
 	petID, err := uuid.Parse(petRaw)
 	if err != nil {

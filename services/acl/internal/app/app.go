@@ -3,6 +3,7 @@ package app
 import (
 	"acl/internal/config"
 	"acl/internal/infrastructure/db"
+	pgrepo "acl/internal/infrastructure/repository"
 	aclservice "acl/internal/service"
 	grpcserver "acl/internal/transport/grpc"
 	"context"
@@ -35,7 +36,8 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	aclSvc := aclservice.New()
+	membershipRepo := pgrepo.NewMembershipRepository(pg.Pool)
+	aclSvc := aclservice.New(membershipRepo)
 
 	app := &App{
 		cfg:    cfg,
@@ -57,7 +59,7 @@ func New(cfg *config.Config) (*App, error) {
 	app.grpcListener = grpcListener
 
 	grpcSrv := grpc.NewServer()
-	grpcserver.Register(grpcSrv)
+	grpcserver.Register(grpcSrv, grpcserver.NewServer(aclSvc))
 	app.grpcSrv = grpcSrv
 
 	return app, nil

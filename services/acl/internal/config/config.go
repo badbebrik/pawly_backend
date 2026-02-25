@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 type Config struct {
 	AppHTTPPort string
@@ -13,6 +16,8 @@ type Config struct {
 	PostgresPort     string
 
 	InternalServiceToken string
+	InviteTTLMinutes     int
+	InviteDeeplinkBase   string
 }
 
 func Load() *Config {
@@ -25,6 +30,8 @@ func Load() *Config {
 		PostgresHost:         getEnv("POSTGRES_HOST", "localhost"),
 		PostgresPort:         getEnv("POSTGRES_PORT", "5434"),
 		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
+		InviteTTLMinutes:     getEnvInt("INVITE_TTL_MINUTES", 10080),
+		InviteDeeplinkBase:   getEnv("INVITE_DEEPLINK_BASE", "myapp://invite?token="),
 	}
 }
 
@@ -33,4 +40,16 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return v
 }

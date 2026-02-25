@@ -121,6 +121,8 @@ func mapSvcErr(err error) error {
 		return status.Error(codes.PermissionDenied, "forbidden")
 	case errors.Is(err, service.ErrInvalidInput):
 		return status.Error(codes.InvalidArgument, "invalid input")
+	case errors.Is(err, service.ErrConflict):
+		return status.Error(codes.FailedPrecondition, "conflict")
 	default:
 		return status.Error(codes.Internal, "internal error")
 	}

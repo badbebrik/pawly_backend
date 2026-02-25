@@ -38,7 +38,18 @@ func New(cfg *config.Config) (*App, error) {
 
 	membershipRepo := pgrepo.NewMembershipRepository(pg.Pool)
 	roleRepo := pgrepo.NewRoleRepository(pg.Pool)
-	aclSvc := aclservice.New(membershipRepo, roleRepo)
+	presetRepo := pgrepo.NewPresetRepository(pg.Pool)
+	inviteRepo := pgrepo.NewInviteRepository(pg.Pool)
+	aclSvc := aclservice.New(
+		membershipRepo,
+		roleRepo,
+		presetRepo,
+		inviteRepo,
+		aclservice.Options{
+			InviteTTL:          time.Duration(cfg.InviteTTLMinutes) * time.Minute,
+			InviteDeeplinkBase: cfg.InviteDeeplinkBase,
+		},
+	)
 
 	app := &App{
 		cfg:    cfg,

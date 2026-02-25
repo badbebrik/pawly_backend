@@ -1,6 +1,7 @@
 package pgrepo
 
 import (
+	"acl/internal/model"
 	"acl/internal/repository"
 	"context"
 	"encoding/json"
@@ -116,7 +117,7 @@ func (r *MembershipRepository) GetActiveViewByPetAndUser(ctx context.Context, pe
 	const query = `
 		SELECT
 			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
-			r.id, r.kind, COALESCE(r.code, ''), r.title
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
 		FROM pet_memberships m
 		JOIN roles r ON r.id = m.role_id
 		WHERE m.pet_id = $1
@@ -131,7 +132,7 @@ func (r *MembershipRepository) ListActiveViewsByPet(ctx context.Context, petID u
 	const query = `
 		SELECT
 			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
-			r.id, r.kind, COALESCE(r.code, ''), r.title
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
 		FROM pet_memberships m
 		JOIN roles r ON r.id = m.role_id
 		WHERE m.pet_id = $1
@@ -157,6 +158,103 @@ func (r *MembershipRepository) ListActiveViewsByPet(ctx context.Context, petID u
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *MembershipRepository) GetByIDAndPet(ctx context.Context, petID, memberID uuid.UUID) (*repository.MemberView, error) {
+	return r.getAnyByIDAndPet(ctx, memberID, petID)
+}
+
+func (r *MembershipRepository) UpdatePermissions(
+	ctx context.Context,
+	petID, memberID uuid.UUID,
+	roleID uuid.UUID,
+	policy model.Policy,
+	basePresetID *uuid.UUID,
+) (*repository.MemberView, error) {
+	policyRaw, err := json.Marshal(policy)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		UPDATE pet_memberships
+		SET role_id = $3,
+		    policy = $4,
+		    base_preset_id = $5,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND pet_id = $2
+		  AND status = 'ACTIVE'
+	`
+	cmd, err := r.db.Exec(ctx, query, memberID, petID, roleID, policyRaw, basePresetID)
+	if err != nil {
+		return nil, err
+	}
+	if cmd.RowsAffected() == 0 {
+		return nil, repository.ErrNotFound
+	}
+
+	return r.getActiveByIDAndPet(ctx, memberID, petID)
+}
+
+func (r *MembershipRepository) RemoveMember(ctx context.Context, petID, memberID, removedByUserID uuid.UUID) (*repository.MemberView, error) {
+	const query = `
+		UPDATE pet_memberships
+		SET status = 'REMOVED',
+		    removed_at = NOW(),
+		    removed_by_user_id = $3,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND pet_id = $2
+		  AND status = 'ACTIVE'
+		  AND is_primary_owner = FALSE
+	`
+	cmd, err := r.db.Exec(ctx, query, memberID, petID, removedByUserID)
+	if err != nil {
+		return nil, err
+	}
+	if cmd.RowsAffected() == 0 {
+		existing, err := r.getAnyByIDAndPet(ctx, memberID, petID)
+		if err != nil {
+			if err == repository.ErrNotFound {
+				return nil, repository.ErrNotFound
+			}
+			return nil, err
+		}
+		if existing.IsPrimaryOwner && existing.Status == "ACTIVE" {
+			return nil, repository.ErrConflict
+		}
+		return nil, repository.ErrNotFound
+	}
+
+	return r.getAnyByIDAndPet(ctx, memberID, petID)
+}
+
+func (r *MembershipRepository) getActiveByIDAndPet(ctx context.Context, memberID, petID uuid.UUID) (*repository.MemberView, error) {
+	const query = `
+		SELECT
+			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+		FROM pet_memberships m
+		JOIN roles r ON r.id = m.role_id
+		WHERE m.id = $1
+		  AND m.pet_id = $2
+		  AND m.status = 'ACTIVE'
+	`
+	return r.scanMemberView(ctx, query, memberID, petID)
+}
+
+func (r *MembershipRepository) getAnyByIDAndPet(ctx context.Context, memberID, petID uuid.UUID) (*repository.MemberView, error) {
+	const query = `
+		SELECT
+			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+		FROM pet_memberships m
+		JOIN roles r ON r.id = m.role_id
+		WHERE m.id = $1
+		  AND m.pet_id = $2
+	`
+	return r.scanMemberView(ctx, query, memberID, petID)
 }
 
 func (r *MembershipRepository) scanMemberView(ctx context.Context, query string, args ...any) (*repository.MemberView, error) {
@@ -192,8 +290,10 @@ func scanMemberRow(s scanner) (*repository.MemberView, error) {
 		&member.UpdatedAt,
 		&role.ID,
 		&role.Kind,
+		&role.PetID,
 		&role.Code,
 		&role.Title,
+		&role.CreatedByUserID,
 	)
 	if err != nil {
 		return nil, err

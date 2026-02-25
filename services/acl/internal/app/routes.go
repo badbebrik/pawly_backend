@@ -23,35 +23,35 @@ func (a *App) setupRoutes() http.Handler {
 	})
 
 	pub := handlers.NewPublicHandlers(a.aclSvc)
-	internal := handlers.NewInternalHandlers()
+	internal := handlers.NewInternalHandlers(a.aclSvc)
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID)
 
 		r.Get("/v1/pets/{pet_id}/acl/roles", pub.ListRoles)
-		r.Post("/v1/pets/{pet_id}/acl/roles", pub.NotImplemented)
-		r.Delete("/v1/pets/{pet_id}/acl/roles/{role_id}", pub.NotImplemented)
+		r.Post("/v1/pets/{pet_id}/acl/roles", pub.CreateCustomRole)
+		r.Delete("/v1/pets/{pet_id}/acl/roles/{role_id}", pub.DeleteCustomRole)
 
-		r.Get("/v1/acl/presets", pub.NotImplemented)
+		r.Get("/v1/acl/presets", pub.ListPresets)
 
 		r.Get("/v1/pets/{pet_id}/acl/members", pub.ListMembers)
 		r.Get("/v1/pets/{pet_id}/acl/me", pub.GetMyAccess)
-		r.Patch("/v1/pets/{pet_id}/acl/members/{member_id}", pub.NotImplemented)
-		r.Delete("/v1/pets/{pet_id}/acl/members/{member_id}", pub.NotImplemented)
+		r.Patch("/v1/pets/{pet_id}/acl/members/{member_id}", pub.UpdateMemberPermissions)
+		r.Delete("/v1/pets/{pet_id}/acl/members/{member_id}", pub.RemoveMember)
 
-		r.Post("/v1/pets/{pet_id}/acl/invites", pub.NotImplemented)
-		r.Get("/v1/pets/{pet_id}/acl/invites", pub.NotImplemented)
-		r.Delete("/v1/pets/{pet_id}/acl/invites/{invite_id}", pub.NotImplemented)
-		r.Post("/v1/acl/invites/accept-by-code", pub.NotImplemented)
-		r.Post("/v1/acl/invites/accept-by-token", pub.NotImplemented)
+		r.Post("/v1/pets/{pet_id}/acl/invites", pub.CreateInvite)
+		r.Get("/v1/pets/{pet_id}/acl/invites", pub.ListInvites)
+		r.Delete("/v1/pets/{pet_id}/acl/invites/{invite_id}", pub.RevokeInvite)
+		r.Post("/v1/acl/invites/accept-by-code", pub.AcceptInviteByCode)
+		r.Post("/v1/acl/invites/accept-by-token", pub.AcceptInviteByToken)
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithInternalToken(a.cfg.InternalServiceToken))
-		r.Post("/internal/v1/acl/is-member", internal.NotImplemented)
-		r.Post("/internal/v1/acl/get-policy", internal.NotImplemented)
-		r.Post("/internal/v1/acl/check", internal.NotImplemented)
-		r.Post("/internal/v1/acl/list-pets-for-user", internal.NotImplemented)
+		r.Post("/internal/v1/acl/is-member", internal.IsMember)
+		r.Post("/internal/v1/acl/get-policy", internal.GetPolicy)
+		r.Post("/internal/v1/acl/check", internal.Check)
+		r.Post("/internal/v1/acl/list-pets-for-user", internal.ListPetsForUser)
 	})
 
 	return r

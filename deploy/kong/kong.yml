@@ -24,6 +24,7 @@ services:
       - name: acl-routes
         paths:
           - /v1/acl
+          - ~/v1/pets/.+/acl
           - /internal/v1/acl
         strip_path: false
 

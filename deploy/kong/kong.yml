@@ -18,6 +18,15 @@ services:
           - /internal/v1/profile
         strip_path: false
 
+  - name: acl-service
+    url: http://host.docker.internal:8087
+    routes:
+      - name: acl-routes
+        paths:
+          - /v1/acl
+          - /internal/v1/acl
+        strip_path: false
+
   - name: catalog-service
     url: http://host.docker.internal:8082
     routes:

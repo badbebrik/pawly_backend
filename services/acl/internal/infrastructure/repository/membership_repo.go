@@ -112,4 +112,98 @@ func (r *MembershipRepository) ListActivePetIDsByUser(ctx context.Context, userI
 	return petIDs, nil
 }
 
+func (r *MembershipRepository) GetActiveViewByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*repository.MemberView, error) {
+	const query = `
+		SELECT
+			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
+			r.id, r.kind, COALESCE(r.code, ''), r.title
+		FROM pet_memberships m
+		JOIN roles r ON r.id = m.role_id
+		WHERE m.pet_id = $1
+		  AND m.user_id = $2
+		  AND m.status = 'ACTIVE'
+	`
+
+	return r.scanMemberView(ctx, query, petID, userID)
+}
+
+func (r *MembershipRepository) ListActiveViewsByPet(ctx context.Context, petID uuid.UUID) ([]repository.MemberView, error) {
+	const query = `
+		SELECT
+			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
+			r.id, r.kind, COALESCE(r.code, ''), r.title
+		FROM pet_memberships m
+		JOIN roles r ON r.id = m.role_id
+		WHERE m.pet_id = $1
+		  AND m.status = 'ACTIVE'
+		ORDER BY m.created_at ASC
+	`
+
+	rows, err := r.db.Query(ctx, query, petID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]repository.MemberView, 0)
+	for rows.Next() {
+		member, err := scanMemberRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *member)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *MembershipRepository) scanMemberView(ctx context.Context, query string, args ...any) (*repository.MemberView, error) {
+	row := r.db.QueryRow(ctx, query, args...)
+	member, err := scanMemberRow(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	return member, nil
+}
+
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+func scanMemberRow(s scanner) (*repository.MemberView, error) {
+	var (
+		member    repository.MemberView
+		role      repository.RoleView
+		policyRaw []byte
+	)
+	err := s.Scan(
+		&member.ID,
+		&member.PetID,
+		&member.UserID,
+		&member.Status,
+		&member.IsPrimaryOwner,
+		&policyRaw,
+		&member.CreatedAt,
+		&member.UpdatedAt,
+		&role.ID,
+		&role.Kind,
+		&role.Code,
+		&role.Title,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(policyRaw, &member.Policy); err != nil {
+		return nil, err
+	}
+	member.Role = role
+	return &member, nil
+}
+
 var _ repository.MembershipRepository = (*MembershipRepository)(nil)

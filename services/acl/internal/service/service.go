@@ -35,10 +35,14 @@ const membershipStatusActive = "ACTIVE"
 
 type ACLService struct {
 	memberships repository.MembershipRepository
+	roles       repository.RoleRepository
 }
 
-func New(memberships repository.MembershipRepository) *ACLService {
-	return &ACLService{memberships: memberships}
+func New(memberships repository.MembershipRepository, roles repository.RoleRepository) *ACLService {
+	return &ACLService{
+		memberships: memberships,
+		roles:       roles,
+	}
 }
 
 type CheckParams struct {
@@ -104,6 +108,49 @@ func (s *ACLService) Check(ctx context.Context, p CheckParams) (bool, error) {
 
 func (s *ACLService) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	return s.memberships.ListActivePetIDsByUser(ctx, userID)
+}
+
+func (s *ACLService) GetMyAccess(ctx context.Context, petID, userID uuid.UUID) (*repository.MemberView, error) {
+	member, err := s.memberships.GetActiveViewByPetAndUser(ctx, petID, userID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	return member, nil
+}
+
+func (s *ACLService) ListMembers(ctx context.Context, petID, requesterID uuid.UUID) ([]repository.MemberView, error) {
+	allowed, err := s.Check(ctx, CheckParams{
+		PetID:  petID,
+		UserID: requesterID,
+		Action: string(ActionMembersView),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	return s.memberships.ListActiveViewsByPet(ctx, petID)
+}
+
+func (s *ACLService) ListRoles(ctx context.Context, petID, requesterID uuid.UUID) ([]repository.RoleView, error) {
+	allowed, err := s.Check(ctx, CheckParams{
+		PetID:  petID,
+		UserID: requesterID,
+		Action: string(ActionMembersView),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	return s.roles.ListSystemAndPetRoles(ctx, petID)
 }
 
 func isAllowed(p model.Policy, action Action) (bool, bool) {

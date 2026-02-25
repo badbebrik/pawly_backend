@@ -37,7 +37,8 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	membershipRepo := pgrepo.NewMembershipRepository(pg.Pool)
-	aclSvc := aclservice.New(membershipRepo)
+	roleRepo := pgrepo.NewRoleRepository(pg.Pool)
+	aclSvc := aclservice.New(membershipRepo, roleRepo)
 
 	app := &App{
 		cfg:    cfg,

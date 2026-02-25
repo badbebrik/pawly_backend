@@ -22,20 +22,20 @@ func (a *App) setupRoutes() http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	pub := handlers.NewPublicHandlers()
+	pub := handlers.NewPublicHandlers(a.aclSvc)
 	internal := handlers.NewInternalHandlers()
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID)
 
-		r.Get("/v1/pets/{pet_id}/acl/roles", pub.NotImplemented)
+		r.Get("/v1/pets/{pet_id}/acl/roles", pub.ListRoles)
 		r.Post("/v1/pets/{pet_id}/acl/roles", pub.NotImplemented)
 		r.Delete("/v1/pets/{pet_id}/acl/roles/{role_id}", pub.NotImplemented)
 
 		r.Get("/v1/acl/presets", pub.NotImplemented)
 
-		r.Get("/v1/pets/{pet_id}/acl/members", pub.NotImplemented)
-		r.Get("/v1/pets/{pet_id}/acl/me", pub.NotImplemented)
+		r.Get("/v1/pets/{pet_id}/acl/members", pub.ListMembers)
+		r.Get("/v1/pets/{pet_id}/acl/me", pub.GetMyAccess)
 		r.Patch("/v1/pets/{pet_id}/acl/members/{member_id}", pub.NotImplemented)
 		r.Delete("/v1/pets/{pet_id}/acl/members/{member_id}", pub.NotImplemented)
 

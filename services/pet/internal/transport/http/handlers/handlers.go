@@ -59,6 +59,18 @@ type changeStatusRequest struct {
 	MissingSince *string `json:"missing_since"`
 }
 
+type initPetPhotoUploadRequest struct {
+	MimeType          string `json:"mime_type"`
+	OriginalFilename  string `json:"original_filename"`
+	ExpectedSizeBytes int64  `json:"expected_size_bytes"`
+}
+
+type confirmPetPhotoUploadRequest struct {
+	RowVersion int    `json:"row_version"`
+	FileID     string `json:"file_id"`
+	SizeBytes  int64  `json:"size_bytes"`
+}
+
 func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 	userID, ok := appmw.UserIDFromContext(r.Context())
 	if !ok {
@@ -309,6 +321,92 @@ func (h *Handlers) ChangePetStatus(w http.ResponseWriter, r *http.Request) {
 		RowVersion:   req.RowVersion,
 		Status:       req.Status,
 		MissingSince: missingSince,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet)})
+}
+
+func (h *Handlers) InitPetPhotoUpload(w http.ResponseWriter, r *http.Request) {
+	userID, ok := appmw.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
+		return
+	}
+
+	petID, err := uuid.Parse(chi.URLParam(r, "pet_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pet_id")
+		return
+	}
+
+	var req initPetPhotoUploadRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	fileID, upload, err := h.svc.InitPetPhotoUpload(r.Context(), service.InitPetPhotoUploadParams{
+		UserID:            userID,
+		PetID:             petID,
+		MimeType:          req.MimeType,
+		OriginalFilename:  req.OriginalFilename,
+		ExpectedSizeBytes: req.ExpectedSizeBytes,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"file_id": fileID.String(),
+		"upload": map[string]any{
+			"method":     upload.Method,
+			"url":        upload.URL,
+			"headers":    upload.Headers,
+			"expires_at": upload.ExpiresAt.UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func (h *Handlers) ConfirmPetPhotoUpload(w http.ResponseWriter, r *http.Request) {
+	userID, ok := appmw.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
+		return
+	}
+
+	petID, err := uuid.Parse(chi.URLParam(r, "pet_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pet_id")
+		return
+	}
+
+	var req confirmPetPhotoUploadRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	fileID, err := uuid.Parse(req.FileID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid file_id")
+		return
+	}
+
+	pet, err := h.svc.ConfirmPetPhotoUpload(r.Context(), service.ConfirmPetPhotoUploadParams{
+		UserID:     userID,
+		PetID:      petID,
+		RowVersion: req.RowVersion,
+		FileID:     fileID,
+		SizeBytes:  req.SizeBytes,
 	})
 	if err != nil {
 		writeServiceError(w, err)

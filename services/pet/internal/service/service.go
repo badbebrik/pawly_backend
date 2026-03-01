@@ -13,6 +13,7 @@ import (
 const ActionPetRead = "pet_read"
 const ActionPetEdit = "pet_edit"
 const ActionPetStatusChange = "pet_status_change"
+const MaxPetPhotoSizeBytes int64 = 20 * 1024 * 1024
 
 type ACLClient interface {
 	Check(ctx context.Context, petID, userID uuid.UUID, action string) (bool, error)
@@ -20,13 +21,20 @@ type ACLClient interface {
 	CreateOwnerMembership(ctx context.Context, petID, userID uuid.UUID) (uuid.UUID, error)
 }
 
+type FileClient interface {
+	InitUpload(ctx context.Context, mimeType string, expectedSize int64) (uuid.UUID, UploadInfo, error)
+	ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) error
+	LinkPetAvatar(ctx context.Context, fileID, petID uuid.UUID) error
+}
+
 type PetService struct {
 	repo repository.PetRepository
 	acl  ACLClient
+	file FileClient
 }
 
-func New(repo repository.PetRepository, acl ACLClient) *PetService {
-	return &PetService{repo: repo, acl: acl}
+func New(repo repository.PetRepository, acl ACLClient, file FileClient) *PetService {
+	return &PetService{repo: repo, acl: acl, file: file}
 }
 
 type CreatePetParams struct {
@@ -76,6 +84,29 @@ type ChangePetStatusParams struct {
 	RowVersion   int
 	Status       string
 	MissingSince *time.Time
+}
+
+type UploadInfo struct {
+	Method    string
+	URL       string
+	Headers   map[string]string
+	ExpiresAt time.Time
+}
+
+type InitPetPhotoUploadParams struct {
+	UserID            uuid.UUID
+	PetID             uuid.UUID
+	MimeType          string
+	OriginalFilename  string
+	ExpectedSizeBytes int64
+}
+
+type ConfirmPetPhotoUploadParams struct {
+	UserID     uuid.UUID
+	PetID      uuid.UUID
+	RowVersion int
+	FileID     uuid.UUID
+	SizeBytes  int64
 }
 
 func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.Pet, error) {
@@ -273,4 +304,98 @@ func (s *PetService) ChangePetStatus(ctx context.Context, p ChangePetStatusParam
 		}
 	}
 	return pet, nil
+}
+
+func (s *PetService) InitPetPhotoUpload(ctx context.Context, p InitPetPhotoUploadParams) (uuid.UUID, UploadInfo, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || strings.TrimSpace(p.MimeType) == "" || p.ExpectedSizeBytes <= 0 || p.ExpectedSizeBytes > MaxPetPhotoSizeBytes {
+		return uuid.Nil, UploadInfo{}, ErrInvalidInput
+	}
+	if !isAllowedPetPhotoMimeType(p.MimeType) {
+		return uuid.Nil, UploadInfo{}, ErrInvalidInput
+	}
+
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetEdit)
+	if err != nil {
+		if err == ErrNotFound {
+			return uuid.Nil, UploadInfo{}, ErrForbidden
+		}
+		return uuid.Nil, UploadInfo{}, err
+	}
+	if !allowed {
+		return uuid.Nil, UploadInfo{}, ErrForbidden
+	}
+
+	pet, err := s.repo.GetByID(ctx, p.PetID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return uuid.Nil, UploadInfo{}, ErrNotFound
+		}
+		return uuid.Nil, UploadInfo{}, err
+	}
+	if pet.Status == "ARCHIVED" {
+		return uuid.Nil, UploadInfo{}, ErrConflict
+	}
+
+	fileID, upload, err := s.file.InitUpload(ctx, strings.TrimSpace(strings.ToLower(p.MimeType)), p.ExpectedSizeBytes)
+	if err != nil {
+		return uuid.Nil, UploadInfo{}, err
+	}
+	return fileID, upload, nil
+}
+
+func (s *PetService) ConfirmPetPhotoUpload(ctx context.Context, p ConfirmPetPhotoUploadParams) (*model.Pet, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.RowVersion <= 0 || p.FileID == uuid.Nil || p.SizeBytes <= 0 || p.SizeBytes > MaxPetPhotoSizeBytes {
+		return nil, ErrInvalidInput
+	}
+
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetEdit)
+	if err != nil {
+		if err == ErrNotFound {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	pet, err := s.repo.GetByID(ctx, p.PetID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if pet.Status == "ARCHIVED" {
+		return nil, ErrConflict
+	}
+
+	if err := s.file.ConfirmUpload(ctx, p.FileID, p.SizeBytes); err != nil {
+		return nil, err
+	}
+	if err := s.file.LinkPetAvatar(ctx, p.FileID, p.PetID); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.repo.UpdatePhoto(ctx, p.PetID, p.RowVersion, p.FileID)
+	if err != nil {
+		switch err {
+		case repository.ErrNotFound:
+			return nil, ErrNotFound
+		case repository.ErrConflict:
+			return nil, ErrConflict
+		default:
+			return nil, err
+		}
+	}
+	return updated, nil
+}
+
+func isAllowedPetPhotoMimeType(raw string) bool {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "image/jpeg", "image/png":
+		return true
+	default:
+		return false
+	}
 }

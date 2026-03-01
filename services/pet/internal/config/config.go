@@ -11,7 +11,8 @@ type Config struct {
 	PostgresHost     string
 	PostgresPort     string
 
-	ACLGRPCAddr string
+	ACLGRPCAddr  string
+	FileGRPCAddr string
 }
 
 func Load() *Config {
@@ -23,6 +24,7 @@ func Load() *Config {
 		PostgresHost:     getEnv("POSTGRES_HOST", "localhost"),
 		PostgresPort:     getEnv("POSTGRES_PORT", "5435"),
 		ACLGRPCAddr:      getEnv("ACL_GRPC_ADDR", "localhost:50057"),
+		FileGRPCAddr:     getEnv("FILE_GRPC_ADDR", "localhost:50056"),
 	}
 }
 

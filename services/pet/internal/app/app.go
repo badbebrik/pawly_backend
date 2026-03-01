@@ -8,6 +8,7 @@ import (
 	"pet/internal/config"
 	"pet/internal/infrastructure"
 	aclclient "pet/internal/infrastructure/aclclient"
+	fileclient "pet/internal/infrastructure/fileclient"
 	pgrepo "pet/internal/infrastructure/repository"
 	"pet/internal/service"
 	"syscall"
@@ -18,8 +19,9 @@ import (
 type App struct {
 	cfg *config.Config
 
-	pg  *infrastructure.Postgres
-	acl *aclclient.Client
+	pg   *infrastructure.Postgres
+	acl  *aclclient.Client
+	file *fileclient.Client
 
 	petSvc  *service.PetService
 	httpSrv *http.Server
@@ -37,13 +39,21 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	file, err := fileclient.New(cfg.FileGRPCAddr)
+	if err != nil {
+		acl.Close()
+		pg.Close()
+		return nil, err
+	}
+
 	petRepo := pgrepo.NewPetRepository(pg.Pool)
-	petSvc := service.New(petRepo, acl)
+	petSvc := service.New(petRepo, acl, file)
 
 	app := &App{
 		cfg:    cfg,
 		pg:     pg,
 		acl:    acl,
+		file:   file,
 		petSvc: petSvc,
 	}
 
@@ -61,6 +71,9 @@ func (a *App) Close() {
 	}
 	if a.acl != nil {
 		a.acl.Close()
+	}
+	if a.file != nil {
+		a.file.Close()
 	}
 	if a.pg != nil {
 		a.pg.Close()

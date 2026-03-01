@@ -223,6 +223,37 @@ func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion 
 	return r.GetByID(ctx, petID)
 }
 
+func (r *PetRepository) UpdatePhoto(ctx context.Context, petID uuid.UUID, rowVersion int, fileID uuid.UUID) (*model.Pet, error) {
+	const query = `
+		UPDATE pets
+		SET profile_photo_file_id = $3,
+		    updated_at = NOW(),
+		    row_version = row_version + 1
+		WHERE id = $1
+		  AND row_version = $2
+	`
+	cmd, err := r.db.Exec(ctx, query, petID, rowVersion, fileID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, repo.ErrConflict
+		}
+		return nil, err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		exists, err := r.existsByID(ctx, petID)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, repo.ErrNotFound
+		}
+		return nil, repo.ErrConflict
+	}
+
+	return r.GetByID(ctx, petID)
+}
+
 func (r *PetRepository) UpdateStatus(ctx context.Context, petID uuid.UUID, rowVersion int, status string, missingSince *time.Time, archivedAt *time.Time) (*model.Pet, error) {
 	const query = `
 		UPDATE pets

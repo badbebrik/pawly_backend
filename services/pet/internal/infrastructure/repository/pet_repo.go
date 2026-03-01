@@ -6,6 +6,7 @@ import (
 	"errors"
 	"pet/internal/model"
 	repo "pet/internal/repository"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -152,6 +153,109 @@ func (r *PetRepository) ListByIDs(ctx context.Context, ids []uuid.UUID, includeA
 	return items, total, nil
 }
 
+func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion int, pet model.Pet) (*model.Pet, error) {
+	colorsRaw, err := json.Marshal(pet.Colors)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		UPDATE pets
+		SET name = $3,
+		    species_id = $4,
+		    sex = $5,
+		    birth_date = $6,
+		    breed_source = $7,
+		    system_breed_id = $8,
+		    custom_breed_name = $9,
+		    colors = $10,
+		    coat_pattern_source = $11,
+		    system_coat_pattern_id = $12,
+		    custom_coat_pattern_name = $13,
+		    is_neutered = $14,
+		    is_outdoor = $15,
+		    profile_photo_file_id = $16,
+		    microchip_id = $17,
+		    microchip_installed_at = $18,
+		    updated_at = NOW(),
+		    row_version = row_version + 1
+		WHERE id = $1
+		  AND row_version = $2
+	`
+
+	cmd, err := r.db.Exec(ctx, query,
+		petID, rowVersion,
+		pet.Name,
+		pet.SpeciesID,
+		pet.Sex,
+		pet.BirthDate,
+		pet.Breed.Source,
+		pet.Breed.SystemBreedID,
+		pet.Breed.CustomBreedName,
+		colorsRaw,
+		pet.CoatPattern.Source,
+		pet.CoatPattern.SystemCoatPatternID,
+		pet.CoatPattern.CustomCoatPatternName,
+		pet.IsNeutered,
+		pet.IsOutdoor,
+		pet.ProfilePhotoFileID,
+		pet.MicrochipID,
+		pet.MicrochipInstalledAt,
+	)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, repo.ErrConflict
+		}
+		return nil, err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		exists, err := r.existsByID(ctx, petID)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, repo.ErrNotFound
+		}
+		return nil, repo.ErrConflict
+	}
+
+	return r.GetByID(ctx, petID)
+}
+
+func (r *PetRepository) UpdateStatus(ctx context.Context, petID uuid.UUID, rowVersion int, status string, missingSince *time.Time, archivedAt *time.Time) (*model.Pet, error) {
+	const query = `
+		UPDATE pets
+		SET status = $3,
+		    missing_since = $4,
+		    archived_at = $5,
+		    updated_at = NOW(),
+		    row_version = row_version + 1
+		WHERE id = $1
+		  AND row_version = $2
+	`
+	cmd, err := r.db.Exec(ctx, query, petID, rowVersion, status, missingSince, archivedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, repo.ErrConflict
+		}
+		return nil, err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		exists, err := r.existsByID(ctx, petID)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, repo.ErrNotFound
+		}
+		return nil, repo.ErrConflict
+	}
+
+	return r.GetByID(ctx, petID)
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }
@@ -188,6 +292,19 @@ func scanPet(s scanner) (*model.Pet, error) {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func (r *PetRepository) existsByID(ctx context.Context, petID uuid.UUID) (bool, error) {
+	const query = `SELECT 1 FROM pets WHERE id = $1 LIMIT 1`
+	var x int
+	err := r.db.QueryRow(ctx, query, petID).Scan(&x)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 var _ repo.PetRepository = (*PetRepository)(nil)

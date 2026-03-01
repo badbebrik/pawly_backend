@@ -37,6 +37,28 @@ type createPetRequest struct {
 	MicrochipInstalledAt *string           `json:"microchip_installed_at"`
 }
 
+type updatePetRequest struct {
+	RowVersion           int               `json:"row_version"`
+	Name                 string            `json:"name"`
+	SpeciesID            string            `json:"species_id"`
+	Sex                  string            `json:"sex"`
+	BirthDate            *string           `json:"birth_date"`
+	Breed                model.Breed       `json:"breed"`
+	Colors               []model.Color     `json:"colors"`
+	CoatPattern          model.CoatPattern `json:"coat_pattern"`
+	IsNeutered           string            `json:"is_neutered"`
+	IsOutdoor            bool              `json:"is_outdoor"`
+	ProfilePhotoFileID   *string           `json:"profile_photo_file_id"`
+	MicrochipID          *string           `json:"microchip_id"`
+	MicrochipInstalledAt *string           `json:"microchip_installed_at"`
+}
+
+type changeStatusRequest struct {
+	RowVersion   int     `json:"row_version"`
+	Status       string  `json:"status"`
+	MissingSince *string `json:"missing_since"`
+}
+
 func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 	userID, ok := appmw.UserIDFromContext(r.Context())
 	if !ok {
@@ -160,6 +182,134 @@ func (h *Handlers) GetPet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pet, err := h.svc.GetPet(r.Context(), userID, petID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet)})
+}
+
+func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
+	userID, ok := appmw.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
+		return
+	}
+
+	petID, err := uuid.Parse(chi.URLParam(r, "pet_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pet_id")
+		return
+	}
+
+	var req updatePetRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	speciesID, err := uuid.Parse(req.SpeciesID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid species_id")
+		return
+	}
+
+	var (
+		birthDate            *time.Time
+		microchipInstalledAt *time.Time
+		profilePhotoID       *uuid.UUID
+	)
+	if req.BirthDate != nil && *req.BirthDate != "" {
+		t, err := time.Parse("2006-01-02", *req.BirthDate)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid birth_date")
+			return
+		}
+		birthDate = &t
+	}
+	if req.MicrochipInstalledAt != nil && *req.MicrochipInstalledAt != "" {
+		t, err := time.Parse("2006-01-02", *req.MicrochipInstalledAt)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid microchip_installed_at")
+			return
+		}
+		microchipInstalledAt = &t
+	}
+	if req.ProfilePhotoFileID != nil && *req.ProfilePhotoFileID != "" {
+		id, err := uuid.Parse(*req.ProfilePhotoFileID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid profile_photo_file_id")
+			return
+		}
+		profilePhotoID = &id
+	}
+
+	pet, err := h.svc.UpdatePet(r.Context(), service.UpdatePetParams{
+		UserID:               userID,
+		PetID:                petID,
+		RowVersion:           req.RowVersion,
+		Name:                 req.Name,
+		SpeciesID:            speciesID,
+		Sex:                  req.Sex,
+		BirthDate:            birthDate,
+		Breed:                req.Breed,
+		Colors:               req.Colors,
+		CoatPattern:          req.CoatPattern,
+		IsNeutered:           req.IsNeutered,
+		IsOutdoor:            req.IsOutdoor,
+		ProfilePhotoFileID:   profilePhotoID,
+		MicrochipID:          req.MicrochipID,
+		MicrochipInstalledAt: microchipInstalledAt,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet)})
+}
+
+func (h *Handlers) ChangePetStatus(w http.ResponseWriter, r *http.Request) {
+	userID, ok := appmw.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
+		return
+	}
+
+	petID, err := uuid.Parse(chi.URLParam(r, "pet_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pet_id")
+		return
+	}
+
+	var req changeStatusRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	var missingSince *time.Time
+	if req.MissingSince != nil && *req.MissingSince != "" {
+		t, err := time.Parse(time.RFC3339, *req.MissingSince)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid missing_since")
+			return
+		}
+		missingSince = &t
+	}
+
+	pet, err := h.svc.ChangePetStatus(r.Context(), service.ChangePetStatusParams{
+		UserID:       userID,
+		PetID:        petID,
+		RowVersion:   req.RowVersion,
+		Status:       req.Status,
+		MissingSince: missingSince,
+	})
 	if err != nil {
 		writeServiceError(w, err)
 		return

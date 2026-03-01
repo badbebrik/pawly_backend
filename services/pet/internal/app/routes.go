@@ -29,6 +29,8 @@ func (a *App) setupRoutes() http.Handler {
 		r.Post("/v1/pets", h.CreatePet)
 		r.Get("/v1/pets", h.ListPets)
 		r.Get("/v1/pets/{pet_id}", h.GetPet)
+		r.Put("/v1/pets/{pet_id}", h.UpdatePet)
+		r.Post("/v1/pets/{pet_id}/status", h.ChangePetStatus)
 	})
 
 	return r

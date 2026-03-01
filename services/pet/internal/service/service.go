@@ -11,6 +11,8 @@ import (
 )
 
 const ActionPetRead = "pet_read"
+const ActionPetEdit = "pet_edit"
+const ActionPetStatusChange = "pet_status_change"
 
 type ACLClient interface {
 	Check(ctx context.Context, petID, userID uuid.UUID, action string) (bool, error)
@@ -48,6 +50,32 @@ type ListPetsParams struct {
 	IncludeArchived bool
 	Offset          int
 	Limit           int
+}
+
+type UpdatePetParams struct {
+	UserID               uuid.UUID
+	PetID                uuid.UUID
+	RowVersion           int
+	Name                 string
+	SpeciesID            uuid.UUID
+	Sex                  string
+	BirthDate            *time.Time
+	Breed                model.Breed
+	Colors               []model.Color
+	CoatPattern          model.CoatPattern
+	IsNeutered           string
+	IsOutdoor            bool
+	ProfilePhotoFileID   *uuid.UUID
+	MicrochipID          *string
+	MicrochipInstalledAt *time.Time
+}
+
+type ChangePetStatusParams struct {
+	UserID       uuid.UUID
+	PetID        uuid.UUID
+	RowVersion   int
+	Status       string
+	MissingSince *time.Time
 }
 
 func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.Pet, error) {
@@ -140,6 +168,109 @@ func (s *PetService) GetPet(ctx context.Context, userID, petID uuid.UUID) (*mode
 			return nil, ErrNotFound
 		}
 		return nil, err
+	}
+	return pet, nil
+}
+
+func (s *PetService) UpdatePet(ctx context.Context, p UpdatePetParams) (*model.Pet, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.RowVersion <= 0 || p.SpeciesID == uuid.Nil || strings.TrimSpace(p.Name) == "" {
+		return nil, ErrInvalidInput
+	}
+
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetEdit)
+	if err != nil {
+		if err == ErrNotFound {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	current, err := s.repo.GetByID(ctx, p.PetID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if current.Status == "ARCHIVED" {
+		return nil, ErrConflict
+	}
+
+	updated, err := s.repo.Update(ctx, p.PetID, p.RowVersion, model.Pet{
+		Name:                 strings.TrimSpace(p.Name),
+		SpeciesID:            p.SpeciesID,
+		Sex:                  p.Sex,
+		BirthDate:            p.BirthDate,
+		Breed:                p.Breed,
+		Colors:               p.Colors,
+		CoatPattern:          p.CoatPattern,
+		IsNeutered:           p.IsNeutered,
+		IsOutdoor:            p.IsOutdoor,
+		ProfilePhotoFileID:   p.ProfilePhotoFileID,
+		MicrochipID:          p.MicrochipID,
+		MicrochipInstalledAt: p.MicrochipInstalledAt,
+	})
+	if err != nil {
+		switch err {
+		case repository.ErrNotFound:
+			return nil, ErrNotFound
+		case repository.ErrConflict:
+			return nil, ErrConflict
+		default:
+			return nil, err
+		}
+	}
+	return updated, nil
+}
+
+func (s *PetService) ChangePetStatus(ctx context.Context, p ChangePetStatusParams) (*model.Pet, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.RowVersion <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetStatusChange)
+	if err != nil {
+		if err == ErrNotFound {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	status := strings.ToUpper(strings.TrimSpace(p.Status))
+	var (
+		missingSince *time.Time
+		archivedAt   *time.Time
+	)
+	switch status {
+	case "ACTIVE":
+	case "MISSING":
+		if p.MissingSince == nil {
+			return nil, ErrInvalidInput
+		}
+		missingSince = p.MissingSince
+	case "ARCHIVED":
+		now := time.Now().UTC()
+		archivedAt = &now
+	default:
+		return nil, ErrInvalidInput
+	}
+
+	pet, err := s.repo.UpdateStatus(ctx, p.PetID, p.RowVersion, status, missingSince, archivedAt)
+	if err != nil {
+		switch err {
+		case repository.ErrNotFound:
+			return nil, ErrNotFound
+		case repository.ErrConflict:
+			return nil, ErrConflict
+		default:
+			return nil, err
+		}
 	}
 	return pet, nil
 }

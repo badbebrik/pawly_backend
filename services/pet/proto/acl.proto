@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package acl;
+
+option go_package = "pet/proto;aclpb";
+
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  ACTION_PET_READ = 1;
+  ACTION_PET_EDIT = 2;
+  ACTION_PET_STATUS_CHANGE = 3;
+  ACTION_PET_DELETE = 4;
+  ACTION_LOG_READ = 5;
+  ACTION_LOG_CREATE = 6;
+  ACTION_LOG_EDIT = 7;
+  ACTION_LOG_DELETE = 8;
+  ACTION_LOG_ATTACHMENTS_READ = 9;
+  ACTION_HEALTH_READ = 10;
+  ACTION_HEALTH_WRITE = 11;
+  ACTION_TASK_READ = 12;
+  ACTION_TASK_WRITE = 13;
+  ACTION_MEMBERS_VIEW = 14;
+  ACTION_MEMBERS_INVITE = 15;
+  ACTION_MEMBERS_REMOVE = 16;
+  ACTION_MEMBERS_EDIT_PERMISSIONS = 17;
+}
+
+service ACLService {
+  rpc Check(CheckRequest) returns (CheckResponse);
+  rpc ListPetsForUser(ListPetsForUserRequest) returns (ListPetsForUserResponse);
+  rpc CreateOwnerMembership(CreateOwnerMembershipRequest) returns (CreateOwnerMembershipResponse);
+}
+
+message CheckRequest {
+  string pet_id = 1;
+  string user_id = 2;
+  Action action = 3;
+}
+
+message CheckResponse {
+  bool allowed = 1;
+}
+
+message ListPetsForUserRequest {
+  string user_id = 1;
+}
+
+message ListPetsForUserResponse {
+  repeated string pet_ids = 1;
+}
+
+message CreateOwnerMembershipRequest {
+  string pet_id = 1;
+  string user_id = 2;
+}
+
+message CreateOwnerMembershipResponse {
+  string member_id = 1;
+}
+

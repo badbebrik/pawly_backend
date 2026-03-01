@@ -1,5 +1,6 @@
+package config
 
-
+import "os"
 
 type Config struct {
 	AppPort string

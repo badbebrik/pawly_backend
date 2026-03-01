@@ -25,10 +25,12 @@ CREATE TABLE pets (
     microchip_installed_at DATE NULL,
 
     status TEXT NOT NULL CHECK (status IN ('ACTIVE','MISSING','ARCHIVED')),
+    missing_since TIMESTAMPTZ NULL,
     archived_at TIMESTAMPTZ NULL,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    row_version INT NOT NULL DEFAULT 1,
 
     CONSTRAINT pets_breed_invariant CHECK (
         (breed_source = 'SYSTEM' AND system_breed_id IS NOT NULL AND custom_breed_name IS NULL) OR
@@ -43,6 +45,10 @@ CREATE TABLE pets (
     CONSTRAINT pets_archived_status_invariant CHECK (
         (status = 'ARCHIVED' AND archived_at IS NOT NULL) OR
         (status <> 'ARCHIVED' AND archived_at IS NULL)
+    ),
+    CONSTRAINT pets_missing_status_invariant CHECK (
+        (status = 'MISSING' AND missing_since IS NOT NULL) OR
+        (status <> 'MISSING' AND missing_since IS NULL)
     )
 );
 

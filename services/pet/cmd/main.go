@@ -1,4 +1,11 @@
+package main
 
+import (
+	"pet/internal/app"
+	"pet/internal/config"
+
+	"github.com/rs/zerolog/log"
+)
 
 func main() {
 	cfg := config.Load()
@@ -7,7 +14,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("init app failed")
 	}
-
 	defer a.Close()
 
 	if err := a.Run(); err != nil {

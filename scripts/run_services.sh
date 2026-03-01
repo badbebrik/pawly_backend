@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 services=(
   "auth"
   "acl"
+  "pet"
   "catalog"
   "notification"
   "email"

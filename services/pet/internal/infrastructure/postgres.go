@@ -1,6 +1,7 @@
-package db
+package infrastructure
 
 import (
+	"context"
 	"fmt"
 	"pet/internal/config"
 
@@ -20,6 +21,7 @@ func NewPostgres(cfg *config.Config) (*Postgres, error) {
 		cfg.PostgresPort,
 		cfg.PostgresDB,
 	)
+
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		return nil, err
@@ -28,6 +30,7 @@ func NewPostgres(cfg *config.Config) (*Postgres, error) {
 		pool.Close()
 		return nil, err
 	}
+
 	return &Postgres{Pool: pool}, nil
 }
 

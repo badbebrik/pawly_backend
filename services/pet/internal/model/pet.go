@@ -28,6 +28,7 @@ type Color struct {
 type Pet struct {
 	ID                   uuid.UUID
 	OwnerUserID          uuid.UUID
+	RowVersion           int
 	Name                 string
 	SpeciesID            uuid.UUID
 	Sex                  string
@@ -41,6 +42,7 @@ type Pet struct {
 	MicrochipID          *string
 	MicrochipInstalledAt *time.Time
 	Status               string
+	MissingSince         *time.Time
 	ArchivedAt           *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time

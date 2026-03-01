@@ -4,9 +4,21 @@ services:
   - name: auth-service
     url: http://host.docker.internal:8080
     routes:
-      - name: auth-routes
+      - name: auth-public-routes
         paths:
-          - /auth
+          - ~/auth/register/email$
+          - ~/auth/verify/email$
+          - ~/auth/login/email$
+          - ~/auth/login/oauth$
+          - ~/auth/password/reset/request$
+          - ~/auth/password/reset/verify$
+          - ~/auth/password/reset/confirm$
+        strip_path: false
+      - name: auth-protected-routes
+        paths:
+          - ~/auth/logout$
+          - ~/auth/logout-all$
+          - ~/auth/refresh$
         strip_path: false
 
   - name: profile-service
@@ -15,7 +27,6 @@ services:
       - name: profile-routes
         paths:
           - /v1/profile
-          - /internal/v1/profile
         strip_path: false
 
   - name: acl-service
@@ -25,7 +36,6 @@ services:
         paths:
           - /v1/acl
           - ~/v1/pets/.+/acl
-          - /internal/v1/acl
         strip_path: false
 
   - name: catalog-service
@@ -33,7 +43,7 @@ services:
     routes:
       - name: catalog-routes
         paths:
-          - /v1/catalog
+          - /catalog
         strip_path: false
 
   - name: pet-service
@@ -62,12 +72,78 @@ services:
 
 plugins:
   - name: jwt
+    route: auth-protected-routes
+    config:
+      key_claim_name: sub
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+  - name: jwt
+    route: profile-routes
+    config:
+      key_claim_name: sub
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+  - name: jwt
+    route: acl-routes
+    config:
+      key_claim_name: sub
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+  - name: jwt
+    route: pet-routes
+    config:
+      key_claim_name: sub
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+  - name: jwt
+    route: notification-routes
     config:
       key_claim_name: sub
       claims_to_verify:
         - exp
       secret_is_base64: false
   - name: pre-function
+    route: auth-protected-routes
+    config:
+      access:
+        - |
+          local jwt = ngx.ctx.authenticated_jwt_token
+          if jwt and jwt.sub then
+            ngx.req.set_header("X-User-ID", jwt.sub)
+          end
+  - name: pre-function
+    route: profile-routes
+    config:
+      access:
+        - |
+          local jwt = ngx.ctx.authenticated_jwt_token
+          if jwt and jwt.sub then
+            ngx.req.set_header("X-User-ID", jwt.sub)
+          end
+  - name: pre-function
+    route: acl-routes
+    config:
+      access:
+        - |
+          local jwt = ngx.ctx.authenticated_jwt_token
+          if jwt and jwt.sub then
+            ngx.req.set_header("X-User-ID", jwt.sub)
+          end
+  - name: pre-function
+    route: pet-routes
+    config:
+      access:
+        - |
+          local jwt = ngx.ctx.authenticated_jwt_token
+          if jwt and jwt.sub then
+            ngx.req.set_header("X-User-ID", jwt.sub)
+          end
+  - name: pre-function
+    route: notification-routes
     config:
       access:
         - |

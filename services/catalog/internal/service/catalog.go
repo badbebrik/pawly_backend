@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -14,6 +15,7 @@ type CatalogService struct {
 	db       *pgxpool.Pool
 	versions repository.VersionRepository
 
+	breeds   repository.BreedRepository
 	species  repository.SpeciesRepository
 	colors   repository.ColorRepository
 	patterns repository.PatternRepository
@@ -22,6 +24,7 @@ type CatalogService struct {
 func NewCatalogService(
 	db *pgxpool.Pool,
 	v repository.VersionRepository,
+	b repository.BreedRepository,
 	s repository.SpeciesRepository,
 	c repository.ColorRepository,
 	p repository.PatternRepository,
@@ -29,6 +32,7 @@ func NewCatalogService(
 	return &CatalogService{
 		db:       db,
 		versions: v,
+		breeds:   b,
 		species:  s,
 		colors:   c,
 		patterns: p,
@@ -41,6 +45,10 @@ func (s *CatalogService) GetVersion(ctx context.Context) (int, error) {
 
 func (s *CatalogService) ListSpecies(ctx context.Context, activeOnly bool) ([]model.Species, error) {
 	return s.species.List(ctx, activeOnly)
+}
+
+func (s *CatalogService) ListBreeds(ctx context.Context, speciesID *uuid.UUID, activeOnly bool) ([]model.Breed, error) {
+	return s.breeds.List(ctx, speciesID, activeOnly)
 }
 
 func (s *CatalogService) ListColors(ctx context.Context, activeOnly bool) ([]model.Color, error) {

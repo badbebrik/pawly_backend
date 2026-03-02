@@ -23,34 +23,62 @@ func New(svc *service.PetService) *Handlers {
 }
 
 type createPetRequest struct {
-	Name                 string            `json:"name"`
-	SpeciesID            string            `json:"species_id"`
-	Sex                  string            `json:"sex"`
-	BirthDate            *string           `json:"birth_date"`
-	Breed                model.Breed       `json:"breed"`
-	Colors               []model.Color     `json:"colors"`
-	CoatPattern          model.CoatPattern `json:"coat_pattern"`
-	IsNeutered           string            `json:"is_neutered"`
-	IsOutdoor            bool              `json:"is_outdoor"`
-	ProfilePhotoFileID   *string           `json:"profile_photo_file_id"`
-	MicrochipID          *string           `json:"microchip_id"`
-	MicrochipInstalledAt *string           `json:"microchip_installed_at"`
+	Name                 string             `json:"name"`
+	SpeciesID            string             `json:"species_id"`
+	Sex                  string             `json:"sex"`
+	BirthDate            *string            `json:"birth_date"`
+	Breed                breedRequest       `json:"breed"`
+	Colors               []model.Color      `json:"colors"`
+	CoatPattern          coatPatternRequest `json:"coat_pattern"`
+	IsNeutered           string             `json:"is_neutered"`
+	IsOutdoor            bool               `json:"is_outdoor"`
+	ProfilePhotoFileID   *string            `json:"profile_photo_file_id"`
+	MicrochipID          *string            `json:"microchip_id"`
+	MicrochipInstalledAt *string            `json:"microchip_installed_at"`
 }
 
 type updatePetRequest struct {
-	RowVersion           int               `json:"row_version"`
-	Name                 string            `json:"name"`
-	SpeciesID            string            `json:"species_id"`
-	Sex                  string            `json:"sex"`
-	BirthDate            *string           `json:"birth_date"`
-	Breed                model.Breed       `json:"breed"`
-	Colors               []model.Color     `json:"colors"`
-	CoatPattern          model.CoatPattern `json:"coat_pattern"`
-	IsNeutered           string            `json:"is_neutered"`
-	IsOutdoor            bool              `json:"is_outdoor"`
-	ProfilePhotoFileID   *string           `json:"profile_photo_file_id"`
-	MicrochipID          *string           `json:"microchip_id"`
-	MicrochipInstalledAt *string           `json:"microchip_installed_at"`
+	RowVersion           int                `json:"row_version"`
+	Name                 string             `json:"name"`
+	SpeciesID            string             `json:"species_id"`
+	Sex                  string             `json:"sex"`
+	BirthDate            *string            `json:"birth_date"`
+	Breed                breedRequest       `json:"breed"`
+	Colors               []model.Color      `json:"colors"`
+	CoatPattern          coatPatternRequest `json:"coat_pattern"`
+	IsNeutered           string             `json:"is_neutered"`
+	IsOutdoor            bool               `json:"is_outdoor"`
+	ProfilePhotoFileID   *string            `json:"profile_photo_file_id"`
+	MicrochipID          *string            `json:"microchip_id"`
+	MicrochipInstalledAt *string            `json:"microchip_installed_at"`
+}
+
+type breedRequest struct {
+	Source          string     `json:"source"`
+	SystemBreedID   *uuid.UUID `json:"system_breed_id"`
+	CustomBreedName *string    `json:"custom_breed_name"`
+}
+
+func (b breedRequest) toModel() model.Breed {
+	return model.Breed{
+		Source:          b.Source,
+		SystemBreedID:   b.SystemBreedID,
+		CustomBreedName: b.CustomBreedName,
+	}
+}
+
+type coatPatternRequest struct {
+	Source                string     `json:"source"`
+	SystemCoatPatternID   *uuid.UUID `json:"system_coat_pattern_id"`
+	CustomCoatPatternName *string    `json:"custom_coat_pattern_name"`
+}
+
+func (c coatPatternRequest) toModel() model.CoatPattern {
+	return model.CoatPattern{
+		Source:                c.Source,
+		SystemCoatPatternID:   c.SystemCoatPatternID,
+		CustomCoatPatternName: c.CustomCoatPatternName,
+	}
 }
 
 type changeStatusRequest struct {
@@ -128,9 +156,9 @@ func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 		SpeciesID:            speciesID,
 		Sex:                  req.Sex,
 		BirthDate:            birthDate,
-		Breed:                req.Breed,
+		Breed:                req.Breed.toModel(),
 		Colors:               req.Colors,
-		CoatPattern:          req.CoatPattern,
+		CoatPattern:          req.CoatPattern.toModel(),
 		IsNeutered:           req.IsNeutered,
 		IsOutdoor:            req.IsOutdoor,
 		ProfilePhotoFileID:   profilePhotoID,
@@ -267,9 +295,9 @@ func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 		SpeciesID:            speciesID,
 		Sex:                  req.Sex,
 		BirthDate:            birthDate,
-		Breed:                req.Breed,
+		Breed:                req.Breed.toModel(),
 		Colors:               req.Colors,
-		CoatPattern:          req.CoatPattern,
+		CoatPattern:          req.CoatPattern.toModel(),
 		IsNeutered:           req.IsNeutered,
 		IsOutdoor:            req.IsOutdoor,
 		ProfilePhotoFileID:   profilePhotoID,

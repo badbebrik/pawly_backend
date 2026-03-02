@@ -8,9 +8,11 @@ import (
 	"catalog/internal/util"
 	"encoding/json"
 	"errors"
-	"github.com/go-chi/chi/v5"
 	"net/http"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type AdminColorHandler struct {
@@ -68,7 +70,7 @@ func (h *AdminColorHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminColorHandler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
-	id, err := util.AtoiPositive(idStr)
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return

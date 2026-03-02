@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,10 +44,13 @@ func (r *SpeciesRepo) List(ctx context.Context, activeOnly bool) ([]model.Specie
 		}
 		out = append(out, s)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
-func (r *SpeciesRepo) GetByID(ctx context.Context, id int) (*model.Species, error) {
+func (r *SpeciesRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Species, error) {
 	var s model.Species
 	err := r.db.QueryRow(ctx, `
 		SELECT id, name_ru, name_en, is_active, version, created_at, updated_at
@@ -74,7 +78,7 @@ func (r *SpeciesRepo) CreateTx(ctx context.Context, tx pgx.Tx, s *model.Species)
 }
 
 func (r *SpeciesRepo) UpdateTx(ctx context.Context, tx pgx.Tx, s *model.Species) error {
-	_, err := tx.Exec(ctx, `
+	cmd, err := tx.Exec(ctx, `
 		UPDATE species
 		SET name_ru = $2,
 		    name_en = $3,
@@ -83,6 +87,11 @@ func (r *SpeciesRepo) UpdateTx(ctx context.Context, tx pgx.Tx, s *model.Species)
 		    updated_at = NOW()
 		WHERE id = $1
 	`, s.ID, s.NameRu, s.NameEn, s.IsActive, s.Version)
-
-	return err
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

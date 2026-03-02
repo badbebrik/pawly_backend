@@ -1,9 +1,13 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Color struct {
-	ID        int
+	ID        uuid.UUID
 	NameRu    string
 	NameEn    string
 	Hex       string

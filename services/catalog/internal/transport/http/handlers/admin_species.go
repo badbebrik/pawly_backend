@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type AdminSpeciesHandler struct {
@@ -59,13 +61,9 @@ func (h *AdminSpeciesHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminSpeciesHandler) Update(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		http.Error(w, "missing id", http.StatusBadRequest)
-		return
-	}
-	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}

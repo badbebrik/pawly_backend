@@ -1,7 +1,7 @@
 package dto
 
 type PatternItem struct {
-	ID       int    `json:"id"`
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	IconKey  string `json:"icon_key"`
 	IsActive bool   `json:"is_active"`

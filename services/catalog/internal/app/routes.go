@@ -19,6 +19,7 @@ func (a *App) routes() http.Handler {
 
 	r.Get("/catalog/version", a.PublicHandler.GetVersion)
 	r.Get("/catalog/species", a.PublicHandler.ListSpecies)
+	r.Get("/catalog/breeds", a.PublicHandler.ListBreeds)
 	r.Get("/catalog/colors", a.PublicHandler.ListColors)
 	r.Get("/catalog/patterns", a.PublicHandler.ListPatterns)
 

@@ -4,6 +4,7 @@ import (
 	"catalog/internal/model"
 	"context"
 	"errors"
+	"github.com/google/uuid"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,10 +42,13 @@ func (r *ColorRepo) List(ctx context.Context, activeOnly bool) ([]model.Color, e
 		}
 		out = append(out, c)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
-func (r *ColorRepo) GetByID(ctx context.Context, id int) (*model.Color, error) {
+func (r *ColorRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Color, error) {
 	var c model.Color
 	err := r.db.QueryRow(ctx, `
 		SELECT id, name_ru, name_en, hex, is_active, version, created_at, updated_at
@@ -61,7 +65,7 @@ func (r *ColorRepo) GetByID(ctx context.Context, id int) (*model.Color, error) {
 func (r *ColorRepo) CreateTx(ctx context.Context, tx pgx.Tx, c *model.Color) error {
 	return tx.QueryRow(ctx, `
 		INSERT INTO colors (name_ru, name_en, hex, is_active, version, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		RETURNING id
 	`, c.NameRu, c.NameEn, c.Hex, c.IsActive, c.Version).Scan(&c.ID)
 }
@@ -71,11 +75,12 @@ func (r *ColorRepo) UpdateTx(ctx context.Context, tx pgx.Tx, c *model.Color) err
 		UPDATE colors
 		SET name_ru = $2,
 		    name_en = $3,
-		    is_active = $4,
-		    version = $5,
+		    hex = $4,
+		    is_active = $5,
+		    version = $6,
 		    updated_at = NOW()
 		WHERE id = $1
-	`, c.ID, c.NameRu, c.NameEn, c.IsActive, c.Version)
+	`, c.ID, c.NameRu, c.NameEn, c.Hex, c.IsActive, c.Version)
 	if err != nil {
 		return err
 	}

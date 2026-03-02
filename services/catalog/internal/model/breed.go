@@ -6,8 +6,9 @@ import (
 	"github.com/google/uuid"
 )
 
-type Species struct {
+type Breed struct {
 	ID        uuid.UUID
+	SpeciesID uuid.UUID
 	NameRu    string
 	NameEn    string
 	IsActive  bool

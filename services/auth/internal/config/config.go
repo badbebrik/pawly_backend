@@ -21,6 +21,7 @@ type Config struct {
 	RedisDB       int
 
 	JWTSecret           string
+	JWTIssuer           string
 	AccessTokenTTLMin   int
 	RefreshTokenTTLDays int
 
@@ -49,6 +50,7 @@ func Load() *Config {
 		RedisPassword:            getEnv("REDIS_PASSWORD", ""),
 		RedisDB:                  getEnvInt("REDIS_DB", 0),
 		JWTSecret:                getEnv("JWT_SECRET", "DEFAULT"),
+		JWTIssuer:                getEnv("JWT_ISSUER", "pawly"),
 		AccessTokenTTLMin:        getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 15),
 		RefreshTokenTTLDays:      getEnvInt("REFRESH_TOKEN_TTL_DAYS", 30),
 		RabbitHost:               getEnv("RABBITMQ_HOST", "localhost"),

@@ -1,9 +1,13 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Pattern struct {
-	ID        int
+	ID        uuid.UUID
 	NameRu    string
 	NameEn    string
 	IconKey   string

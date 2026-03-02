@@ -13,7 +13,7 @@ type UpdateSpeciesRequest struct {
 }
 
 type SpeciesItem struct {
-	ID       int    `json:"id"`
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	IsActive bool   `json:"is_active"`
 	Version  int    `json:"version"`

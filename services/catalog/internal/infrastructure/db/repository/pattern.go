@@ -4,6 +4,7 @@ import (
 	"catalog/internal/model"
 	"context"
 	"errors"
+	"github.com/google/uuid"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,10 +42,13 @@ func (r *PatternRepo) List(ctx context.Context, activeOnly bool) ([]model.Patter
 		}
 		out = append(out, p)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
-func (r *PatternRepo) GetByID(ctx context.Context, id int) (*model.Pattern, error) {
+func (r *PatternRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Pattern, error) {
 	var p model.Pattern
 	err := r.db.QueryRow(ctx, `
 		SELECT id, name_ru, name_en, icon_key, is_active, version, created_at, updated_at
@@ -61,9 +65,9 @@ func (r *PatternRepo) GetByID(ctx context.Context, id int) (*model.Pattern, erro
 func (r *PatternRepo) CreateTx(ctx context.Context, tx pgx.Tx, p *model.Pattern) error {
 	return tx.QueryRow(ctx, `
 		INSERT INTO patterns (name_ru, name_en, is_active, icon_key, version, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		RETURNING id
-	`, p.NameRu, p.NameEn, p.IconKey, p.IsActive, p.Version).Scan(&p.ID)
+	`, p.NameRu, p.NameEn, p.IsActive, p.IconKey, p.Version).Scan(&p.ID)
 }
 
 func (r *PatternRepo) UpdateTx(ctx context.Context, tx pgx.Tx, p *model.Pattern) error {

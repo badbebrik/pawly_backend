@@ -74,35 +74,35 @@ plugins:
   - name: jwt
     route: auth-protected-routes
     config:
-      key_claim_name: sub
+      key_claim_name: iss
       claims_to_verify:
         - exp
       secret_is_base64: false
   - name: jwt
     route: profile-routes
     config:
-      key_claim_name: sub
+      key_claim_name: iss
       claims_to_verify:
         - exp
       secret_is_base64: false
   - name: jwt
     route: acl-routes
     config:
-      key_claim_name: sub
+      key_claim_name: iss
       claims_to_verify:
         - exp
       secret_is_base64: false
   - name: jwt
     route: pet-routes
     config:
-      key_claim_name: sub
+      key_claim_name: iss
       claims_to_verify:
         - exp
       secret_is_base64: false
   - name: jwt
     route: notification-routes
     config:
-      key_claim_name: sub
+      key_claim_name: iss
       claims_to_verify:
         - exp
       secret_is_base64: false
@@ -156,5 +156,5 @@ consumers:
   - username: pawly-gateway
     jwt_secrets:
       - key: pawly
-        secret: DEFAULT
+        secret: local_dev_jwt_secret
         algorithm: HS256

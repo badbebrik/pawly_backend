@@ -6,7 +6,8 @@ import (
 	appmw "catalog/internal/transport/http/middleware"
 	"encoding/json"
 	"net/http"
-	"strconv"
+
+	"github.com/google/uuid"
 )
 
 type PublicHandler struct {
@@ -30,10 +31,8 @@ func (h *PublicHandler) ListSpecies(w http.ResponseWriter, r *http.Request) {
 	locale := appmw.LocaleFromCtx(r.Context(), "ru")
 
 	activeOnly := true
-	if v := r.URL.Query().Get("active"); v != "" {
-		if n, _ := strconv.Atoi(v); n == 0 {
-			activeOnly = false
-		}
+	if r.URL.Query().Get("active") == "0" {
+		activeOnly = false
 	}
 
 	items, err := h.svc.ListSpecies(r.Context(), activeOnly)
@@ -49,10 +48,52 @@ func (h *PublicHandler) ListSpecies(w http.ResponseWriter, r *http.Request) {
 			name = s.NameEn
 		}
 		out = append(out, dto.SpeciesItem{
-			ID:       s.ID,
+			ID:       s.ID.String(),
 			Name:     name,
 			IsActive: s.IsActive,
 			Version:  s.Version,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *PublicHandler) ListBreeds(w http.ResponseWriter, r *http.Request) {
+	locale := appmw.LocaleFromCtx(r.Context(), "ru")
+
+	activeOnly := true
+	if r.URL.Query().Get("active") == "0" {
+		activeOnly = false
+	}
+
+	var speciesID *uuid.UUID
+	if raw := r.URL.Query().Get("species_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			http.Error(w, "invalid species_id", http.StatusBadRequest)
+			return
+		}
+		speciesID = &id
+	}
+
+	items, err := h.svc.ListBreeds(r.Context(), speciesID, activeOnly)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]dto.BreedItem, 0, len(items))
+	for _, b := range items {
+		name := b.NameRu
+		if locale == "en" {
+			name = b.NameEn
+		}
+		out = append(out, dto.BreedItem{
+			ID:        b.ID.String(),
+			SpeciesID: b.SpeciesID.String(),
+			Name:      name,
+			IsActive:  b.IsActive,
+			Version:   b.Version,
 		})
 	}
 
@@ -80,7 +121,7 @@ func (h *PublicHandler) ListColors(w http.ResponseWriter, r *http.Request) {
 			name = c.NameEn
 		}
 		out = append(out, dto.ColorItem{
-			ID:       c.ID,
+			ID:       c.ID.String(),
 			Name:     name,
 			Hex:      c.Hex,
 			IsActive: c.IsActive,
@@ -112,7 +153,7 @@ func (h *PublicHandler) ListPatterns(w http.ResponseWriter, r *http.Request) {
 			name = p.NameEn
 		}
 		out = append(out, dto.PatternItem{
-			ID:       p.ID,
+			ID:       p.ID.String(),
 			Name:     name,
 			IconKey:  p.IconKey,
 			IsActive: p.IsActive,

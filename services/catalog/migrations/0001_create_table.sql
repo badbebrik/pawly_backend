@@ -1,3 +1,6 @@
+-- +goose Up
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS catalog_version (
    id      SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
    version INT NOT NULL
@@ -8,7 +11,7 @@ VALUES (1, 1)
 ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS species (
-    id         SERIAL PRIMARY KEY,
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name_ru    TEXT NOT NULL,
     name_en    TEXT NOT NULL,
     is_active  BOOLEAN NOT NULL DEFAULT TRUE,
@@ -18,8 +21,8 @@ CREATE TABLE IF NOT EXISTS species (
 );
 
 CREATE TABLE IF NOT EXISTS breeds (
-    id         SERIAL PRIMARY KEY,
-    species_id INT NOT NULL REFERENCES species(id) ON DELETE RESTRICT,
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    species_id UUID NOT NULL REFERENCES species(id) ON DELETE RESTRICT,
     name_ru    TEXT NOT NULL,
     name_en    TEXT NOT NULL,
     is_active  BOOLEAN NOT NULL DEFAULT TRUE,
@@ -31,7 +34,7 @@ CREATE TABLE IF NOT EXISTS breeds (
 CREATE INDEX IF NOT EXISTS idx_breeds_species_id ON breeds(species_id);
 
 CREATE TABLE IF NOT EXISTS colors (
-    id         SERIAL PRIMARY KEY,
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name_ru    TEXT NOT NULL,
     name_en    TEXT NOT NULL,
     is_active  BOOLEAN NOT NULL DEFAULT TRUE,
@@ -41,7 +44,7 @@ CREATE TABLE IF NOT EXISTS colors (
 );
 
 CREATE TABLE IF NOT EXISTS patterns (
-    id         SERIAL PRIMARY KEY,
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name_ru    TEXT NOT NULL,
     name_en    TEXT NOT NULL,
     is_active  BOOLEAN NOT NULL DEFAULT TRUE,
@@ -50,3 +53,9 @@ CREATE TABLE IF NOT EXISTS patterns (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- +goose Down
+DROP TABLE IF EXISTS breeds;
+DROP TABLE IF EXISTS colors;
+DROP TABLE IF EXISTS patterns;
+DROP TABLE IF EXISTS species;
+DROP TABLE IF EXISTS catalog_version;

@@ -1,7 +1,7 @@
 package dto
 
 type ColorItem struct {
-	ID       int    `json:"id"`
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Hex      string `json:"hex"`
 	IsActive bool   `json:"is_active"`

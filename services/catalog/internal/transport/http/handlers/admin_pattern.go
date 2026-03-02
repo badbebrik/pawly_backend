@@ -5,12 +5,13 @@ import (
 	"catalog/internal/model"
 	"catalog/internal/service"
 	"catalog/internal/transport/http/dto"
-	"catalog/internal/util"
 	"encoding/json"
 	"errors"
-	"github.com/go-chi/chi/v5"
 	"net/http"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type AdminPatternHandler struct {
@@ -68,7 +69,7 @@ func (h *AdminPatternHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminPatternHandler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
-	id, err := util.AtoiPositive(idStr)
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return

@@ -8,6 +8,7 @@ import (
 
 type JWTService struct {
 	secretKey  []byte
+	issuer     string
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 }
@@ -23,6 +24,7 @@ type TokenManager interface {
 func NewJWTService(cnf config.Config) *JWTService {
 	svc := &JWTService{
 		secretKey:  []byte(cnf.JWTSecret),
+		issuer:     cnf.JWTIssuer,
 		accessTTL:  time.Duration(cnf.AccessTokenTTLMin) * time.Minute,
 		refreshTTL: time.Duration(cnf.RefreshTokenTTLDays) * time.Hour * 24,
 	}
@@ -32,6 +34,7 @@ func NewJWTService(cnf config.Config) *JWTService {
 func (s *JWTService) Sign(payload Payload) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":        payload.Sub,
+		"iss":        s.issuer,
 		"session_id": payload.SessionID,
 		"type":       payload.Type,
 		"exp":        payload.Exp,

@@ -37,11 +37,12 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	versionRepo := dbrepo.NewVersionRepo(pg.Pool)
+	breedRepo := dbrepo.NewBreedRepo(pg.Pool)
 	speciesRepo := dbrepo.NewSpeciesRepo(pg.Pool)
 	colorRepo := dbrepo.NewColorRepo(pg.Pool)
 	patternRepo := dbrepo.NewPatternRepo(pg.Pool)
 
-	catalogSvc := service.NewCatalogService(pg.Pool, versionRepo, speciesRepo, colorRepo, patternRepo)
+	catalogSvc := service.NewCatalogService(pg.Pool, versionRepo, breedRepo, speciesRepo, colorRepo, patternRepo)
 
 	publicHandler := handlers.NewPublicHandler(catalogSvc)
 	adminSpeciesHandler := handlers.NewAdminSpeciesHandler(catalogSvc, speciesRepo)

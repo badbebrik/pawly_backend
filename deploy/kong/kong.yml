@@ -2,7 +2,7 @@ _format_version: "3.0"
 
 services:
   - name: auth-service
-    url: http://host.docker.internal:8080
+    url: http://auth:8080
     routes:
       - name: auth-public-routes
         paths:
@@ -22,7 +22,7 @@ services:
         strip_path: false
 
   - name: profile-service
-    url: http://host.docker.internal:8086
+    url: http://profile:8086
     routes:
       - name: profile-routes
         paths:
@@ -30,7 +30,7 @@ services:
         strip_path: false
 
   - name: acl-service
-    url: http://host.docker.internal:8087
+    url: http://acl:8087
     routes:
       - name: acl-routes
         paths:
@@ -39,7 +39,7 @@ services:
         strip_path: false
 
   - name: catalog-service
-    url: http://host.docker.internal:8082
+    url: http://catalog:8082
     routes:
       - name: catalog-routes
         paths:
@@ -47,7 +47,7 @@ services:
         strip_path: false
 
   - name: pet-service
-    url: http://host.docker.internal:8085
+    url: http://pet:8085
     routes:
       - name: pet-routes
         paths:
@@ -55,7 +55,7 @@ services:
         strip_path: false
 
   - name: notification-service
-    url: http://host.docker.internal:8083
+    url: http://notification:8083
     routes:
       - name: notification-routes
         paths:
@@ -63,7 +63,7 @@ services:
         strip_path: false
 
   - name: email-service
-    url: http://host.docker.internal:8084
+    url: http://email:8084
     routes:
       - name: email-routes
         paths:

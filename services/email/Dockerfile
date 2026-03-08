@@ -12,7 +12,8 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /out/service /app/service
+COPY templates /app/templates
 RUN touch /app/.env
 
-EXPOSE 8080
+EXPOSE 8084
 ENTRYPOINT ["/app/service"]

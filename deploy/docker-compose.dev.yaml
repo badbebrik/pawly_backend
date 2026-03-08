@@ -10,6 +10,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   file_postgres:
     image: postgres:16
     container_name: file_postgres
@@ -21,6 +27,12 @@ services:
       - "5433:5432"
     volumes:
       - file_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U file_user -d file_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   acl_postgres:
     image: postgres:16
     container_name: acl_postgres
@@ -32,6 +44,12 @@ services:
       - "5434:5432"
     volumes:
       - acl_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acl_user -d acl_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   pet_postgres:
     image: postgres:16
     container_name: pet_postgres
@@ -43,6 +61,12 @@ services:
       - "5435:5432"
     volumes:
       - pet_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pet_user -d pet_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   catalog_postgres:
     image: postgres:16
     container_name: catalog_postgres
@@ -54,6 +78,12 @@ services:
       - "5436:5432"
     volumes:
       - catalog_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog_user -d catalog_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:7
     container_name: auth_redis
@@ -61,6 +91,12 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   rabbitmq:
     image: rabbitmq:3.12-management
     container_name: auth_rabbitmq
@@ -72,6 +108,12 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   minio:
     image: minio/minio:latest
     container_name: file_minio
@@ -84,6 +126,235 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+
+  file:
+    build:
+      context: ../services/file
+    container_name: pawly_file
+    restart: unless-stopped
+    environment:
+      APP_PORT: "50056"
+      POSTGRES_USER: file_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: file_db
+      POSTGRES_HOST: file_postgres
+      POSTGRES_PORT: "5432"
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: pawly-files
+      MINIO_USE_SSL: "false"
+      UPLOAD_URL_TTL_SECONDS: "900"
+      DOWNLOAD_URL_TTL_SECONDS: "900"
+    depends_on:
+      file_postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  acl:
+    build:
+      context: ../services/acl
+    container_name: pawly_acl
+    restart: unless-stopped
+    environment:
+      APP_HTTP_PORT: "8087"
+      APP_GRPC_PORT: "50057"
+      POSTGRES_USER: acl_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: acl_db
+      POSTGRES_HOST: acl_postgres
+      POSTGRES_PORT: "5432"
+      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
+      INVITE_TTL_MINUTES: "10080"
+      INVITE_DEEPLINK_BASE: myapp://invite?token=
+    depends_on:
+      acl_postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8087/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  profile:
+    build:
+      context: ../services
+      dockerfile: profile/Dockerfile
+    container_name: pawly_profile
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8086"
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: auth_db
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: auth_user
+      RABBITMQ_PASSWORD: supersecret
+      RABBITMQ_USER_EVENTS_QUEUE: auth.user_events
+      PROFILE_DEFAULT_LOCALE: ru
+      PROFILE_DEFAULT_TIMEZONE: Europe/Moscow
+      PROFILE_DEFAULT_DATE_FORMAT: dd.MM.yyyy
+      FILE_SERVICE_GRPC_ADDR: file:50056
+      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      file:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8086/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  auth:
+    build:
+      context: ../services/auth
+    container_name: pawly_auth
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8080"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: auth_db
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      REDIS_DB: "0"
+      JWT_SECRET: local_dev_jwt_secret
+      JWT_ISSUER: pawly
+      ACCESS_TOKEN_TTL_MINUTES: "15"
+      REFRESH_TOKEN_TTL_DAYS: "30"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: auth_user
+      RABBITMQ_PASSWORD: supersecret
+      RABBITMQ_NOTIFICATIONS_QUEUE: notifications.events
+      PROFILE_SERVICE_URL: http://profile:8086
+      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
+      GOOGLE_OAUTH_CLIENT_ID: ""
+      OAUTH_HTTP_TIMEOUT_SECONDS: "5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      profile:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  catalog:
+    build:
+      context: ../services/catalog
+    container_name: pawly_catalog
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8082"
+      POSTGRES_USER: catalog_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: catalog_db
+      POSTGRES_HOST: catalog_postgres
+      POSTGRES_PORT: "5432"
+      ADMIN_TOKEN: superadmin
+    depends_on:
+      catalog_postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8082/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  notification:
+    build:
+      context: ../services/notification
+    container_name: pawly_notification
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8083"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: auth_user
+      RABBITMQ_PASSWORD: supersecret
+      RABBITMQ_EVENTS_QUEUE: notifications.events
+      RABBITMQ_EMAIL_JOBS_QUEUE: email.jobs
+      RABBITMQ_PUSH_JOBS_QUEUE: push.jobs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8083/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  email:
+    build:
+      context: ../services/email
+    container_name: pawly_email
+    restart: unless-stopped
+    volumes:
+      - ../services/email/.env:/app/.env:ro
+    environment:
+      APP_PORT: "8084"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: auth_user
+      RABBITMQ_PASSWORD: supersecret
+      RABBITMQ_EMAIL_JOBS_QUEUE: email.jobs
+      TEMPLATE_DIR: /app/templates
+      DEFAULT_LOCALE: ru
+      REQUEUE_ON_FAIL: "false"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  pet:
+    build:
+      context: ../services/pet
+    container_name: pawly_pet
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8085"
+      POSTGRES_USER: pet_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: pet_db
+      POSTGRES_HOST: pet_postgres
+      POSTGRES_PORT: "5432"
+      ACL_GRPC_ADDR: acl:50057
+      FILE_GRPC_ADDR: file:50056
+    depends_on:
+      pet_postgres:
+        condition: service_healthy
+      acl:
+        condition: service_started
+      file:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8085/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
   kong:
     image: kong:3.6
     container_name: pawly_kong
@@ -97,6 +368,19 @@ services:
       - "8001:8001"
     volumes:
       - ./kong/kong.yml:/opt/kong/kong.yml:ro
+    depends_on:
+      auth:
+        condition: service_healthy
+      profile:
+        condition: service_healthy
+      acl:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+      pet:
+        condition: service_healthy
+      notification:
+        condition: service_healthy
 
 volumes:
   postgres_data:

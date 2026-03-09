@@ -132,25 +132,11 @@ services:
       context: ../services/file
     container_name: pawly_file
     restart: unless-stopped
-    environment:
-      APP_PORT: "50056"
-      POSTGRES_USER: file_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: file_db
-      POSTGRES_HOST: file_postgres
-      POSTGRES_PORT: "5432"
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: pawly-files
-      MINIO_USE_SSL: "false"
-      UPLOAD_URL_TTL_SECONDS: "900"
-      DOWNLOAD_URL_TTL_SECONDS: "900"
+    env_file:
+      - ../services/file/.env
     depends_on:
       file_postgres:
         condition: service_healthy
-      minio:
-        condition: service_started
 
   acl:
     build:

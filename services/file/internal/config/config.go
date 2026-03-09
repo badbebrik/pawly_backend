@@ -11,11 +11,16 @@ type Config struct {
 	PostgresHost     string
 	PostgresPort     string
 
-	MinioEndpoint  string
-	MinioAccessKey string
-	MinioSecretKey string
-	MinioBucket    string
-	MinioUseSSL    string
+	MinioEndpoint     string
+	MinioAccessKey    string
+	MinioSecretKey    string
+	MinioBucket       string
+	MinioUseSSL       string
+	MinioRegion       string
+	MinioBucketLookup string
+
+	MinioPublicEndpoint   string
+	MinioSkipBucketEnsure string
 
 	UploadURLTTLSeconds   string
 	DownloadURLTTLSeconds string
@@ -34,6 +39,10 @@ func Load() *Config {
 		MinioSecretKey:        getEnv("MINIO_SECRET_KEY", ""),
 		MinioBucket:           getEnv("MINIO_BUCKET", ""),
 		MinioUseSSL:           getEnv("MINIO_USE_SSL", ""),
+		MinioRegion:           getEnv("MINIO_REGION", "us-east-1"),
+		MinioBucketLookup:     getEnv("MINIO_BUCKET_LOOKUP", "path"),
+		MinioPublicEndpoint:   getEnv("MINIO_PUBLIC_ENDPOINT", ""),
+		MinioSkipBucketEnsure: getEnv("MINIO_SKIP_BUCKET_ENSURE", "false"),
 		UploadURLTTLSeconds:   getEnv("UPLOAD_URL_TTL_SECONDS", ""),
 		DownloadURLTTLSeconds: getEnv("DOWNLOAD_URL_TTL_SECONDS", ""),
 	}

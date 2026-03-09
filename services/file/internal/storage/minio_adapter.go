@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
 )
 
@@ -27,10 +26,13 @@ func (m *MinioStorageAdapter) UploadTTL() time.Duration {
 	return m.client.UploadTTL()
 }
 
-func (m *MinioStorageAdapter) PresignPut(ctx context.Context, bucket, objectKey, contentType string, expires time.Duration) (string, error) {
-	params := make(url.Values)
-	params.Set("response-content-type", contentType)
-	u, err := m.client.Client.PresignedPutObject(ctx, bucket, objectKey, expires)
+func (m *MinioStorageAdapter) PresignPut(ctx context.Context, bucket, objectKey, _ string, expires time.Duration) (string, error) {
+	client := m.client.Client
+	if m.client.PresignClient != nil {
+		client = m.client.PresignClient
+	}
+
+	u, err := client.PresignedPutObject(ctx, bucket, objectKey, expires)
 	if err != nil {
 		return "", fmt.Errorf("minio presign put: %w", err)
 	}
@@ -38,7 +40,12 @@ func (m *MinioStorageAdapter) PresignPut(ctx context.Context, bucket, objectKey,
 }
 
 func (m *MinioStorageAdapter) PresignGet(ctx context.Context, bucket, objectKey string, expires time.Duration) (string, error) {
-	u, err := m.client.Client.PresignedGetObject(ctx, bucket, objectKey, expires, nil)
+	client := m.client.Client
+	if m.client.PresignClient != nil {
+		client = m.client.PresignClient
+	}
+
+	u, err := client.PresignedGetObject(ctx, bucket, objectKey, expires, nil)
 	if err != nil {
 		return "", fmt.Errorf("minio presign get: %w", err)
 	}

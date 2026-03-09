@@ -9,9 +9,11 @@ import (
 	"file/internal/storage"
 	grpcserver "file/internal/transport/grpc"
 	filepb "file/proto"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/rs/zerolog/log"
@@ -47,12 +49,22 @@ func New(cfg *config.Config) (*App, error) {
 
 	fileSvc := service.NewFileService(fileObjRepo, fileLinkRepo, storageAdapter)
 
-	if err := minioClient.EnsureBucket(context.Background()); err != nil {
-		log.Error().Err(err).Msg("minio bucket init failed")
+	skipEnsureBucket, err := strconv.ParseBool(cfg.MinioSkipBucketEnsure)
+	if err != nil {
 		pg.Close()
-		return nil, err
+		return nil, fmt.Errorf("parse MINIO_SKIP_BUCKET_ENSURE: %w", err)
 	}
-	log.Info().Str("bucket", minioClient.Bucket).Msg("minio bucket ready")
+
+	if !skipEnsureBucket {
+		if err := minioClient.EnsureBucket(context.Background()); err != nil {
+			log.Error().Err(err).Msg("minio bucket init failed")
+			pg.Close()
+			return nil, err
+		}
+		log.Info().Str("bucket", minioClient.Bucket).Msg("minio bucket ready")
+	} else {
+		log.Warn().Str("bucket", minioClient.Bucket).Msg("minio bucket ensure is disabled by config")
+	}
 
 	app := &App{
 		cfg:     cfg,

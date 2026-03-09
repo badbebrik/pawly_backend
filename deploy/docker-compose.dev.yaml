@@ -166,6 +166,7 @@ services:
       POSTGRES_HOST: acl_postgres
       POSTGRES_PORT: "5432"
       INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
+      PROFILE_SERVICE_GRPC_ADDR: profile:50058
       INVITE_TTL_MINUTES: "10080"
       INVITE_DEEPLINK_BASE: myapp://invite?token=
     depends_on:
@@ -195,6 +196,7 @@ services:
       PROFILE_DEFAULT_TIMEZONE: Europe/Moscow
       PROFILE_DEFAULT_DATE_FORMAT: dd.MM.yyyy
       FILE_SERVICE_GRPC_ADDR: file:50056
+      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
     depends_on:
       postgres:
         condition: service_healthy
@@ -211,6 +213,8 @@ services:
       context: ../services/auth
     container_name: pawly_auth
     restart: unless-stopped
+    env_file:
+      - ../services/auth/.env
     environment:
       APP_PORT: "8080"
       POSTGRES_HOST: postgres
@@ -232,7 +236,6 @@ services:
       RABBITMQ_PASSWORD: supersecret
       RABBITMQ_NOTIFICATIONS_QUEUE: notifications.events
       PROFILE_SERVICE_GRPC_ADDR: profile:50058
-      GOOGLE_OAUTH_CLIENT_ID: ""
       OAUTH_HTTP_TIMEOUT_SECONDS: "5"
     depends_on:
       postgres:

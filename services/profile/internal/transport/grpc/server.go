@@ -52,6 +52,51 @@ func (s *Server) CreateProfile(ctx context.Context, req *profilepb.CreateProfile
 	}, nil
 }
 
+func (s *Server) BatchProfilesBrief(ctx context.Context, req *profilepb.BatchProfilesBriefRequest) (*profilepb.BatchProfilesBriefResponse, error) {
+	if len(req.GetUserIds()) == 0 {
+		return &profilepb.BatchProfilesBriefResponse{
+			Items:           []*profilepb.ProfileBrief{},
+			NotFoundUserIds: []string{},
+		}, nil
+	}
+
+	userIDs := make([]uuid.UUID, 0, len(req.GetUserIds()))
+	for i := range req.GetUserIds() {
+		userID, err := uuid.Parse(req.GetUserIds()[i])
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid user_ids")
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	items, notFound, err := s.svc.BatchGetProfilesBrief(ctx, userIDs)
+	if err != nil {
+		return nil, mapSvcErr(err)
+	}
+
+	out := make([]*profilepb.ProfileBrief, 0, len(items))
+	for i := range items {
+		item := items[i]
+		out = append(out, &profilepb.ProfileBrief{
+			UserId:            item.UserID.String(),
+			FirstName:         valueOrEmpty(item.FirstName),
+			LastName:          valueOrEmpty(item.LastName),
+			DisplayName:       buildDisplayName(item.FirstName, item.LastName),
+			AvatarDownloadUrl: valueOrEmpty(item.AvatarDownloadURL),
+		})
+	}
+
+	notFoundRaw := make([]string, 0, len(notFound))
+	for i := range notFound {
+		notFoundRaw = append(notFoundRaw, notFound[i].String())
+	}
+
+	return &profilepb.BatchProfilesBriefResponse{
+		Items:           out,
+		NotFoundUserIds: notFoundRaw,
+	}, nil
+}
+
 func mapSvcErr(err error) error {
 	switch {
 	case errors.Is(err, service.ErrInvalidInput):
@@ -67,4 +112,16 @@ func optionalString(raw string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+func valueOrEmpty(raw *string) string {
+	if raw == nil {
+		return ""
+	}
+	return *raw
+}
+
+func buildDisplayName(firstName, lastName *string) string {
+	parts := []string{valueOrEmpty(firstName), valueOrEmpty(lastName)}
+	return strings.TrimSpace(strings.Join(parts, " "))
 }

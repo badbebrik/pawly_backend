@@ -81,6 +81,37 @@ func (c *Client) GetDownloadURL(ctx context.Context, fileID uuid.UUID) (string, 
 	return resp.GetUrl(), resp.GetExpiresAt().AsTime(), nil
 }
 
+func (c *Client) BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	if len(fileIDs) == 0 {
+		return map[uuid.UUID]string{}, nil
+	}
+
+	raw := make([]string, 0, len(fileIDs))
+	for i := range fileIDs {
+		raw = append(raw, fileIDs[i].String())
+	}
+
+	resp, err := c.client.BatchGetDownloadUrls(ctx, &filepb.BatchGetDownloadUrlsRequest{
+		FileIds: raw,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[uuid.UUID]string, len(resp.GetItems()))
+	for _, item := range resp.GetItems() {
+		id, err := uuid.Parse(item.GetFileId())
+		if err != nil {
+			continue
+		}
+		if item.GetUrl() == "" {
+			continue
+		}
+		out[id] = item.GetUrl()
+	}
+	return out, nil
+}
+
 func (c *Client) LinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.UUID) error {
 	_, err := c.client.LinkFile(ctx, &filepb.LinkFileRequest{
 		FileId:       fileID.String(),

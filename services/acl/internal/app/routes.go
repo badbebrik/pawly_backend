@@ -22,7 +22,7 @@ func (a *App) setupRoutes() http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	pub := handlers.NewPublicHandlers(a.aclSvc)
+	pub := handlers.NewPublicHandlers(a.aclSvc, a.profile)
 	internal := handlers.NewInternalHandlers(a.aclSvc)
 
 	r.Group(func(r chi.Router) {

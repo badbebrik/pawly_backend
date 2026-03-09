@@ -15,23 +15,25 @@ type Config struct {
 	PostgresHost     string
 	PostgresPort     string
 
-	InternalServiceToken string
-	InviteTTLMinutes     int
-	InviteDeeplinkBase   string
+	InternalServiceToken   string
+	ProfileServiceGRPCAddr string
+	InviteTTLMinutes       int
+	InviteDeeplinkBase     string
 }
 
 func Load() *Config {
 	return &Config{
-		AppHTTPPort:          getEnv("APP_HTTP_PORT", "8087"),
-		AppGRPCPort:          getEnv("APP_GRPC_PORT", "50057"),
-		PostgresUser:         getEnv("POSTGRES_USER", "acl_user"),
-		PostgresPassword:     getEnv("POSTGRES_PASSWORD", "supersecret"),
-		PostgresDB:           getEnv("POSTGRES_DB", "acl_db"),
-		PostgresHost:         getEnv("POSTGRES_HOST", "localhost"),
-		PostgresPort:         getEnv("POSTGRES_PORT", "5434"),
-		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
-		InviteTTLMinutes:     getEnvInt("INVITE_TTL_MINUTES", 10080),
-		InviteDeeplinkBase:   getEnv("INVITE_DEEPLINK_BASE", "myapp://invite?token="),
+		AppHTTPPort:            getEnv("APP_HTTP_PORT", "8087"),
+		AppGRPCPort:            getEnv("APP_GRPC_PORT", "50057"),
+		PostgresUser:           getEnv("POSTGRES_USER", "acl_user"),
+		PostgresPassword:       getEnv("POSTGRES_PASSWORD", "supersecret"),
+		PostgresDB:             getEnv("POSTGRES_DB", "acl_db"),
+		PostgresHost:           getEnv("POSTGRES_HOST", "localhost"),
+		PostgresPort:           getEnv("POSTGRES_PORT", "5434"),
+		InternalServiceToken:   getEnv("INTERNAL_SERVICE_TOKEN", ""),
+		ProfileServiceGRPCAddr: getEnv("PROFILE_SERVICE_GRPC_ADDR", "localhost:50058"),
+		InviteTTLMinutes:       getEnvInt("INVITE_TTL_MINUTES", 10080),
+		InviteDeeplinkBase:     getEnv("INVITE_DEEPLINK_BASE", "myapp://invite?token="),
 	}
 }
 

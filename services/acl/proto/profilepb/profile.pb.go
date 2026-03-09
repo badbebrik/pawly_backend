@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v4.25.3
-// source: proto/profile.proto
+// source: proto/profilepb/profile.proto
 
 package profilepb
 
@@ -33,7 +33,7 @@ type CreateProfileRequest struct {
 
 func (x *CreateProfileRequest) Reset() {
 	*x = CreateProfileRequest{}
-	mi := &file_proto_profile_proto_msgTypes[0]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +45,7 @@ func (x *CreateProfileRequest) String() string {
 func (*CreateProfileRequest) ProtoMessage() {}
 
 func (x *CreateProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_profile_proto_msgTypes[0]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +58,7 @@ func (x *CreateProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProfileRequest.ProtoReflect.Descriptor instead.
 func (*CreateProfileRequest) Descriptor() ([]byte, []int) {
-	return file_proto_profile_proto_rawDescGZIP(), []int{0}
+	return file_proto_profilepb_profile_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CreateProfileRequest) GetUserId() string {
@@ -98,7 +98,7 @@ type CreateProfileResponse struct {
 
 func (x *CreateProfileResponse) Reset() {
 	*x = CreateProfileResponse{}
-	mi := &file_proto_profile_proto_msgTypes[1]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -110,7 +110,7 @@ func (x *CreateProfileResponse) String() string {
 func (*CreateProfileResponse) ProtoMessage() {}
 
 func (x *CreateProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_profile_proto_msgTypes[1]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -123,7 +123,7 @@ func (x *CreateProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProfileResponse.ProtoReflect.Descriptor instead.
 func (*CreateProfileResponse) Descriptor() ([]byte, []int) {
-	return file_proto_profile_proto_rawDescGZIP(), []int{1}
+	return file_proto_profilepb_profile_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CreateProfileResponse) GetUserId() string {
@@ -142,7 +142,7 @@ type BatchProfilesBriefRequest struct {
 
 func (x *BatchProfilesBriefRequest) Reset() {
 	*x = BatchProfilesBriefRequest{}
-	mi := &file_proto_profile_proto_msgTypes[2]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -154,7 +154,7 @@ func (x *BatchProfilesBriefRequest) String() string {
 func (*BatchProfilesBriefRequest) ProtoMessage() {}
 
 func (x *BatchProfilesBriefRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_profile_proto_msgTypes[2]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -167,7 +167,7 @@ func (x *BatchProfilesBriefRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchProfilesBriefRequest.ProtoReflect.Descriptor instead.
 func (*BatchProfilesBriefRequest) Descriptor() ([]byte, []int) {
-	return file_proto_profile_proto_rawDescGZIP(), []int{2}
+	return file_proto_profilepb_profile_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *BatchProfilesBriefRequest) GetUserIds() []string {
@@ -190,7 +190,7 @@ type ProfileBrief struct {
 
 func (x *ProfileBrief) Reset() {
 	*x = ProfileBrief{}
-	mi := &file_proto_profile_proto_msgTypes[3]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -202,7 +202,7 @@ func (x *ProfileBrief) String() string {
 func (*ProfileBrief) ProtoMessage() {}
 
 func (x *ProfileBrief) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_profile_proto_msgTypes[3]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -215,7 +215,7 @@ func (x *ProfileBrief) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProfileBrief.ProtoReflect.Descriptor instead.
 func (*ProfileBrief) Descriptor() ([]byte, []int) {
-	return file_proto_profile_proto_rawDescGZIP(), []int{3}
+	return file_proto_profilepb_profile_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ProfileBrief) GetUserId() string {
@@ -263,7 +263,7 @@ type BatchProfilesBriefResponse struct {
 
 func (x *BatchProfilesBriefResponse) Reset() {
 	*x = BatchProfilesBriefResponse{}
-	mi := &file_proto_profile_proto_msgTypes[4]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +275,7 @@ func (x *BatchProfilesBriefResponse) String() string {
 func (*BatchProfilesBriefResponse) ProtoMessage() {}
 
 func (x *BatchProfilesBriefResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_profile_proto_msgTypes[4]
+	mi := &file_proto_profilepb_profile_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +288,7 @@ func (x *BatchProfilesBriefResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchProfilesBriefResponse.ProtoReflect.Descriptor instead.
 func (*BatchProfilesBriefResponse) Descriptor() ([]byte, []int) {
-	return file_proto_profile_proto_rawDescGZIP(), []int{4}
+	return file_proto_profilepb_profile_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *BatchProfilesBriefResponse) GetItems() []*ProfileBrief {
@@ -305,11 +305,11 @@ func (x *BatchProfilesBriefResponse) GetNotFoundUserIds() []string {
 	return nil
 }
 
-var File_proto_profile_proto protoreflect.FileDescriptor
+var File_proto_profilepb_profile_proto protoreflect.FileDescriptor
 
-const file_proto_profile_proto_rawDesc = "" +
+const file_proto_profilepb_profile_proto_rawDesc = "" +
 	"\n" +
-	"\x13proto/profile.proto\x12\aprofile\"\x83\x01\n" +
+	"\x1dproto/profilepb/profile.proto\x12\aprofile\"\x83\x01\n" +
 	"\x14CreateProfileRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
 	"\x06locale\x18\x02 \x01(\tR\x06locale\x12\x1d\n" +
@@ -332,29 +332,29 @@ const file_proto_profile_proto_rawDesc = "" +
 	"\x12not_found_user_ids\x18\x02 \x03(\tR\x0fnotFoundUserIds2\xbf\x01\n" +
 	"\x0eProfileService\x12N\n" +
 	"\rCreateProfile\x12\x1d.profile.CreateProfileRequest\x1a\x1e.profile.CreateProfileResponse\x12]\n" +
-	"\x12BatchProfilesBrief\x12\".profile.BatchProfilesBriefRequest\x1a#.profile.BatchProfilesBriefResponseB\x19Z\x17profile/proto;profilepbb\x06proto3"
+	"\x12BatchProfilesBrief\x12\".profile.BatchProfilesBriefRequest\x1a#.profile.BatchProfilesBriefResponseB\x1fZ\x1dacl/proto/profilepb;profilepbb\x06proto3"
 
 var (
-	file_proto_profile_proto_rawDescOnce sync.Once
-	file_proto_profile_proto_rawDescData []byte
+	file_proto_profilepb_profile_proto_rawDescOnce sync.Once
+	file_proto_profilepb_profile_proto_rawDescData []byte
 )
 
-func file_proto_profile_proto_rawDescGZIP() []byte {
-	file_proto_profile_proto_rawDescOnce.Do(func() {
-		file_proto_profile_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_profile_proto_rawDesc), len(file_proto_profile_proto_rawDesc)))
+func file_proto_profilepb_profile_proto_rawDescGZIP() []byte {
+	file_proto_profilepb_profile_proto_rawDescOnce.Do(func() {
+		file_proto_profilepb_profile_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_profilepb_profile_proto_rawDesc), len(file_proto_profilepb_profile_proto_rawDesc)))
 	})
-	return file_proto_profile_proto_rawDescData
+	return file_proto_profilepb_profile_proto_rawDescData
 }
 
-var file_proto_profile_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
-var file_proto_profile_proto_goTypes = []any{
+var file_proto_profilepb_profile_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_profilepb_profile_proto_goTypes = []any{
 	(*CreateProfileRequest)(nil),       // 0: profile.CreateProfileRequest
 	(*CreateProfileResponse)(nil),      // 1: profile.CreateProfileResponse
 	(*BatchProfilesBriefRequest)(nil),  // 2: profile.BatchProfilesBriefRequest
 	(*ProfileBrief)(nil),               // 3: profile.ProfileBrief
 	(*BatchProfilesBriefResponse)(nil), // 4: profile.BatchProfilesBriefResponse
 }
-var file_proto_profile_proto_depIdxs = []int32{
+var file_proto_profilepb_profile_proto_depIdxs = []int32{
 	3, // 0: profile.BatchProfilesBriefResponse.items:type_name -> profile.ProfileBrief
 	0, // 1: profile.ProfileService.CreateProfile:input_type -> profile.CreateProfileRequest
 	2, // 2: profile.ProfileService.BatchProfilesBrief:input_type -> profile.BatchProfilesBriefRequest
@@ -367,26 +367,26 @@ var file_proto_profile_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_proto_profile_proto_init() }
-func file_proto_profile_proto_init() {
-	if File_proto_profile_proto != nil {
+func init() { file_proto_profilepb_profile_proto_init() }
+func file_proto_profilepb_profile_proto_init() {
+	if File_proto_profilepb_profile_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_profile_proto_rawDesc), len(file_proto_profile_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_profilepb_profile_proto_rawDesc), len(file_proto_profilepb_profile_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_profile_proto_goTypes,
-		DependencyIndexes: file_proto_profile_proto_depIdxs,
-		MessageInfos:      file_proto_profile_proto_msgTypes,
+		GoTypes:           file_proto_profilepb_profile_proto_goTypes,
+		DependencyIndexes: file_proto_profilepb_profile_proto_depIdxs,
+		MessageInfos:      file_proto_profilepb_profile_proto_msgTypes,
 	}.Build()
-	File_proto_profile_proto = out.File
-	file_proto_profile_proto_goTypes = nil
-	file_proto_profile_proto_depIdxs = nil
+	File_proto_profilepb_profile_proto = out.File
+	file_proto_profilepb_profile_proto_goTypes = nil
+	file_proto_profilepb_profile_proto_depIdxs = nil
 }

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package profile;
 
-option go_package = "profile/proto;profilepb";
+option go_package = "acl/proto/profilepb;profilepb";
 
 service ProfileService {
   rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse);

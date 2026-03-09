@@ -31,12 +31,61 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
     `
 
 	row := r.db.QueryRow(ctx, query, userID)
+	p, err := scanProfileRow(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
 
+	return p, nil
+}
+
+func (r *ProfileRepository) GetByUserIDs(ctx context.Context, userIDs []uuid.UUID) ([]model.Profile, error) {
+	if len(userIDs) == 0 {
+		return []model.Profile{}, nil
+	}
+
+	const query = `
+        SELECT user_id, first_name, last_name, phone, avatar_file_id,
+               locale, timezone, date_format,
+               public_contact_settings, extra_contacts,
+               created_at, updated_at
+        FROM profiles
+        WHERE user_id = ANY($1)
+    `
+
+	rows, err := r.db.Query(ctx, query, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.Profile, 0, len(userIDs))
+	for rows.Next() {
+		profile, err := scanProfileRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *profile)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+type profileScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanProfileRow(s profileScanner) (*model.Profile, error) {
 	var p model.Profile
 	var publicBytes []byte
 	var extraBytes []byte
 
-	err := row.Scan(
+	if err := s.Scan(
 		&p.UserID,
 		&p.FirstName,
 		&p.LastName,
@@ -49,11 +98,7 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 		&extraBytes,
 		&p.CreatedAt,
 		&p.UpdatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
-		}
+	); err != nil {
 		return nil, err
 	}
 

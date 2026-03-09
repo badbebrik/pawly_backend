@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	profileclient "acl/internal/infrastructure/profileclient"
 	"acl/internal/model"
 	"acl/internal/repository"
 	"acl/internal/service"
 	appmw "acl/internal/transport/http/middleware"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,7 +17,12 @@ import (
 )
 
 type PublicHandlers struct {
-	svc *service.ACLService
+	svc      *service.ACLService
+	profiles ProfileBatchClient
+}
+
+type ProfileBatchClient interface {
+	BatchProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([]profileclient.ProfileBrief, []uuid.UUID, error)
 }
 
 type createInviteRequest struct {
@@ -46,8 +53,8 @@ type previewInviteByTokenRequest struct {
 	Token string `json:"token"`
 }
 
-func NewPublicHandlers(svc *service.ACLService) *PublicHandlers {
-	return &PublicHandlers{svc: svc}
+func NewPublicHandlers(svc *service.ACLService, profiles ProfileBatchClient) *PublicHandlers {
+	return &PublicHandlers{svc: svc, profiles: profiles}
 }
 
 func (h *PublicHandlers) NotImplemented(w http.ResponseWriter, _ *http.Request) {
@@ -66,9 +73,11 @@ func (h *PublicHandlers) GetMyAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	profilesByUser := h.loadProfilesByUserID(r.Context(), []repository.MemberView{*member})
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_id": petID.String(),
-		"member": memberToDTO(member),
+		"member": memberToDTO(member, profilesByUser[member.UserID]),
 	})
 }
 
@@ -84,9 +93,12 @@ func (h *PublicHandlers) GetBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	profilesByUser := h.loadProfilesByUserID(r.Context(), append([]repository.MemberView{*res.Me}, res.Members...))
+
 	members := make([]any, 0, len(res.Members))
 	for i := range res.Members {
-		members = append(members, memberToDTO(&res.Members[i]))
+		profile := profilesByUser[res.Members[i].UserID]
+		members = append(members, memberToDTO(&res.Members[i], profile))
 	}
 
 	roles := make([]any, 0, len(res.Roles))
@@ -106,7 +118,7 @@ func (h *PublicHandlers) GetBootstrap(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_id": petID.String(),
-		"me":     memberToDTO(res.Me),
+		"me":     memberToDTO(res.Me, profilesByUser[res.Me.UserID]),
 		"capabilities": map[string]any{
 			"members_read":  res.CanMembersRead,
 			"members_write": res.CanMembersWrite,
@@ -130,9 +142,12 @@ func (h *PublicHandlers) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	profilesByUser := h.loadProfilesByUserID(r.Context(), items)
+
 	out := make([]any, 0, len(items))
 	for i := range items {
-		out = append(out, memberToDTO(&items[i]))
+		profile := profilesByUser[items[i].UserID]
+		out = append(out, memberToDTO(&items[i], profile))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
@@ -185,7 +200,8 @@ func (h *PublicHandlers) UpdateMemberPermissions(w http.ResponseWriter, r *http.
 		writeServiceError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"member": memberToDTO(member)})
+	profilesByUser := h.loadProfilesByUserID(r.Context(), []repository.MemberView{*member})
+	writeJSON(w, http.StatusOK, map[string]any{"member": memberToDTO(member, profilesByUser[member.UserID])})
 }
 
 func (h *PublicHandlers) RemoveMember(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +225,8 @@ func (h *PublicHandlers) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"member": memberToDTO(member)})
+	profilesByUser := h.loadProfilesByUserID(r.Context(), []repository.MemberView{*member})
+	writeJSON(w, http.StatusOK, map[string]any{"member": memberToDTO(member, profilesByUser[member.UserID])})
 }
 
 func (h *PublicHandlers) ListRoles(w http.ResponseWriter, r *http.Request) {
@@ -396,10 +413,11 @@ func (h *PublicHandlers) AcceptInviteByCode(w http.ResponseWriter, r *http.Reque
 		writeServiceError(w, err)
 		return
 	}
+	profilesByUser := h.loadProfilesByUserID(r.Context(), []repository.MemberView{*res.Member})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_id": res.PetID.String(),
-		"member": memberToDTO(res.Member),
+		"member": memberToDTO(res.Member, profilesByUser[res.Member.UserID]),
 	})
 }
 
@@ -423,10 +441,11 @@ func (h *PublicHandlers) AcceptInviteByToken(w http.ResponseWriter, r *http.Requ
 		writeServiceError(w, err)
 		return
 	}
+	profilesByUser := h.loadProfilesByUserID(r.Context(), []repository.MemberView{*res.Member})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_id": res.PetID.String(),
-		"member": memberToDTO(res.Member),
+		"member": memberToDTO(res.Member, profilesByUser[res.Member.UserID]),
 	})
 }
 
@@ -496,8 +515,8 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-func memberToDTO(m *repository.MemberView) map[string]any {
-	return map[string]any{
+func memberToDTO(m *repository.MemberView, profile *profileclient.ProfileBrief) map[string]any {
+	out := map[string]any{
 		"id":               m.ID.String(),
 		"pet_id":           m.PetID.String(),
 		"user_id":          m.UserID.String(),
@@ -508,6 +527,52 @@ func memberToDTO(m *repository.MemberView) map[string]any {
 		"created_at":       m.CreatedAt.UTC().Format(time.RFC3339),
 		"updated_at":       m.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+	out["profile"] = profileToDTO(profile)
+	return out
+}
+
+func profileToDTO(profile *profileclient.ProfileBrief) any {
+	if profile == nil {
+		return nil
+	}
+	return map[string]any{
+		"first_name":          profile.FirstName,
+		"last_name":           profile.LastName,
+		"display_name":        profile.DisplayName,
+		"avatar_download_url": profile.AvatarDownloadURL,
+	}
+}
+
+func (h *PublicHandlers) loadProfilesByUserID(ctx context.Context, members []repository.MemberView) map[uuid.UUID]*profileclient.ProfileBrief {
+	result := map[uuid.UUID]*profileclient.ProfileBrief{}
+	if h.profiles == nil || len(members) == 0 {
+		return result
+	}
+
+	userIDs := make([]uuid.UUID, 0, len(members))
+	seen := make(map[uuid.UUID]struct{}, len(members))
+	for i := range members {
+		userID := members[i].UserID
+		if _, ok := seen[userID]; ok {
+			continue
+		}
+		seen[userID] = struct{}{}
+		userIDs = append(userIDs, userID)
+	}
+	if len(userIDs) == 0 {
+		return result
+	}
+
+	items, _, err := h.profiles.BatchProfilesBrief(ctx, userIDs)
+	if err != nil {
+		return result
+	}
+	for i := range items {
+		item := items[i]
+		itemCopy := item
+		result[item.UserID] = &itemCopy
+	}
+	return result
 }
 
 func roleToDTO(r repository.RoleView) map[string]any {

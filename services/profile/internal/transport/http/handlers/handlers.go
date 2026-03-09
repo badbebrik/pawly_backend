@@ -1,12 +1,9 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -34,7 +31,6 @@ type ProfileResponse struct {
 	FirstName         *string                     `json:"first_name"`
 	LastName          *string                     `json:"last_name"`
 	Phone             *string                     `json:"phone"`
-	AvatarFileID      *uuid.UUID                  `json:"avatar_file_id"`
 	AvatarDownloadURL *string                     `json:"avatar_download_url"`
 	Locale            string                      `json:"locale"`
 	Timezone          string                      `json:"time_zone"`
@@ -57,7 +53,6 @@ func (h *Handlers) fromModel(ctx context.Context, p *model.Profile) ProfileRespo
 		FirstName:         p.FirstName,
 		LastName:          p.LastName,
 		Phone:             p.Phone,
-		AvatarFileID:      p.AvatarFileID,
 		AvatarDownloadURL: avatarURL,
 		Locale:            p.Locale,
 		Timezone:          p.Timezone,
@@ -259,69 +254,6 @@ func (h *Handlers) ConfirmAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ConfirmAvatarUploadResponse{Profile: h.fromModel(r.Context(), p)})
 }
 
-// TestAvatarUpload godoc
-// @Summary Test avatar upload (multipart)
-// @Tags profile
-// @Accept multipart/form-data
-// @Produce json
-// @Param X-User-ID header string true "User ID"
-// @Param file formData file true "file"
-// @Success 200 {object} ConfirmAvatarUploadResponse
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Router /v1/profile/me/avatar:test-upload [post]
-// Test endpoint: accepts file in multipart/form-data and uploads via FileService presigned URL
-func (h *Handlers) TestAvatarUpload(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "invalid multipart", http.StatusBadRequest)
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "missing file", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, "read failed", http.StatusInternalServerError)
-		return
-	}
-
-	mimeType := header.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = http.DetectContentType(data)
-	}
-
-	size := int64(len(data))
-	fileID, upload, err := h.svc.InitAvatarUpload(r.Context(), mimeType, &size, userID)
-	if err != nil {
-		http.Error(w, "init upload failed", http.StatusBadRequest)
-		return
-	}
-
-	if err := putToURL(upload, mimeType, data); err != nil {
-		http.Error(w, "upload failed", http.StatusBadRequest)
-		return
-	}
-
-	p, err := h.svc.ConfirmAvatarUpload(r.Context(), userID, fileID, size)
-	if err != nil {
-		http.Error(w, "confirm failed", http.StatusBadRequest)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, ConfirmAvatarUploadResponse{Profile: h.fromModel(r.Context(), p)})
-}
-
 type PublicOwnerContactDTO struct {
 	DisplayName   *string             `json:"display_name"`
 	Phone         *string             `json:"phone"`
@@ -387,24 +319,71 @@ func (h *Handlers) GetPublicContact(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func putToURL(upload service.UploadInfo, mimeType string, data []byte) error {
-	req, err := http.NewRequest(http.MethodPut, upload.URL, bytes.NewReader(data))
+type BatchProfilesBriefRequest struct {
+	UserIDs []string `json:"user_ids"`
+}
+
+type ProfileBriefDTO struct {
+	UserID            uuid.UUID `json:"user_id"`
+	FirstName         *string   `json:"first_name"`
+	LastName          *string   `json:"last_name"`
+	DisplayName       *string   `json:"display_name"`
+	AvatarDownloadURL *string   `json:"avatar_download_url"`
+}
+
+type BatchProfilesBriefResponse struct {
+	Items           []ProfileBriefDTO `json:"items"`
+	NotFoundUserIDs []uuid.UUID       `json:"not_found_user_ids"`
+}
+
+func (h *Handlers) BatchProfilesBrief(w http.ResponseWriter, r *http.Request) {
+	var req BatchProfilesBriefRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if len(req.UserIDs) == 0 {
+		writeJSON(w, http.StatusOK, BatchProfilesBriefResponse{
+			Items:           []ProfileBriefDTO{},
+			NotFoundUserIDs: []uuid.UUID{},
+		})
+		return
+	}
+
+	userIDs := make([]uuid.UUID, 0, len(req.UserIDs))
+	for i := range req.UserIDs {
+		userID, err := uuid.Parse(req.UserIDs[i])
+		if err != nil {
+			http.Error(w, "invalid user_ids", http.StatusBadRequest)
+			return
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	items, notFound, err := h.svc.BatchGetProfilesBrief(r.Context(), userIDs)
 	if err != nil {
-		return err
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
-	req.Header.Set("Content-Type", mimeType)
-	for k, v := range upload.Headers {
-		req.Header.Set(k, v)
+
+	out := make([]ProfileBriefDTO, 0, len(items))
+	for i := range items {
+		item := items[i]
+		out = append(out, ProfileBriefDTO{
+			UserID:            item.UserID,
+			FirstName:         item.FirstName,
+			LastName:          item.LastName,
+			DisplayName:       buildDisplayName(item.FirstName, item.LastName),
+			AvatarDownloadURL: item.AvatarDownloadURL,
+		})
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("upload status %d", resp.StatusCode)
-	}
-	return nil
+
+	writeJSON(w, http.StatusOK, BatchProfilesBriefResponse{
+		Items:           out,
+		NotFoundUserIDs: notFound,
+	})
 }
 
 func valueOrEmpty(s *string) string {
@@ -412,6 +391,14 @@ func valueOrEmpty(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func buildDisplayName(firstName, lastName *string) *string {
+	displayName := strings.TrimSpace(strings.Join([]string{valueOrEmpty(firstName), valueOrEmpty(lastName)}, " "))
+	if displayName == "" {
+		return nil
+	}
+	return &displayName
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

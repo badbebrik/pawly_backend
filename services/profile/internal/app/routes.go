@@ -26,10 +26,13 @@ func (a *App) setupRoutes(svc *service.ProfileService) http.Handler {
 		r.Put("/v1/profile/me", hs.PutMe)
 		r.Post("/v1/profile/me/avatar:init-upload", hs.InitAvatarUpload)
 		r.Post("/v1/profile/me/avatar:confirm-upload", hs.ConfirmAvatarUpload)
-		r.Post("/v1/profile/me/avatar:test-upload", hs.TestAvatarUpload)
 	})
 
-	r.Get("/internal/v1/profile/users/{user_id}/public-contact", hs.GetPublicContact)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.WithInternalToken(a.cfg.InternalServiceToken))
+		r.Get("/internal/v1/profile/users/{user_id}/public-contact", hs.GetPublicContact)
+		r.Post("/internal/v1/profile/users:batch-brief", hs.BatchProfilesBrief)
+	})
 
 	return r
 }

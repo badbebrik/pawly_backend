@@ -3,6 +3,7 @@ package app
 import (
 	"acl/internal/config"
 	"acl/internal/infrastructure/db"
+	profileclient "acl/internal/infrastructure/profileclient"
 	pgrepo "acl/internal/infrastructure/repository"
 	aclservice "acl/internal/service"
 	grpcserver "acl/internal/transport/grpc"
@@ -24,6 +25,7 @@ type App struct {
 
 	pg      *db.Postgres
 	aclSvc  *aclservice.ACLService
+	profile *profileclient.Client
 	httpSrv *http.Server
 	grpcSrv *grpc.Server
 
@@ -50,11 +52,17 @@ func New(cfg *config.Config) (*App, error) {
 			InviteDeeplinkBase: cfg.InviteDeeplinkBase,
 		},
 	)
+	profile, err := profileclient.New(cfg.ProfileServiceGRPCAddr)
+	if err != nil {
+		pg.Close()
+		return nil, err
+	}
 
 	app := &App{
-		cfg:    cfg,
-		pg:     pg,
-		aclSvc: aclSvc,
+		cfg:     cfg,
+		pg:      pg,
+		aclSvc:  aclSvc,
+		profile: profile,
 	}
 
 	httpRouter := app.setupRoutes()
@@ -65,6 +73,7 @@ func New(cfg *config.Config) (*App, error) {
 
 	grpcListener, err := net.Listen("tcp", ":"+cfg.AppGRPCPort)
 	if err != nil {
+		profile.Close()
 		pg.Close()
 		return nil, err
 	}
@@ -95,6 +104,9 @@ func (a *App) Close() {
 
 	if a.pg != nil {
 		a.pg.Close()
+	}
+	if a.profile != nil {
+		a.profile.Close()
 	}
 }
 

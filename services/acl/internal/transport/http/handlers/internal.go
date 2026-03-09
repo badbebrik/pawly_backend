@@ -128,7 +128,7 @@ func (h *InternalHandlers) ListPetsForUser(w http.ResponseWriter, r *http.Reques
 	for i := range memberships {
 		m := memberships[i]
 		petIDs = append(petIDs, m.PetID.String())
-		membershipItems = append(membershipItems, memberToDTO(&m))
+		membershipItems = append(membershipItems, memberToDTO(&m, nil))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_ids":     petIDs,

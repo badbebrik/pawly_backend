@@ -86,8 +86,88 @@ func (s *ProfileService) CreateProfile(ctx context.Context, in CreateProfileInpu
 	return profile, nil
 }
 
+type ProfileBrief struct {
+	UserID            uuid.UUID
+	FirstName         *string
+	LastName          *string
+	AvatarFileID      *uuid.UUID
+	AvatarDownloadURL *string
+}
+
 func (s *ProfileService) GetProfile(ctx context.Context, userID uuid.UUID) (*model.Profile, error) {
 	return s.repo.GetByUserID(ctx, userID)
+}
+
+func (s *ProfileService) BatchGetProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([]ProfileBrief, []uuid.UUID, error) {
+	if len(userIDs) == 0 {
+		return []ProfileBrief{}, []uuid.UUID{}, nil
+	}
+
+	unique := make([]uuid.UUID, 0, len(userIDs))
+	seen := make(map[uuid.UUID]struct{}, len(userIDs))
+	for i := range userIDs {
+		id := userIDs[i]
+		if id == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return []ProfileBrief{}, []uuid.UUID{}, nil
+	}
+
+	profiles, err := s.repo.GetByUserIDs(ctx, unique)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	profilesByUser := make(map[uuid.UUID]model.Profile, len(profiles))
+	avatarIDs := make([]uuid.UUID, 0, len(profiles))
+	for i := range profiles {
+		profile := profiles[i]
+		profilesByUser[profile.UserID] = profile
+		if profile.AvatarFileID != nil {
+			avatarIDs = append(avatarIDs, *profile.AvatarFileID)
+		}
+	}
+
+	avatarURLByID := map[uuid.UUID]string{}
+	if s.fileClient != nil && len(avatarIDs) > 0 {
+		if urls, err := s.fileClient.BatchGetDownloadURLs(ctx, avatarIDs); err == nil {
+			avatarURLByID = urls
+		}
+	}
+
+	items := make([]ProfileBrief, 0, len(profilesByUser))
+	notFound := make([]uuid.UUID, 0)
+	for i := range unique {
+		userID := unique[i]
+		profile, ok := profilesByUser[userID]
+		if !ok {
+			notFound = append(notFound, userID)
+			continue
+		}
+
+		item := ProfileBrief{
+			UserID:       profile.UserID,
+			FirstName:    profile.FirstName,
+			LastName:     profile.LastName,
+			AvatarFileID: profile.AvatarFileID,
+		}
+		if profile.AvatarFileID != nil {
+			if url, ok := avatarURLByID[*profile.AvatarFileID]; ok && strings.TrimSpace(url) != "" {
+				urlCopy := url
+				item.AvatarDownloadURL = &urlCopy
+			}
+		}
+		items = append(items, item)
+	}
+
+	return items, notFound, nil
 }
 
 func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, patch UpdateProfileInput) (*model.Profile, error) {

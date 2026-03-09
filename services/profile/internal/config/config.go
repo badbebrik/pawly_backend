@@ -16,22 +16,24 @@ type Config struct {
 	DefaultTimezone string
 	DefaultDateFmt  string
 
-	FileServiceGRPCAddr string
+	FileServiceGRPCAddr  string
+	InternalServiceToken string
 }
 
 func Load() *Config {
 	return &Config{
-		AppPort:             getEnv("APP_PORT", "8086"),
-		AppGRPCPort:         getEnv("APP_GRPC_PORT", "50058"),
-		PostgresUser:        getEnv("POSTGRES_USER", ""),
-		PostgresPassword:    getEnv("POSTGRES_PASSWORD", ""),
-		PostgresDB:          getEnv("POSTGRES_DB", ""),
-		PostgresHost:        getEnv("POSTGRES_HOST", ""),
-		PostgresPort:        getEnv("POSTGRES_PORT", ""),
-		DefaultLocale:       getEnv("PROFILE_DEFAULT_LOCALE", ""),
-		DefaultTimezone:     getEnv("PROFILE_DEFAULT_TIMEZONE", ""),
-		DefaultDateFmt:      getEnv("PROFILE_DEFAULT_DATE_FORMAT", ""),
-		FileServiceGRPCAddr: getEnv("FILE_SERVICE_GRPC_ADDR", ""),
+		AppPort:              getEnv("APP_PORT", "8086"),
+		AppGRPCPort:          getEnv("APP_GRPC_PORT", "50058"),
+		PostgresUser:         getEnv("POSTGRES_USER", ""),
+		PostgresPassword:     getEnv("POSTGRES_PASSWORD", ""),
+		PostgresDB:           getEnv("POSTGRES_DB", ""),
+		PostgresHost:         getEnv("POSTGRES_HOST", ""),
+		PostgresPort:         getEnv("POSTGRES_PORT", ""),
+		DefaultLocale:        getEnv("PROFILE_DEFAULT_LOCALE", ""),
+		DefaultTimezone:      getEnv("PROFILE_DEFAULT_TIMEZONE", ""),
+		DefaultDateFmt:       getEnv("PROFILE_DEFAULT_DATE_FORMAT", ""),
+		FileServiceGRPCAddr:  getEnv("FILE_SERVICE_GRPC_ADDR", ""),
+		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}
 }
 

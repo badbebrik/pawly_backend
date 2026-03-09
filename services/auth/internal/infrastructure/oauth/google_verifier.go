@@ -22,6 +22,8 @@ type Claims struct {
 	Subject       string
 	Email         string
 	EmailVerified bool
+	FirstName     string
+	LastName      string
 }
 
 type Verifier interface {
@@ -39,6 +41,8 @@ type tokenInfoResponse struct {
 	Email         string `json:"email"`
 	EmailVerified any    `json:"email_verified"`
 	Exp           string `json:"exp"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
 }
 
 func NewGoogleVerifier(timeout time.Duration, clientID string) *GoogleVerifier {
@@ -95,6 +99,8 @@ func (v *GoogleVerifier) VerifyGoogleIDToken(ctx context.Context, idToken string
 		Subject:       out.Sub,
 		Email:         strings.TrimSpace(strings.ToLower(out.Email)),
 		EmailVerified: parseBool(out.EmailVerified),
+		FirstName:     strings.TrimSpace(out.GivenName),
+		LastName:      strings.TrimSpace(out.FamilyName),
 	}, nil
 }
 

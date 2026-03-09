@@ -88,7 +88,7 @@ func (s *Service) LoginOAuth(ctx context.Context, in LoginOAuthInput) (*LoginOAu
 				}
 			} else {
 				createdUser = true
-				if err := s.profile.CreateProfile(ctx, user.ID, ""); err != nil {
+				if err := s.profile.CreateProfile(ctx, user.ID, "", claims.FirstName, claims.LastName); err != nil {
 					_ = s.users.Delete(ctx, user.ID)
 					return nil, ErrProfileCreationFailed
 				}

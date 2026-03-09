@@ -7,6 +7,7 @@ import (
 	"profile/internal/config"
 	"profile/internal/model"
 	"profile/internal/repository"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,9 +23,37 @@ func NewService(repo repository.ProfileRepository, cfg *config.Config, fileClien
 	return &ProfileService{repo: repo, cfg: cfg, fileClient: fileClient}
 }
 
-func (s *ProfileService) CreateProfile(ctx context.Context, userID uuid.UUID, localeOpt *string) (*model.Profile, error) {
-	p, err := s.repo.GetByUserID(ctx, userID)
+type CreateProfileInput struct {
+	UserID    uuid.UUID
+	Locale    *string
+	FirstName *string
+	LastName  *string
+}
+
+func (s *ProfileService) CreateProfile(ctx context.Context, in CreateProfileInput) (*model.Profile, error) {
+	if in.UserID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	firstName := normalizeOptionalString(in.FirstName)
+	lastName := normalizeOptionalString(in.LastName)
+
+	p, err := s.repo.GetByUserID(ctx, in.UserID)
 	if err == nil {
+		changed := false
+		if p.FirstName == nil && firstName != nil {
+			p.FirstName = firstName
+			changed = true
+		}
+		if p.LastName == nil && lastName != nil {
+			p.LastName = lastName
+			changed = true
+		}
+		if changed {
+			if err := s.repo.Update(ctx, p); err != nil {
+				return nil, err
+			}
+		}
 		return p, nil
 	}
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
@@ -32,12 +61,14 @@ func (s *ProfileService) CreateProfile(ctx context.Context, userID uuid.UUID, lo
 	}
 
 	locale := s.cfg.DefaultLocale
-	if localeOpt != nil && *localeOpt != "" {
-		locale = *localeOpt
+	if in.Locale != nil && *in.Locale != "" {
+		locale = *in.Locale
 	}
 
 	profile := &model.Profile{
-		UserID:        userID,
+		UserID:        in.UserID,
+		FirstName:     firstName,
+		LastName:      lastName,
 		Locale:        locale,
 		Timezone:      s.cfg.DefaultTimezone,
 		DateFormat:    s.cfg.DefaultDateFmt,
@@ -46,6 +77,9 @@ func (s *ProfileService) CreateProfile(ctx context.Context, userID uuid.UUID, lo
 	}
 
 	if err := s.repo.Create(ctx, profile); err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return s.repo.GetByUserID(ctx, in.UserID)
+		}
 		return nil, err
 	}
 
@@ -170,4 +204,15 @@ func validateExtraContacts(m model.ExtraContacts) error {
 		}
 	}
 	return nil
+}
+
+func normalizeOptionalString(raw *string) *string {
+	if raw == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*raw)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

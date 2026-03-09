@@ -19,5 +19,5 @@ WORKDIR /app
 COPY --from=builder /out/service /app/service
 RUN touch /app/.env
 
-EXPOSE 8086
+EXPOSE 8086 50058
 ENTRYPOINT ["/app/service"]

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"profile/internal/model"
 	"profile/internal/repository"
@@ -105,6 +106,12 @@ func (r *ProfileRepository) Create(ctx context.Context, p *model.Profile) error 
 		publicJSON,
 		extraJSON,
 	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return repository.ErrConflict
+		}
+	}
 	return err
 }
 

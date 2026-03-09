@@ -31,6 +31,7 @@ type App struct {
 	redis      *redisdb.Redis
 	rabbitConn *amqp091.Connection
 	rabbitCh   *amqp091.Channel
+	profile    profileclient.Client
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -80,7 +81,14 @@ func New(cfg *config.Config) (*App, error) {
 	verificationRepo := redisstore.NewRedisStore(redis.Client())
 
 	jwtSvc := tokens.NewJWTService(*cfg)
-	profileSvc := profileclient.New(cfg.ProfileServiceURL, cfg.InternalServiceToken, 5*time.Second)
+	profileSvc, err := profileclient.New(cfg.ProfileServiceGRPCAddr)
+	if err != nil {
+		_ = ch.Close()
+		_ = conn.Close()
+		_ = redis.Close()
+		pg.Close()
+		return nil, err
+	}
 	oauthVerifier := oauth.NewGoogleVerifier(time.Duration(cfg.OAuthHTTPTimeoutSeconds)*time.Second, cfg.GoogleOAuthClientID)
 
 	authSvc := authsvc.NewService(
@@ -103,6 +111,7 @@ func New(cfg *config.Config) (*App, error) {
 		AuthSvc:    authSvc,
 		rabbitConn: conn,
 		rabbitCh:   ch,
+		profile:    profileSvc,
 	}, nil
 }
 
@@ -125,6 +134,9 @@ func (a *App) Close() {
 	}
 	if a.rabbitConn != nil {
 		_ = a.rabbitConn.Close()
+	}
+	if a.profile != nil {
+		a.profile.Close()
 	}
 }
 

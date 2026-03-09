@@ -3,22 +3,21 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
-	"time"
-
-	"github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog/log"
-
 	"profile/internal/config"
 	"profile/internal/infrastructure/db"
 	pgrepo "profile/internal/infrastructure/db/repository"
 	"profile/internal/infrastructure/fileclient"
-	"profile/internal/queue"
 	"profile/internal/service"
+	grpcserver "profile/internal/transport/grpc"
+	"syscall"
+	"time"
+
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
 )
 
 type App struct {
@@ -26,12 +25,10 @@ type App struct {
 
 	pg      *db.Postgres
 	httpSrv *http.Server
+	grpcSrv *grpc.Server
 
-	rabbitConn *amqp091.Connection
-	rabbitCh   *amqp091.Channel
-
-	userEventsConsumer *queue.UserEventsConsumer
-	fileClient         *fileclient.Client
+	grpcListener net.Listener
+	fileClient   *fileclient.Client
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -46,54 +43,13 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	conn, err := amqp091.Dial(fmt.Sprintf(
-		"amqp://%s:%s@%s:%s/",
-		cfg.RabbitUser,
-		cfg.RabbitPassword,
-		cfg.RabbitHost,
-		cfg.RabbitPort,
-	))
-	if err != nil {
-		fileClient.Close()
-		pg.Close()
-		return nil, fmt.Errorf("rabbit connect: %w", err)
-	}
-
-	ch, err := conn.Channel()
-	if err != nil {
-		fileClient.Close()
-		pg.Close()
-		_ = conn.Close()
-		return nil, fmt.Errorf("rabbit channel: %w", err)
-	}
-
-	if _, err := ch.QueueDeclare(
-		cfg.RabbitUserEventsQueue,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	); err != nil {
-		fileClient.Close()
-		pg.Close()
-		_ = ch.Close()
-		_ = conn.Close()
-		return nil, fmt.Errorf("queue declare %s: %w", cfg.RabbitUserEventsQueue, err)
-	}
-
 	profileRepo := pgrepo.NewProfileRepository(pg.Pool)
 	profileSvc := service.NewService(profileRepo, cfg, fileClient)
 
-	userEventsConsumer := queue.NewUserEventsConsumer(ch, cfg.RabbitUserEventsQueue, profileSvc, cfg)
-
 	app := &App{
-		cfg:                cfg,
-		pg:                 pg,
-		fileClient:         fileClient,
-		rabbitConn:         conn,
-		rabbitCh:           ch,
-		userEventsConsumer: userEventsConsumer,
+		cfg:        cfg,
+		pg:         pg,
+		fileClient: fileClient,
 	}
 
 	r := app.setupRoutes(profileSvc)
@@ -101,6 +57,18 @@ func New(cfg *config.Config) (*App, error) {
 		Addr:    ":" + cfg.AppPort,
 		Handler: r,
 	}
+
+	grpcListener, err := net.Listen("tcp", ":"+cfg.AppGRPCPort)
+	if err != nil {
+		fileClient.Close()
+		pg.Close()
+		return nil, err
+	}
+	app.grpcListener = grpcListener
+
+	grpcSrv := grpc.NewServer()
+	grpcserver.Register(grpcSrv, grpcserver.NewServer(profileSvc))
+	app.grpcSrv = grpcSrv
 
 	return app, nil
 }
@@ -114,11 +82,11 @@ func (a *App) Close() {
 		cancel()
 	}
 
-	if a.rabbitCh != nil {
-		_ = a.rabbitCh.Close()
+	if a.grpcSrv != nil {
+		a.grpcSrv.GracefulStop()
 	}
-	if a.rabbitConn != nil {
-		_ = a.rabbitConn.Close()
+	if a.grpcListener != nil {
+		_ = a.grpcListener.Close()
 	}
 	if a.fileClient != nil {
 		a.fileClient.Close()
@@ -129,18 +97,17 @@ func (a *App) Close() {
 }
 
 func (a *App) Run() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	if err := a.userEventsConsumer.Start(ctx); err != nil {
-		return err
-	}
-	log.Info().Str("queue", a.cfg.RabbitUserEventsQueue).Msg("started user events consumer")
-
 	go func() {
 		log.Info().Str("port", a.cfg.AppPort).Msg("starting HTTP server")
 		if err := a.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal().Err(err).Msg("http server crash")
+		}
+	}()
+
+	go func() {
+		log.Info().Str("port", a.cfg.AppGRPCPort).Msg("starting gRPC server")
+		if err := a.grpcSrv.Serve(a.grpcListener); err != nil {
+			log.Fatal().Err(err).Msg("grpc server crash")
 		}
 	}()
 

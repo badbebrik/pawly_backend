@@ -154,35 +154,6 @@ func (r *MembershipRepository) CreateOwner(ctx context.Context, petID, ownerUser
 	return member, nil
 }
 
-func (r *MembershipRepository) ListActivePetIDsByUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
-	const query = `
-		SELECT pet_id
-		FROM pet_memberships
-		WHERE user_id = $1 AND status = 'ACTIVE'
-		ORDER BY created_at DESC
-	`
-
-	rows, err := r.db.Query(ctx, query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	petIDs := make([]uuid.UUID, 0)
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		petIDs = append(petIDs, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return petIDs, nil
-}
-
 func (r *MembershipRepository) GetActiveViewByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*repository.MemberView, error) {
 	const query = `
 		SELECT
@@ -211,6 +182,38 @@ func (r *MembershipRepository) ListActiveViewsByPet(ctx context.Context, petID u
 	`
 
 	rows, err := r.db.Query(ctx, query, petID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]repository.MemberView, 0)
+	for rows.Next() {
+		member, err := scanMemberRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *member)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *MembershipRepository) ListActiveViewsByUser(ctx context.Context, userID uuid.UUID) ([]repository.MemberView, error) {
+	const query = `
+		SELECT
+			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+		FROM pet_memberships m
+		JOIN roles r ON r.id = m.role_id
+		WHERE m.user_id = $1
+		  AND m.status = 'ACTIVE'
+		ORDER BY m.created_at DESC
+	`
+
+	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}

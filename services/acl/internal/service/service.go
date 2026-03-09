@@ -176,8 +176,11 @@ func (s *ACLService) Check(ctx context.Context, p CheckParams) (bool, error) {
 	return allowed, nil
 }
 
-func (s *ACLService) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
-	return s.memberships.ListActivePetIDsByUser(ctx, userID)
+func (s *ACLService) ListPetMembershipsForUser(ctx context.Context, userID uuid.UUID) ([]repository.MemberView, error) {
+	if userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	return s.memberships.ListActiveViewsByUser(ctx, userID)
 }
 
 func (s *ACLService) CreateOwnerMembership(ctx context.Context, petID, ownerUserID uuid.UUID) (*repository.MemberView, error) {

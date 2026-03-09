@@ -21,6 +21,7 @@ type LoginEmailOutput struct {
 	UserID       uuid.UUID
 	AccessToken  string
 	RefreshToken string
+	ExpiresIn    int
 }
 
 func (s *Service) LoginEmail(ctx context.Context, in LoginEmailInput) (*LoginEmailOutput, error) {
@@ -100,5 +101,6 @@ func (s *Service) LoginEmail(ctx context.Context, in LoginEmailInput) (*LoginEma
 		UserID:       u.ID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		ExpiresIn:    s.accessTTLSeconds,
 	}, nil
 }

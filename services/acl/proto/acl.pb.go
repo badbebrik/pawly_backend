@@ -70,6 +70,55 @@ func (MembershipStatus) EnumDescriptor() ([]byte, []int) {
 	return file_acl_proto_rawDescGZIP(), []int{0}
 }
 
+type RoleKind int32
+
+const (
+	RoleKind_ROLE_KIND_UNSPECIFIED RoleKind = 0
+	RoleKind_ROLE_KIND_SYSTEM      RoleKind = 1
+	RoleKind_ROLE_KIND_CUSTOM      RoleKind = 2
+)
+
+// Enum value maps for RoleKind.
+var (
+	RoleKind_name = map[int32]string{
+		0: "ROLE_KIND_UNSPECIFIED",
+		1: "ROLE_KIND_SYSTEM",
+		2: "ROLE_KIND_CUSTOM",
+	}
+	RoleKind_value = map[string]int32{
+		"ROLE_KIND_UNSPECIFIED": 0,
+		"ROLE_KIND_SYSTEM":      1,
+		"ROLE_KIND_CUSTOM":      2,
+	}
+)
+
+func (x RoleKind) Enum() *RoleKind {
+	p := new(RoleKind)
+	*p = x
+	return p
+}
+
+func (x RoleKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RoleKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_acl_proto_enumTypes[1].Descriptor()
+}
+
+func (RoleKind) Type() protoreflect.EnumType {
+	return &file_acl_proto_enumTypes[1]
+}
+
+func (x RoleKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RoleKind.Descriptor instead.
+func (RoleKind) EnumDescriptor() ([]byte, []int) {
+	return file_acl_proto_rawDescGZIP(), []int{1}
+}
+
 type Action int32
 
 const (
@@ -148,11 +197,11 @@ func (x Action) String() string {
 }
 
 func (Action) Descriptor() protoreflect.EnumDescriptor {
-	return file_acl_proto_enumTypes[1].Descriptor()
+	return file_acl_proto_enumTypes[2].Descriptor()
 }
 
 func (Action) Type() protoreflect.EnumType {
-	return &file_acl_proto_enumTypes[1]
+	return &file_acl_proto_enumTypes[2]
 }
 
 func (x Action) Number() protoreflect.EnumNumber {
@@ -161,7 +210,7 @@ func (x Action) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Action.Descriptor instead.
 func (Action) EnumDescriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{1}
+	return file_acl_proto_rawDescGZIP(), []int{2}
 }
 
 type Policy struct {
@@ -336,6 +385,174 @@ func (x *Policy) GetMembersEditPermissions() bool {
 	return false
 }
 
+type Role struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Kind            RoleKind               `protobuf:"varint,2,opt,name=kind,proto3,enum=acl.RoleKind" json:"kind,omitempty"`
+	PetId           string                 `protobuf:"bytes,3,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	Code            string                 `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
+	Title           string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
+	CreatedByUserId string                 `protobuf:"bytes,6,opt,name=created_by_user_id,json=createdByUserId,proto3" json:"created_by_user_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *Role) Reset() {
+	*x = Role{}
+	mi := &file_acl_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Role) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Role) ProtoMessage() {}
+
+func (x *Role) ProtoReflect() protoreflect.Message {
+	mi := &file_acl_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Role.ProtoReflect.Descriptor instead.
+func (*Role) Descriptor() ([]byte, []int) {
+	return file_acl_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Role) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Role) GetKind() RoleKind {
+	if x != nil {
+		return x.Kind
+	}
+	return RoleKind_ROLE_KIND_UNSPECIFIED
+}
+
+func (x *Role) GetPetId() string {
+	if x != nil {
+		return x.PetId
+	}
+	return ""
+}
+
+func (x *Role) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *Role) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Role) GetCreatedByUserId() string {
+	if x != nil {
+		return x.CreatedByUserId
+	}
+	return ""
+}
+
+type PetMembership struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PetId          string                 `protobuf:"bytes,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	MemberId       string                 `protobuf:"bytes,2,opt,name=member_id,json=memberId,proto3" json:"member_id,omitempty"`
+	Status         MembershipStatus       `protobuf:"varint,3,opt,name=status,proto3,enum=acl.MembershipStatus" json:"status,omitempty"`
+	IsPrimaryOwner bool                   `protobuf:"varint,4,opt,name=is_primary_owner,json=isPrimaryOwner,proto3" json:"is_primary_owner,omitempty"`
+	Role           *Role                  `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
+	Policy         *Policy                `protobuf:"bytes,6,opt,name=policy,proto3" json:"policy,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PetMembership) Reset() {
+	*x = PetMembership{}
+	mi := &file_acl_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetMembership) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetMembership) ProtoMessage() {}
+
+func (x *PetMembership) ProtoReflect() protoreflect.Message {
+	mi := &file_acl_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetMembership.ProtoReflect.Descriptor instead.
+func (*PetMembership) Descriptor() ([]byte, []int) {
+	return file_acl_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PetMembership) GetPetId() string {
+	if x != nil {
+		return x.PetId
+	}
+	return ""
+}
+
+func (x *PetMembership) GetMemberId() string {
+	if x != nil {
+		return x.MemberId
+	}
+	return ""
+}
+
+func (x *PetMembership) GetStatus() MembershipStatus {
+	if x != nil {
+		return x.Status
+	}
+	return MembershipStatus_MEMBERSHIP_STATUS_UNSPECIFIED
+}
+
+func (x *PetMembership) GetIsPrimaryOwner() bool {
+	if x != nil {
+		return x.IsPrimaryOwner
+	}
+	return false
+}
+
+func (x *PetMembership) GetRole() *Role {
+	if x != nil {
+		return x.Role
+	}
+	return nil
+}
+
+func (x *PetMembership) GetPolicy() *Policy {
+	if x != nil {
+		return x.Policy
+	}
+	return nil
+}
+
 type IsMemberRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PetId         string                 `protobuf:"bytes,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
@@ -346,7 +563,7 @@ type IsMemberRequest struct {
 
 func (x *IsMemberRequest) Reset() {
 	*x = IsMemberRequest{}
-	mi := &file_acl_proto_msgTypes[1]
+	mi := &file_acl_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -358,7 +575,7 @@ func (x *IsMemberRequest) String() string {
 func (*IsMemberRequest) ProtoMessage() {}
 
 func (x *IsMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[1]
+	mi := &file_acl_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -371,7 +588,7 @@ func (x *IsMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsMemberRequest.ProtoReflect.Descriptor instead.
 func (*IsMemberRequest) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{1}
+	return file_acl_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *IsMemberRequest) GetPetId() string {
@@ -397,7 +614,7 @@ type IsMemberResponse struct {
 
 func (x *IsMemberResponse) Reset() {
 	*x = IsMemberResponse{}
-	mi := &file_acl_proto_msgTypes[2]
+	mi := &file_acl_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -409,7 +626,7 @@ func (x *IsMemberResponse) String() string {
 func (*IsMemberResponse) ProtoMessage() {}
 
 func (x *IsMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[2]
+	mi := &file_acl_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -422,7 +639,7 @@ func (x *IsMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsMemberResponse.ProtoReflect.Descriptor instead.
 func (*IsMemberResponse) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{2}
+	return file_acl_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *IsMemberResponse) GetIsMember() bool {
@@ -442,7 +659,7 @@ type GetPolicyRequest struct {
 
 func (x *GetPolicyRequest) Reset() {
 	*x = GetPolicyRequest{}
-	mi := &file_acl_proto_msgTypes[3]
+	mi := &file_acl_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -454,7 +671,7 @@ func (x *GetPolicyRequest) String() string {
 func (*GetPolicyRequest) ProtoMessage() {}
 
 func (x *GetPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[3]
+	mi := &file_acl_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -467,7 +684,7 @@ func (x *GetPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPolicyRequest.ProtoReflect.Descriptor instead.
 func (*GetPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{3}
+	return file_acl_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetPolicyRequest) GetPetId() string {
@@ -496,7 +713,7 @@ type GetPolicyResponse struct {
 
 func (x *GetPolicyResponse) Reset() {
 	*x = GetPolicyResponse{}
-	mi := &file_acl_proto_msgTypes[4]
+	mi := &file_acl_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -508,7 +725,7 @@ func (x *GetPolicyResponse) String() string {
 func (*GetPolicyResponse) ProtoMessage() {}
 
 func (x *GetPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[4]
+	mi := &file_acl_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -521,7 +738,7 @@ func (x *GetPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPolicyResponse.ProtoReflect.Descriptor instead.
 func (*GetPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{4}
+	return file_acl_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetPolicyResponse) GetMemberId() string {
@@ -563,7 +780,7 @@ type CheckRequest struct {
 
 func (x *CheckRequest) Reset() {
 	*x = CheckRequest{}
-	mi := &file_acl_proto_msgTypes[5]
+	mi := &file_acl_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -575,7 +792,7 @@ func (x *CheckRequest) String() string {
 func (*CheckRequest) ProtoMessage() {}
 
 func (x *CheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[5]
+	mi := &file_acl_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -588,7 +805,7 @@ func (x *CheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckRequest.ProtoReflect.Descriptor instead.
 func (*CheckRequest) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{5}
+	return file_acl_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CheckRequest) GetPetId() string {
@@ -621,7 +838,7 @@ type CheckResponse struct {
 
 func (x *CheckResponse) Reset() {
 	*x = CheckResponse{}
-	mi := &file_acl_proto_msgTypes[6]
+	mi := &file_acl_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -633,7 +850,7 @@ func (x *CheckResponse) String() string {
 func (*CheckResponse) ProtoMessage() {}
 
 func (x *CheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[6]
+	mi := &file_acl_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -646,7 +863,7 @@ func (x *CheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckResponse.ProtoReflect.Descriptor instead.
 func (*CheckResponse) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{6}
+	return file_acl_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CheckResponse) GetAllowed() bool {
@@ -665,7 +882,7 @@ type ListPetsForUserRequest struct {
 
 func (x *ListPetsForUserRequest) Reset() {
 	*x = ListPetsForUserRequest{}
-	mi := &file_acl_proto_msgTypes[7]
+	mi := &file_acl_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -677,7 +894,7 @@ func (x *ListPetsForUserRequest) String() string {
 func (*ListPetsForUserRequest) ProtoMessage() {}
 
 func (x *ListPetsForUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[7]
+	mi := &file_acl_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -690,7 +907,7 @@ func (x *ListPetsForUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPetsForUserRequest.ProtoReflect.Descriptor instead.
 func (*ListPetsForUserRequest) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{7}
+	return file_acl_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListPetsForUserRequest) GetUserId() string {
@@ -703,13 +920,14 @@ func (x *ListPetsForUserRequest) GetUserId() string {
 type ListPetsForUserResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PetIds        []string               `protobuf:"bytes,1,rep,name=pet_ids,json=petIds,proto3" json:"pet_ids,omitempty"`
+	Memberships   []*PetMembership       `protobuf:"bytes,2,rep,name=memberships,proto3" json:"memberships,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListPetsForUserResponse) Reset() {
 	*x = ListPetsForUserResponse{}
-	mi := &file_acl_proto_msgTypes[8]
+	mi := &file_acl_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -721,7 +939,7 @@ func (x *ListPetsForUserResponse) String() string {
 func (*ListPetsForUserResponse) ProtoMessage() {}
 
 func (x *ListPetsForUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[8]
+	mi := &file_acl_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -734,12 +952,19 @@ func (x *ListPetsForUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPetsForUserResponse.ProtoReflect.Descriptor instead.
 func (*ListPetsForUserResponse) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{8}
+	return file_acl_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListPetsForUserResponse) GetPetIds() []string {
 	if x != nil {
 		return x.PetIds
+	}
+	return nil
+}
+
+func (x *ListPetsForUserResponse) GetMemberships() []*PetMembership {
+	if x != nil {
+		return x.Memberships
 	}
 	return nil
 }
@@ -754,7 +979,7 @@ type CreateOwnerMembershipRequest struct {
 
 func (x *CreateOwnerMembershipRequest) Reset() {
 	*x = CreateOwnerMembershipRequest{}
-	mi := &file_acl_proto_msgTypes[9]
+	mi := &file_acl_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -766,7 +991,7 @@ func (x *CreateOwnerMembershipRequest) String() string {
 func (*CreateOwnerMembershipRequest) ProtoMessage() {}
 
 func (x *CreateOwnerMembershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[9]
+	mi := &file_acl_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -779,7 +1004,7 @@ func (x *CreateOwnerMembershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOwnerMembershipRequest.ProtoReflect.Descriptor instead.
 func (*CreateOwnerMembershipRequest) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{9}
+	return file_acl_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CreateOwnerMembershipRequest) GetPetId() string {
@@ -805,7 +1030,7 @@ type CreateOwnerMembershipResponse struct {
 
 func (x *CreateOwnerMembershipResponse) Reset() {
 	*x = CreateOwnerMembershipResponse{}
-	mi := &file_acl_proto_msgTypes[10]
+	mi := &file_acl_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -817,7 +1042,7 @@ func (x *CreateOwnerMembershipResponse) String() string {
 func (*CreateOwnerMembershipResponse) ProtoMessage() {}
 
 func (x *CreateOwnerMembershipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_acl_proto_msgTypes[10]
+	mi := &file_acl_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -830,7 +1055,7 @@ func (x *CreateOwnerMembershipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOwnerMembershipResponse.ProtoReflect.Descriptor instead.
 func (*CreateOwnerMembershipResponse) Descriptor() ([]byte, []int) {
-	return file_acl_proto_rawDescGZIP(), []int{10}
+	return file_acl_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CreateOwnerMembershipResponse) GetMemberId() string {
@@ -868,7 +1093,21 @@ const file_acl_proto_rawDesc = "" +
 	"\fmembers_view\x18\x0e \x01(\bR\vmembersView\x12%\n" +
 	"\x0emembers_invite\x18\x0f \x01(\bR\rmembersInvite\x12%\n" +
 	"\x0emembers_remove\x18\x10 \x01(\bR\rmembersRemove\x128\n" +
-	"\x18members_edit_permissions\x18\x11 \x01(\bR\x16membersEditPermissions\"A\n" +
+	"\x18members_edit_permissions\x18\x11 \x01(\bR\x16membersEditPermissions\"\xa7\x01\n" +
+	"\x04Role\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\r.acl.RoleKindR\x04kind\x12\x15\n" +
+	"\x06pet_id\x18\x03 \x01(\tR\x05petId\x12\x12\n" +
+	"\x04code\x18\x04 \x01(\tR\x04code\x12\x14\n" +
+	"\x05title\x18\x05 \x01(\tR\x05title\x12+\n" +
+	"\x12created_by_user_id\x18\x06 \x01(\tR\x0fcreatedByUserId\"\xe0\x01\n" +
+	"\rPetMembership\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\tR\x05petId\x12\x1b\n" +
+	"\tmember_id\x18\x02 \x01(\tR\bmemberId\x12-\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x15.acl.MembershipStatusR\x06status\x12(\n" +
+	"\x10is_primary_owner\x18\x04 \x01(\bR\x0eisPrimaryOwner\x12\x1d\n" +
+	"\x04role\x18\x05 \x01(\v2\t.acl.RoleR\x04role\x12#\n" +
+	"\x06policy\x18\x06 \x01(\v2\v.acl.PolicyR\x06policy\"A\n" +
 	"\x0fIsMemberRequest\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\tR\x05petId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"/\n" +
@@ -889,9 +1128,10 @@ const file_acl_proto_rawDesc = "" +
 	"\rCheckResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\"1\n" +
 	"\x16ListPetsForUserRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"2\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"h\n" +
 	"\x17ListPetsForUserResponse\x12\x17\n" +
-	"\apet_ids\x18\x01 \x03(\tR\x06petIds\"N\n" +
+	"\apet_ids\x18\x01 \x03(\tR\x06petIds\x124\n" +
+	"\vmemberships\x18\x02 \x03(\v2\x12.acl.PetMembershipR\vmemberships\"N\n" +
 	"\x1cCreateOwnerMembershipRequest\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\tR\x05petId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"<\n" +
@@ -900,7 +1140,11 @@ const file_acl_proto_rawDesc = "" +
 	"\x10MembershipStatus\x12!\n" +
 	"\x1dMEMBERSHIP_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18MEMBERSHIP_STATUS_ACTIVE\x10\x01\x12\x1d\n" +
-	"\x19MEMBERSHIP_STATUS_REMOVED\x10\x02*\xca\x03\n" +
+	"\x19MEMBERSHIP_STATUS_REMOVED\x10\x02*Q\n" +
+	"\bRoleKind\x12\x19\n" +
+	"\x15ROLE_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10ROLE_KIND_SYSTEM\x10\x01\x12\x14\n" +
+	"\x10ROLE_KIND_CUSTOM\x10\x02*\xca\x03\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fACTION_PET_READ\x10\x01\x12\x13\n" +
@@ -941,42 +1185,50 @@ func file_acl_proto_rawDescGZIP() []byte {
 	return file_acl_proto_rawDescData
 }
 
-var file_acl_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_acl_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_acl_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_acl_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_acl_proto_goTypes = []any{
 	(MembershipStatus)(0),                 // 0: acl.MembershipStatus
-	(Action)(0),                           // 1: acl.Action
-	(*Policy)(nil),                        // 2: acl.Policy
-	(*IsMemberRequest)(nil),               // 3: acl.IsMemberRequest
-	(*IsMemberResponse)(nil),              // 4: acl.IsMemberResponse
-	(*GetPolicyRequest)(nil),              // 5: acl.GetPolicyRequest
-	(*GetPolicyResponse)(nil),             // 6: acl.GetPolicyResponse
-	(*CheckRequest)(nil),                  // 7: acl.CheckRequest
-	(*CheckResponse)(nil),                 // 8: acl.CheckResponse
-	(*ListPetsForUserRequest)(nil),        // 9: acl.ListPetsForUserRequest
-	(*ListPetsForUserResponse)(nil),       // 10: acl.ListPetsForUserResponse
-	(*CreateOwnerMembershipRequest)(nil),  // 11: acl.CreateOwnerMembershipRequest
-	(*CreateOwnerMembershipResponse)(nil), // 12: acl.CreateOwnerMembershipResponse
+	(RoleKind)(0),                         // 1: acl.RoleKind
+	(Action)(0),                           // 2: acl.Action
+	(*Policy)(nil),                        // 3: acl.Policy
+	(*Role)(nil),                          // 4: acl.Role
+	(*PetMembership)(nil),                 // 5: acl.PetMembership
+	(*IsMemberRequest)(nil),               // 6: acl.IsMemberRequest
+	(*IsMemberResponse)(nil),              // 7: acl.IsMemberResponse
+	(*GetPolicyRequest)(nil),              // 8: acl.GetPolicyRequest
+	(*GetPolicyResponse)(nil),             // 9: acl.GetPolicyResponse
+	(*CheckRequest)(nil),                  // 10: acl.CheckRequest
+	(*CheckResponse)(nil),                 // 11: acl.CheckResponse
+	(*ListPetsForUserRequest)(nil),        // 12: acl.ListPetsForUserRequest
+	(*ListPetsForUserResponse)(nil),       // 13: acl.ListPetsForUserResponse
+	(*CreateOwnerMembershipRequest)(nil),  // 14: acl.CreateOwnerMembershipRequest
+	(*CreateOwnerMembershipResponse)(nil), // 15: acl.CreateOwnerMembershipResponse
 }
 var file_acl_proto_depIdxs = []int32{
-	0,  // 0: acl.GetPolicyResponse.status:type_name -> acl.MembershipStatus
-	2,  // 1: acl.GetPolicyResponse.policy:type_name -> acl.Policy
-	1,  // 2: acl.CheckRequest.action:type_name -> acl.Action
-	3,  // 3: acl.ACLService.IsMember:input_type -> acl.IsMemberRequest
-	5,  // 4: acl.ACLService.GetPolicy:input_type -> acl.GetPolicyRequest
-	7,  // 5: acl.ACLService.Check:input_type -> acl.CheckRequest
-	9,  // 6: acl.ACLService.ListPetsForUser:input_type -> acl.ListPetsForUserRequest
-	11, // 7: acl.ACLService.CreateOwnerMembership:input_type -> acl.CreateOwnerMembershipRequest
-	4,  // 8: acl.ACLService.IsMember:output_type -> acl.IsMemberResponse
-	6,  // 9: acl.ACLService.GetPolicy:output_type -> acl.GetPolicyResponse
-	8,  // 10: acl.ACLService.Check:output_type -> acl.CheckResponse
-	10, // 11: acl.ACLService.ListPetsForUser:output_type -> acl.ListPetsForUserResponse
-	12, // 12: acl.ACLService.CreateOwnerMembership:output_type -> acl.CreateOwnerMembershipResponse
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	1,  // 0: acl.Role.kind:type_name -> acl.RoleKind
+	0,  // 1: acl.PetMembership.status:type_name -> acl.MembershipStatus
+	4,  // 2: acl.PetMembership.role:type_name -> acl.Role
+	3,  // 3: acl.PetMembership.policy:type_name -> acl.Policy
+	0,  // 4: acl.GetPolicyResponse.status:type_name -> acl.MembershipStatus
+	3,  // 5: acl.GetPolicyResponse.policy:type_name -> acl.Policy
+	2,  // 6: acl.CheckRequest.action:type_name -> acl.Action
+	5,  // 7: acl.ListPetsForUserResponse.memberships:type_name -> acl.PetMembership
+	6,  // 8: acl.ACLService.IsMember:input_type -> acl.IsMemberRequest
+	8,  // 9: acl.ACLService.GetPolicy:input_type -> acl.GetPolicyRequest
+	10, // 10: acl.ACLService.Check:input_type -> acl.CheckRequest
+	12, // 11: acl.ACLService.ListPetsForUser:input_type -> acl.ListPetsForUserRequest
+	14, // 12: acl.ACLService.CreateOwnerMembership:input_type -> acl.CreateOwnerMembershipRequest
+	7,  // 13: acl.ACLService.IsMember:output_type -> acl.IsMemberResponse
+	9,  // 14: acl.ACLService.GetPolicy:output_type -> acl.GetPolicyResponse
+	11, // 15: acl.ACLService.Check:output_type -> acl.CheckResponse
+	13, // 16: acl.ACLService.ListPetsForUser:output_type -> acl.ListPetsForUserResponse
+	15, // 17: acl.ACLService.CreateOwnerMembership:output_type -> acl.CreateOwnerMembershipResponse
+	13, // [13:18] is the sub-list for method output_type
+	8,  // [8:13] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_acl_proto_init() }
@@ -989,8 +1241,8 @@ func file_acl_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_acl_proto_rawDesc), len(file_acl_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   11,
+			NumEnums:      3,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

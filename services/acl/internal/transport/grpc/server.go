@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"acl/internal/model"
+	"acl/internal/repository"
 	"acl/internal/service"
 	aclpb "acl/proto"
 	"context"
@@ -87,16 +88,22 @@ func (s *Server) ListPetsForUser(ctx context.Context, req *aclpb.ListPetsForUser
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
 
-	petIDs, err := s.svc.ListPetsForUser(ctx, userID)
+	memberships, err := s.svc.ListPetMembershipsForUser(ctx, userID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
 
-	items := make([]string, 0, len(petIDs))
-	for _, id := range petIDs {
-		items = append(items, id.String())
+	petIDs := make([]string, 0, len(memberships))
+	items := make([]*aclpb.PetMembership, 0, len(memberships))
+	for i := range memberships {
+		member := memberships[i]
+		petIDs = append(petIDs, member.PetID.String())
+		items = append(items, toProtoPetMembership(member))
 	}
-	return &aclpb.ListPetsForUserResponse{PetIds: items}, nil
+	return &aclpb.ListPetsForUserResponse{
+		PetIds:      petIDs,
+		Memberships: items,
+	}, nil
 }
 
 func (s *Server) CreateOwnerMembership(ctx context.Context, req *aclpb.CreateOwnerMembershipRequest) (*aclpb.CreateOwnerMembershipResponse, error) {
@@ -213,5 +220,47 @@ func toProtoPolicy(p model.Policy) *aclpb.Policy {
 		MembersInvite:          p.MembersInvite,
 		MembersRemove:          p.MembersRemove,
 		MembersEditPermissions: p.MembersEditPermissions,
+	}
+}
+
+func toProtoPetMembership(member repository.MemberView) *aclpb.PetMembership {
+	return &aclpb.PetMembership{
+		PetId:          member.PetID.String(),
+		MemberId:       member.ID.String(),
+		Status:         mapMembershipStatus(member.Status),
+		IsPrimaryOwner: member.IsPrimaryOwner,
+		Role:           toProtoRole(member.Role),
+		Policy:         toProtoPolicy(member.Policy),
+	}
+}
+
+func toProtoRole(role repository.RoleView) *aclpb.Role {
+	var petID string
+	if role.PetID != nil {
+		petID = role.PetID.String()
+	}
+	var createdBy string
+	if role.CreatedByUserID != nil {
+		createdBy = role.CreatedByUserID.String()
+	}
+
+	return &aclpb.Role{
+		Id:              role.ID.String(),
+		Kind:            mapRoleKind(role.Kind),
+		PetId:           petID,
+		Code:            role.Code,
+		Title:           role.Title,
+		CreatedByUserId: createdBy,
+	}
+}
+
+func mapRoleKind(kind string) aclpb.RoleKind {
+	switch kind {
+	case "SYSTEM":
+		return aclpb.RoleKind_ROLE_KIND_SYSTEM
+	case "CUSTOM":
+		return aclpb.RoleKind_ROLE_KIND_CUSTOM
+	default:
+		return aclpb.RoleKind_ROLE_KIND_UNSPECIFIED
 	}
 }

@@ -22,6 +22,7 @@ type LoginOAuthOutput struct {
 	UserID       uuid.UUID
 	AccessToken  string
 	RefreshToken string
+	ExpiresIn    int
 }
 
 func (s *Service) LoginOAuth(ctx context.Context, in LoginOAuthInput) (*LoginOAuthOutput, error) {
@@ -151,5 +152,6 @@ func (s *Service) LoginOAuth(ctx context.Context, in LoginOAuthInput) (*LoginOAu
 		UserID:       user.ID,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		ExpiresIn:    s.accessTTLSeconds,
 	}, nil
 }

@@ -15,6 +15,12 @@ type AuthHandlers struct {
 	svc *authsvc.Service
 }
 
+type errorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Details any    `json:"details,omitempty"`
+}
+
 func NewAuthHandlers(svc *authsvc.Service) *AuthHandlers {
 	return &AuthHandlers{svc: svc}
 }
@@ -23,12 +29,12 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterEmailRequest
 
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
 	if req.Email == "" || req.Password == "" {
-		http.Error(w, "email and password required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "incorrect_format", nil)
 		return
 	}
 
@@ -44,29 +50,26 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 
 		switch {
 		case errors.Is(err, authsvc.ErrEmailAlreadyTaken):
-			http.Error(w, err.Error(), http.StatusConflict)
+			writeServiceError(w, http.StatusConflict, err)
 			return
 		case errors.Is(err, authsvc.ErrWeakPassword),
 			errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrCannotResendYet):
-			writeJSON(w, http.StatusTooManyRequests, map[string]any{
-				"error":            err.Error(),
+			writeError(w, http.StatusTooManyRequests, err.Error(), map[string]any{
 				"user_id":          resp.UserID,
 				"channel":          resp.Verification.Channel,
 				"code_ttl_seconds": resp.Verification.CodeTTLSeconds,
 				"can_resend_in":    resp.Verification.CanResendInSeconds,
 			})
 			return
-		case errors.Is(err, authsvc.ErrVerificationFailed):
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			return
-		case errors.Is(err, authsvc.ErrProfileCreationFailed):
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		case errors.Is(err, authsvc.ErrVerificationFailed),
+			errors.Is(err, authsvc.ErrProfileCreationFailed):
+			writeServiceError(w, http.StatusServiceUnavailable, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -78,13 +81,12 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 	out.Verification.CanResendInSeconds = resp.Verification.CanResendInSeconds
 
 	writeJSON(w, http.StatusCreated, out)
-
 }
 
 func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.VerifyEmailRequest
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
@@ -100,23 +102,21 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 			Msg("VerifyEmail failed")
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrUserNotFound):
-			http.Error(w, err.Error(), http.StatusNotFound)
+			writeServiceError(w, http.StatusNotFound, err)
 			return
 		case errors.Is(err, authsvc.ErrUserBlocked):
-			http.Error(w, err.Error(), http.StatusForbidden)
+			writeServiceError(w, http.StatusForbidden, err)
 			return
-		case errors.Is(err, authsvc.ErrVerificationCodeInvalid):
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-			return
-		case errors.Is(err, authsvc.ErrVerificationCodeExpired),
+		case errors.Is(err, authsvc.ErrVerificationCodeInvalid),
+			errors.Is(err, authsvc.ErrVerificationCodeExpired),
 			errors.Is(err, authsvc.ErrVerificationTooMany):
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			writeServiceError(w, http.StatusUnprocessableEntity, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -125,6 +125,8 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		UserID:       resp.UserID,
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    resp.ExpiresIn,
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -132,7 +134,7 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandlers) LoginEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginEmailRequest
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
@@ -145,19 +147,17 @@ func (h *AuthHandlers) LoginEmail(w http.ResponseWriter, r *http.Request) {
 
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrInvalidEmailOrPassword):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			writeServiceError(w, http.StatusUnauthorized, err)
 			return
-		case errors.Is(err, authsvc.ErrEmailNotVerified):
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
-		case errors.Is(err, authsvc.ErrUserBlocked):
-			http.Error(w, err.Error(), http.StatusForbidden)
+		case errors.Is(err, authsvc.ErrEmailNotVerified),
+			errors.Is(err, authsvc.ErrUserBlocked):
+			writeServiceError(w, http.StatusForbidden, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -166,13 +166,15 @@ func (h *AuthHandlers) LoginEmail(w http.ResponseWriter, r *http.Request) {
 		UserID:       resp.UserID,
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    resp.ExpiresIn,
 	})
 }
 
 func (h *AuthHandlers) LoginOAuth(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginOAuthRequest
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
@@ -184,20 +186,20 @@ func (h *AuthHandlers) LoginOAuth(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Str("provider", req.Provider).Msg("LoginOAuth failed")
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrOAuthInvalidToken):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			writeServiceError(w, http.StatusUnauthorized, err)
 			return
 		case errors.Is(err, authsvc.ErrOAuthProviderUnavailable),
 			errors.Is(err, authsvc.ErrProfileCreationFailed):
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			writeServiceError(w, http.StatusServiceUnavailable, err)
 			return
 		case errors.Is(err, authsvc.ErrUserBlocked):
-			http.Error(w, err.Error(), http.StatusForbidden)
+			writeServiceError(w, http.StatusForbidden, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -206,13 +208,15 @@ func (h *AuthHandlers) LoginOAuth(w http.ResponseWriter, r *http.Request) {
 		UserID:       resp.UserID,
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    resp.ExpiresIn,
 	})
 }
 
 func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	tok, err := authz.BearerToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeServiceError(w, http.StatusUnauthorized, err)
 		return
 	}
 
@@ -220,13 +224,13 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("Logout failed")
 		switch {
 		case errors.Is(err, authsvc.ErrUnauthorized):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			writeServiceError(w, http.StatusUnauthorized, err)
 			return
 		case errors.Is(err, authsvc.ErrSessionNotFound):
-			http.Error(w, err.Error(), http.StatusNotFound)
+			writeServiceError(w, http.StatusNotFound, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -237,7 +241,7 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	tok, err := authz.BearerToken(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeServiceError(w, http.StatusUnauthorized, err)
 		return
 	}
 
@@ -245,10 +249,10 @@ func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("LogoutAll failed")
 		switch {
 		case errors.Is(err, authsvc.ErrUnauthorized):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			writeServiceError(w, http.StatusUnauthorized, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -259,7 +263,7 @@ func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req dto.RefreshRequest
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
@@ -271,21 +275,19 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("Refresh failed")
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrUnauthorized),
-			errors.Is(err, authsvc.ErrRefreshMismatch):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			errors.Is(err, authsvc.ErrRefreshMismatch),
+			errors.Is(err, authsvc.ErrSessionExpired),
+			errors.Is(err, authsvc.ErrSessionRevoked):
+			writeServiceError(w, http.StatusUnauthorized, err)
 			return
 		case errors.Is(err, authsvc.ErrSessionNotFound):
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		case errors.Is(err, authsvc.ErrSessionExpired),
-			errors.Is(err, authsvc.ErrSessionRevoked):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			writeServiceError(w, http.StatusNotFound, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -294,13 +296,15 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		UserID:       resp.UserID,
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    resp.ExpiresIn,
 	})
 }
 
 func (h *AuthHandlers) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
 	var req dto.PasswordResetRequestRequest
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
@@ -308,16 +312,16 @@ func (h *AuthHandlers) PasswordResetRequest(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrCannotResendYet):
-			http.Error(w, err.Error(), http.StatusTooManyRequests)
+			writeServiceError(w, http.StatusTooManyRequests, err)
 			return
 		case errors.Is(err, authsvc.ErrVerificationFailed):
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			writeServiceError(w, http.StatusServiceUnavailable, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -328,7 +332,7 @@ func (h *AuthHandlers) PasswordResetRequest(w http.ResponseWriter, r *http.Reque
 func (h *AuthHandlers) PasswordResetVerify(w http.ResponseWriter, r *http.Request) {
 	var req dto.PasswordResetVerifyRequest
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
@@ -336,18 +340,18 @@ func (h *AuthHandlers) PasswordResetVerify(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrVerificationCodeInvalid),
 			errors.Is(err, authsvc.ErrVerificationCodeExpired),
 			errors.Is(err, authsvc.ErrVerificationTooMany):
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			writeServiceError(w, http.StatusUnprocessableEntity, err)
 			return
 		case errors.Is(err, authsvc.ErrUserBlocked):
-			http.Error(w, err.Error(), http.StatusForbidden)
+			writeServiceError(w, http.StatusForbidden, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -358,7 +362,7 @@ func (h *AuthHandlers) PasswordResetVerify(w http.ResponseWriter, r *http.Reques
 func (h *AuthHandlers) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 	var req dto.PasswordResetConfirmRequest
 	if err := decodeJSON(r, &req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
@@ -369,19 +373,19 @@ func (h *AuthHandlers) PasswordResetConfirm(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		switch {
 		case errors.Is(err, authsvc.ErrIncorrectFormat):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeServiceError(w, http.StatusBadRequest, err)
 			return
 		case errors.Is(err, authsvc.ErrUnauthorized):
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			writeServiceError(w, http.StatusUnauthorized, err)
 			return
 		case errors.Is(err, authsvc.ErrUserNotFound):
-			http.Error(w, err.Error(), http.StatusNotFound)
+			writeServiceError(w, http.StatusNotFound, err)
 			return
 		case errors.Is(err, authsvc.ErrUserBlocked):
-			http.Error(w, err.Error(), http.StatusForbidden)
+			writeServiceError(w, http.StatusForbidden, err)
 			return
 		default:
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeInternalError(w)
 			return
 		}
 	}
@@ -393,6 +397,22 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeServiceError(w http.ResponseWriter, status int, err error) {
+	writeError(w, status, err.Error(), nil)
+}
+
+func writeInternalError(w http.ResponseWriter) {
+	writeError(w, http.StatusInternalServerError, "internal_error", nil)
+}
+
+func writeError(w http.ResponseWriter, status int, code string, details any) {
+	writeJSON(w, status, errorResponse{
+		Code:    code,
+		Message: code,
+		Details: details,
+	})
 }
 
 func decodeJSON(r *http.Request, dst any) error {

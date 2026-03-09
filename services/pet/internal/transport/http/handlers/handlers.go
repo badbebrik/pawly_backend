@@ -170,7 +170,7 @@ func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{"pet": petToDTO(pet)})
+	writeJSON(w, http.StatusCreated, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
 }
 
 func (h *Handlers) ListPets(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +197,10 @@ func (h *Handlers) ListPets(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]any, 0, len(items))
 	for i := range items {
-		out = append(out, map[string]any{"pet": petToDTO(&items[i])})
+		out = append(out, map[string]any{
+			"pet":       petToDTO(&items[i].Pet, items[i].ProfilePhotoDownloadURL),
+			"my_access": accessToDTO(items[i].MyAccess),
+		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -227,7 +230,7 @@ func (h *Handlers) GetPet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet)})
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
 }
 
 func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
@@ -309,7 +312,7 @@ func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet)})
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
 }
 
 func (h *Handlers) ChangePetStatus(w http.ResponseWriter, r *http.Request) {
@@ -355,7 +358,7 @@ func (h *Handlers) ChangePetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet)})
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
 }
 
 func (h *Handlers) InitPetPhotoUpload(w http.ResponseWriter, r *http.Request) {
@@ -441,7 +444,7 @@ func (h *Handlers) ConfirmPetPhotoUpload(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet)})
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
 }
 
 func writeServiceError(w http.ResponseWriter, err error) {
@@ -485,7 +488,7 @@ func parseIntOrDefault(raw string, fallback int) int {
 	return v
 }
 
-func petToDTO(p *model.Pet) map[string]any {
+func petToDTO(p *model.Pet, profilePhotoDownloadURL *string) map[string]any {
 	return map[string]any{
 		"id":            p.ID.String(),
 		"owner_user_id": p.OwnerUserID.String(),
@@ -505,17 +508,81 @@ func petToDTO(p *model.Pet) map[string]any {
 			"system_coat_pattern_id":   uuidOrNil(p.CoatPattern.SystemCoatPatternID),
 			"custom_coat_pattern_name": strOrNil(p.CoatPattern.CustomCoatPatternName),
 		},
-		"is_neutered":            p.IsNeutered,
-		"is_outdoor":             p.IsOutdoor,
-		"profile_photo_file_id":  uuidOrNil(p.ProfilePhotoFileID),
-		"microchip_id":           strOrNil(p.MicrochipID),
-		"microchip_installed_at": dateOrNil(p.MicrochipInstalledAt),
-		"status":                 p.Status,
-		"missing_since":          tsOrNil(p.MissingSince),
-		"archived_at":            tsOrNil(p.ArchivedAt),
-		"created_at":             p.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":             p.UpdatedAt.UTC().Format(time.RFC3339),
+		"is_neutered":                p.IsNeutered,
+		"is_outdoor":                 p.IsOutdoor,
+		"profile_photo_file_id":      uuidOrNil(p.ProfilePhotoFileID),
+		"profile_photo_download_url": strOrNil(profilePhotoDownloadURL),
+		"microchip_id":               strOrNil(p.MicrochipID),
+		"microchip_installed_at":     dateOrNil(p.MicrochipInstalledAt),
+		"status":                     p.Status,
+		"missing_since":              tsOrNil(p.MissingSince),
+		"archived_at":                tsOrNil(p.ArchivedAt),
+		"created_at":                 p.CreatedAt.UTC().Format(time.RFC3339),
+		"updated_at":                 p.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func accessToDTO(access *service.ACLMembership) any {
+	if access == nil {
+		return nil
+	}
+	if access.MemberID == uuid.Nil {
+		return nil
+	}
+
+	var roleCode any
+	if access.Role.Code != nil {
+		roleCode = *access.Role.Code
+	}
+	var rolePetID any
+	if access.Role.PetID != nil {
+		rolePetID = access.Role.PetID.String()
+	}
+	var roleCreatedBy any
+	if access.Role.CreatedByUserID != nil {
+		roleCreatedBy = access.Role.CreatedByUserID.String()
+	}
+	var roleID any
+	if access.Role.ID != uuid.Nil {
+		roleID = access.Role.ID.String()
+	}
+
+	return map[string]any{
+		"member_id":        access.MemberID.String(),
+		"status":           access.Status,
+		"is_primary_owner": access.IsPrimaryOwner,
+		"role": map[string]any{
+			"id":                 roleID,
+			"kind":               access.Role.Kind,
+			"pet_id":             rolePetID,
+			"code":               roleCode,
+			"title":              access.Role.Title,
+			"created_by_user_id": roleCreatedBy,
+		},
+		"policy": map[string]any{
+			"pet_read":                 access.Policy.PetRead,
+			"pet_edit":                 access.Policy.PetEdit,
+			"pet_status_change":        access.Policy.PetStatusChange,
+			"pet_delete":               access.Policy.PetDelete,
+			"log_read":                 access.Policy.LogRead,
+			"log_create":               access.Policy.LogCreate,
+			"log_edit":                 access.Policy.LogEdit,
+			"log_delete":               access.Policy.LogDelete,
+			"log_attachments_read":     access.Policy.LogAttachmentsRead,
+			"health_read":              access.Policy.HealthRead,
+			"health_write":             access.Policy.HealthWrite,
+			"task_read":                access.Policy.TaskRead,
+			"task_write":               access.Policy.TaskWrite,
+			"members_view":             access.Policy.MembersView,
+			"members_invite":           access.Policy.MembersInvite,
+			"members_remove":           access.Policy.MembersRemove,
+			"members_edit_permissions": access.Policy.MembersEditPermissions,
+		},
+	}
+}
+
+func (h *Handlers) getPetPhotoDownloadURL(r *http.Request, pet *model.Pet) *string {
+	return h.svc.ResolveProfilePhotoDownloadURL(r.Context(), pet.ProfilePhotoFileID)
 }
 
 func strOrNil(v *string) any {

@@ -47,7 +47,7 @@ func (c *Client) Check(ctx context.Context, petID, userID uuid.UUID, action stri
 	return resp.GetAllowed(), nil
 }
 
-func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]service.ACLMembership, error) {
 	resp, err := c.client.ListPetsForUser(ctx, &aclpb.ListPetsForUserRequest{
 		UserId: userID.String(),
 	})
@@ -55,14 +55,59 @@ func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.
 		return nil, mapErr(err)
 	}
 
-	out := make([]uuid.UUID, 0, len(resp.GetPetIds()))
-	for _, raw := range resp.GetPetIds() {
-		id, err := uuid.Parse(raw)
+	out := make([]service.ACLMembership, 0, len(resp.GetMemberships()))
+	for _, member := range resp.GetMemberships() {
+		petID, err := uuid.Parse(member.GetPetId())
 		if err != nil {
 			continue
 		}
-		out = append(out, id)
+
+		memberID, err := uuid.Parse(member.GetMemberId())
+		if err != nil {
+			continue
+		}
+
+		roleMsg := member.GetRole()
+		role := service.ACLRole{
+			Kind:  mapRoleKind(roleMsg.GetKind()),
+			Title: roleMsg.GetTitle(),
+		}
+		if roleID, err := uuid.Parse(roleMsg.GetId()); err == nil {
+			role.ID = roleID
+		}
+		if rolePetID, err := uuid.Parse(roleMsg.GetPetId()); err == nil {
+			role.PetID = &rolePetID
+		}
+		if rawCode := roleMsg.GetCode(); rawCode != "" {
+			role.Code = &rawCode
+		}
+		if createdBy, err := uuid.Parse(roleMsg.GetCreatedByUserId()); err == nil {
+			role.CreatedByUserID = &createdBy
+		}
+
+		out = append(out, service.ACLMembership{
+			PetID:          petID,
+			MemberID:       memberID,
+			Status:         mapMembershipStatus(member.GetStatus()),
+			IsPrimaryOwner: member.GetIsPrimaryOwner(),
+			Role:           role,
+			Policy:         mapPolicy(member.GetPolicy()),
+		})
 	}
+
+	// Fallback for older ACL service versions that return only pet_ids.
+	if len(out) == 0 && len(resp.GetPetIds()) > 0 {
+		for _, raw := range resp.GetPetIds() {
+			id, err := uuid.Parse(raw)
+			if err != nil {
+				continue
+			}
+			out = append(out, service.ACLMembership{
+				PetID: id,
+			})
+		}
+	}
+
 	return out, nil
 }
 
@@ -94,6 +139,53 @@ func mapAction(action string) aclpb.Action {
 		return aclpb.Action_ACTION_PET_DELETE
 	default:
 		return aclpb.Action_ACTION_UNSPECIFIED
+	}
+}
+
+func mapMembershipStatus(status aclpb.MembershipStatus) string {
+	switch status {
+	case aclpb.MembershipStatus_MEMBERSHIP_STATUS_ACTIVE:
+		return "ACTIVE"
+	case aclpb.MembershipStatus_MEMBERSHIP_STATUS_REMOVED:
+		return "REMOVED"
+	default:
+		return ""
+	}
+}
+
+func mapRoleKind(kind aclpb.RoleKind) string {
+	switch kind {
+	case aclpb.RoleKind_ROLE_KIND_SYSTEM:
+		return "SYSTEM"
+	case aclpb.RoleKind_ROLE_KIND_CUSTOM:
+		return "CUSTOM"
+	default:
+		return ""
+	}
+}
+
+func mapPolicy(p *aclpb.Policy) service.ACLPolicy {
+	if p == nil {
+		return service.ACLPolicy{}
+	}
+	return service.ACLPolicy{
+		PetRead:                p.GetPetRead(),
+		PetEdit:                p.GetPetEdit(),
+		PetStatusChange:        p.GetPetStatusChange(),
+		PetDelete:              p.GetPetDelete(),
+		LogRead:                p.GetLogRead(),
+		LogCreate:              p.GetLogCreate(),
+		LogEdit:                p.GetLogEdit(),
+		LogDelete:              p.GetLogDelete(),
+		LogAttachmentsRead:     p.GetLogAttachmentsRead(),
+		HealthRead:             p.GetHealthRead(),
+		HealthWrite:            p.GetHealthWrite(),
+		TaskRead:               p.GetTaskRead(),
+		TaskWrite:              p.GetTaskWrite(),
+		MembersView:            p.GetMembersView(),
+		MembersInvite:          p.GetMembersInvite(),
+		MembersRemove:          p.GetMembersRemove(),
+		MembersEditPermissions: p.GetMembersEditPermissions(),
 	}
 }
 

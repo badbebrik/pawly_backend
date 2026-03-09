@@ -10,6 +10,12 @@ enum MembershipStatus {
   MEMBERSHIP_STATUS_REMOVED = 2;
 }
 
+enum RoleKind {
+  ROLE_KIND_UNSPECIFIED = 0;
+  ROLE_KIND_SYSTEM = 1;
+  ROLE_KIND_CUSTOM = 2;
+}
+
 enum Action {
   ACTION_UNSPECIFIED = 0;
   ACTION_PET_READ = 1;
@@ -53,6 +59,24 @@ message Policy {
   bool members_invite = 15;
   bool members_remove = 16;
   bool members_edit_permissions = 17;
+}
+
+message Role {
+  string id = 1;
+  RoleKind kind = 2;
+  string pet_id = 3;
+  string code = 4;
+  string title = 5;
+  string created_by_user_id = 6;
+}
+
+message PetMembership {
+  string pet_id = 1;
+  string member_id = 2;
+  MembershipStatus status = 3;
+  bool is_primary_owner = 4;
+  Role role = 5;
+  Policy policy = 6;
 }
 
 service ACLService {
@@ -100,6 +124,7 @@ message ListPetsForUserRequest {
 
 message ListPetsForUserResponse {
   repeated string pet_ids = 1;
+  repeated PetMembership memberships = 2;
 }
 
 message CreateOwnerMembershipRequest {

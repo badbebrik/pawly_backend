@@ -17,13 +17,15 @@ const MaxPetPhotoSizeBytes int64 = 20 * 1024 * 1024
 
 type ACLClient interface {
 	Check(ctx context.Context, petID, userID uuid.UUID, action string) (bool, error)
-	ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]ACLMembership, error)
 	CreateOwnerMembership(ctx context.Context, petID, userID uuid.UUID) (uuid.UUID, error)
 }
 
 type FileClient interface {
 	InitUpload(ctx context.Context, mimeType string, expectedSize int64) (uuid.UUID, UploadInfo, error)
 	ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) error
+	GetDownloadURL(ctx context.Context, fileID uuid.UUID) (string, time.Time, error)
+	BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error)
 	LinkPetAvatar(ctx context.Context, fileID, petID uuid.UUID) error
 }
 
@@ -109,6 +111,50 @@ type ConfirmPetPhotoUploadParams struct {
 	SizeBytes  int64
 }
 
+type ACLPolicy struct {
+	PetRead                bool
+	PetEdit                bool
+	PetStatusChange        bool
+	PetDelete              bool
+	LogRead                bool
+	LogCreate              bool
+	LogEdit                bool
+	LogDelete              bool
+	LogAttachmentsRead     bool
+	HealthRead             bool
+	HealthWrite            bool
+	TaskRead               bool
+	TaskWrite              bool
+	MembersView            bool
+	MembersInvite          bool
+	MembersRemove          bool
+	MembersEditPermissions bool
+}
+
+type ACLRole struct {
+	ID              uuid.UUID
+	Kind            string
+	PetID           *uuid.UUID
+	Code            *string
+	Title           string
+	CreatedByUserID *uuid.UUID
+}
+
+type ACLMembership struct {
+	PetID          uuid.UUID
+	MemberID       uuid.UUID
+	Status         string
+	IsPrimaryOwner bool
+	Role           ACLRole
+	Policy         ACLPolicy
+}
+
+type PetListItem struct {
+	Pet                     model.Pet
+	MyAccess                *ACLMembership
+	ProfilePhotoDownloadURL *string
+}
+
 func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.Pet, error) {
 	if p.UserID == uuid.Nil || p.SpeciesID == uuid.Nil || strings.TrimSpace(p.Name) == "" {
 		return nil, ErrInvalidInput
@@ -151,7 +197,7 @@ func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.P
 	return created, nil
 }
 
-func (s *PetService) ListPets(ctx context.Context, p ListPetsParams) ([]model.Pet, int, error) {
+func (s *PetService) ListPets(ctx context.Context, p ListPetsParams) ([]PetListItem, int, error) {
 	if p.UserID == uuid.Nil {
 		return nil, 0, ErrInvalidInput
 	}
@@ -165,16 +211,70 @@ func (s *PetService) ListPets(ctx context.Context, p ListPetsParams) ([]model.Pe
 		p.Limit = 100
 	}
 
-	petIDs, err := s.acl.ListPetsForUser(ctx, p.UserID)
+	memberships, err := s.acl.ListPetsForUser(ctx, p.UserID)
 	if err != nil {
 		return nil, 0, err
+	}
+	petIDs := make([]uuid.UUID, 0, len(memberships))
+	accessByPet := make(map[uuid.UUID]ACLMembership, len(memberships))
+	for i := range memberships {
+		member := memberships[i]
+		petIDs = append(petIDs, member.PetID)
+		if member.MemberID != uuid.Nil {
+			accessByPet[member.PetID] = member
+		}
 	}
 
 	items, total, err := s.repo.ListByIDs(ctx, petIDs, p.IncludeArchived, p.Offset, p.Limit)
 	if err != nil {
 		return nil, 0, err
 	}
-	return items, total, nil
+
+	photoIDs := make([]uuid.UUID, 0, len(items))
+	for i := range items {
+		if items[i].ProfilePhotoFileID != nil {
+			photoIDs = append(photoIDs, *items[i].ProfilePhotoFileID)
+		}
+	}
+
+	photoURLs := make(map[uuid.UUID]string, len(photoIDs))
+	if len(photoIDs) > 0 {
+		if urls, err := s.file.BatchGetDownloadURLs(ctx, photoIDs); err == nil {
+			photoURLs = urls
+		}
+	}
+
+	out := make([]PetListItem, 0, len(items))
+	for i := range items {
+		item := PetListItem{
+			Pet:      items[i],
+			MyAccess: nil,
+		}
+		if access, ok := accessByPet[items[i].ID]; ok {
+			accessCopy := access
+			item.MyAccess = &accessCopy
+		}
+		if items[i].ProfilePhotoFileID != nil {
+			if url, ok := photoURLs[*items[i].ProfilePhotoFileID]; ok && strings.TrimSpace(url) != "" {
+				urlCopy := url
+				item.ProfilePhotoDownloadURL = &urlCopy
+			}
+		}
+		out = append(out, item)
+	}
+
+	return out, total, nil
+}
+
+func (s *PetService) ResolveProfilePhotoDownloadURL(ctx context.Context, fileID *uuid.UUID) *string {
+	if fileID == nil {
+		return nil
+	}
+	url, _, err := s.file.GetDownloadURL(ctx, *fileID)
+	if err != nil || strings.TrimSpace(url) == "" {
+		return nil
+	}
+	return &url
 }
 
 func (s *PetService) GetPet(ctx context.Context, userID, petID uuid.UUID) (*model.Pet, error) {

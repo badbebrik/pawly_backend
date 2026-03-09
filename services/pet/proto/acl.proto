@@ -25,6 +25,60 @@ enum Action {
   ACTION_MEMBERS_EDIT_PERMISSIONS = 17;
 }
 
+enum MembershipStatus {
+  MEMBERSHIP_STATUS_UNSPECIFIED = 0;
+  MEMBERSHIP_STATUS_ACTIVE = 1;
+  MEMBERSHIP_STATUS_REMOVED = 2;
+}
+
+enum RoleKind {
+  ROLE_KIND_UNSPECIFIED = 0;
+  ROLE_KIND_SYSTEM = 1;
+  ROLE_KIND_CUSTOM = 2;
+}
+
+message Policy {
+  bool pet_read = 1;
+  bool pet_edit = 2;
+  bool pet_status_change = 3;
+  bool pet_delete = 4;
+
+  bool log_read = 5;
+  bool log_create = 6;
+  bool log_edit = 7;
+  bool log_delete = 8;
+  bool log_attachments_read = 9;
+
+  bool health_read = 10;
+  bool health_write = 11;
+
+  bool task_read = 12;
+  bool task_write = 13;
+
+  bool members_view = 14;
+  bool members_invite = 15;
+  bool members_remove = 16;
+  bool members_edit_permissions = 17;
+}
+
+message Role {
+  string id = 1;
+  RoleKind kind = 2;
+  string pet_id = 3;
+  string code = 4;
+  string title = 5;
+  string created_by_user_id = 6;
+}
+
+message PetMembership {
+  string pet_id = 1;
+  string member_id = 2;
+  MembershipStatus status = 3;
+  bool is_primary_owner = 4;
+  Role role = 5;
+  Policy policy = 6;
+}
+
 service ACLService {
   rpc Check(CheckRequest) returns (CheckResponse);
   rpc ListPetsForUser(ListPetsForUserRequest) returns (ListPetsForUserResponse);
@@ -47,6 +101,7 @@ message ListPetsForUserRequest {
 
 message ListPetsForUserResponse {
   repeated string pet_ids = 1;
+  repeated PetMembership memberships = 2;
 }
 
 message CreateOwnerMembershipRequest {
@@ -57,4 +112,3 @@ message CreateOwnerMembershipRequest {
 message CreateOwnerMembershipResponse {
   string member_id = 1;
 }
-

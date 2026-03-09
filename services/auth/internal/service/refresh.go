@@ -18,6 +18,7 @@ type RefreshOutput struct {
 	UserID       uuid.UUID
 	AccessToken  string
 	RefreshToken string
+	ExpiresIn    int
 }
 
 func (s *Service) Refresh(ctx context.Context, in RefreshInput) (*RefreshOutput, error) {
@@ -93,5 +94,6 @@ func (s *Service) Refresh(ctx context.Context, in RefreshInput) (*RefreshOutput,
 		UserID:       userID,
 		AccessToken:  newAccess,
 		RefreshToken: newRefresh,
+		ExpiresIn:    s.accessTTLSeconds,
 	}, nil
 }

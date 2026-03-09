@@ -15,7 +15,6 @@ type fakeMembershipRepo struct {
 	activeByPetUser *repository.MembershipAccess
 	activeView      *repository.MemberView
 	activeViews     []repository.MemberView
-	petIDs          []uuid.UUID
 	ownerResult     *repository.MemberView
 	ownerErr        error
 	updateResult    *repository.MemberView
@@ -82,11 +81,11 @@ func (f *fakeMembershipRepo) ListActiveViewsByPet(_ context.Context, _ uuid.UUID
 	return f.activeViews, nil
 }
 
-func (f *fakeMembershipRepo) ListActivePetIDsByUser(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
+func (f *fakeMembershipRepo) ListActiveViewsByUser(_ context.Context, _ uuid.UUID) ([]repository.MemberView, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
-	return f.petIDs, nil
+	return f.activeViews, nil
 }
 
 func (f *fakeMembershipRepo) UpdatePermissions(_ context.Context, _, _ uuid.UUID, _ uuid.UUID, _ model.Policy, _ *uuid.UUID) (*repository.MemberView, error) {

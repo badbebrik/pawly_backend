@@ -60,7 +60,7 @@ func Load() *Config {
 		RabbitNotificationsQueue: getEnv("RABBITMQ_NOTIFICATIONS_QUEUE", ""),
 		ProfileServiceURL:        getEnv("PROFILE_SERVICE_URL", "http://localhost:8001"),
 		InternalServiceToken:     getEnv("INTERNAL_SERVICE_TOKEN", ""),
-		GoogleOAuthClientID:      getEnv("GOOGLE_OAUTH_CLIENT_ID", ""),
+		GoogleOAuthClientID:      getRequiredEnv("GOOGLE_OAUTH_CLIENT_ID"),
 		OAuthHTTPTimeoutSeconds:  getEnvInt("OAUTH_HTTP_TIMEOUT_SECONDS", 5),
 	}
 
@@ -93,5 +93,15 @@ func getEnvInt(key string, fallback int) int {
 			Msg("Invalid integer value in environment variable")
 	}
 
+	return val
+}
+
+func getRequiredEnv(key string) string {
+	val, ok := os.LookupEnv(key)
+	if !ok || val == "" {
+		log.Fatal().
+			Str("env_key", key).
+			Msg("Missing required environment variable")
+	}
 	return val
 }

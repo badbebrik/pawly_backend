@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"pet/internal/service"
 	filepb "pet/proto/filepb"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -68,6 +69,47 @@ func (c *Client) ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes 
 		SizeBytes: sizeBytes,
 	})
 	return mapErr(err)
+}
+
+func (c *Client) GetDownloadURL(ctx context.Context, fileID uuid.UUID) (string, time.Time, error) {
+	resp, err := c.client.GetDownloadUrl(ctx, &filepb.GetDownloadUrlRequest{
+		FileId: fileID.String(),
+	})
+	if err != nil {
+		return "", time.Time{}, mapErr(err)
+	}
+	return resp.GetUrl(), resp.GetExpiresAt().AsTime(), nil
+}
+
+func (c *Client) BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	if len(fileIDs) == 0 {
+		return map[uuid.UUID]string{}, nil
+	}
+
+	in := make([]string, 0, len(fileIDs))
+	for _, id := range fileIDs {
+		in = append(in, id.String())
+	}
+
+	resp, err := c.client.BatchGetDownloadUrls(ctx, &filepb.BatchGetDownloadUrlsRequest{
+		FileIds: in,
+	})
+	if err != nil {
+		return nil, mapErr(err)
+	}
+
+	out := make(map[uuid.UUID]string, len(resp.GetItems()))
+	for _, item := range resp.GetItems() {
+		fileID, err := uuid.Parse(item.GetFileId())
+		if err != nil {
+			continue
+		}
+		if item.GetUrl() == "" {
+			continue
+		}
+		out[fileID] = item.GetUrl()
+	}
+	return out, nil
 }
 
 func (c *Client) LinkPetAvatar(ctx context.Context, fileID, petID uuid.UUID) error {

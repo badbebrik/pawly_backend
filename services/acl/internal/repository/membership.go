@@ -43,7 +43,7 @@ type MembershipRepository interface {
 	GetActiveViewByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*MemberView, error)
 	GetByIDAndPet(ctx context.Context, petID, memberID uuid.UUID) (*MemberView, error)
 	ListActiveViewsByPet(ctx context.Context, petID uuid.UUID) ([]MemberView, error)
-	ListActivePetIDsByUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	ListActiveViewsByUser(ctx context.Context, userID uuid.UUID) ([]MemberView, error)
 	UpdatePermissions(ctx context.Context, petID, memberID uuid.UUID, roleID uuid.UUID, policy model.Policy, basePresetID *uuid.UUID) (*MemberView, error)
 	RemoveMember(ctx context.Context, petID, memberID, removedByUserID uuid.UUID) (*MemberView, error)
 }

@@ -117,17 +117,23 @@ func (h *InternalHandlers) ListPetsForUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	petIDs, err := h.svc.ListPetsForUser(r.Context(), userID)
+	memberships, err := h.svc.ListPetMembershipsForUser(r.Context(), userID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 
-	items := make([]string, 0, len(petIDs))
-	for _, id := range petIDs {
-		items = append(items, id.String())
+	petIDs := make([]string, 0, len(memberships))
+	membershipItems := make([]any, 0, len(memberships))
+	for i := range memberships {
+		m := memberships[i]
+		petIDs = append(petIDs, m.PetID.String())
+		membershipItems = append(membershipItems, memberToDTO(&m))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"pet_ids": items})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"pet_ids":     petIDs,
+		"memberships": membershipItems,
+	})
 }
 
 func decodeInternalBody(w http.ResponseWriter, r *http.Request, out any) bool {

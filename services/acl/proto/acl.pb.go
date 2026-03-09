@@ -122,24 +122,17 @@ func (RoleKind) EnumDescriptor() ([]byte, []int) {
 type Action int32
 
 const (
-	Action_ACTION_UNSPECIFIED              Action = 0
-	Action_ACTION_PET_READ                 Action = 1
-	Action_ACTION_PET_EDIT                 Action = 2
-	Action_ACTION_PET_STATUS_CHANGE        Action = 3
-	Action_ACTION_PET_DELETE               Action = 4
-	Action_ACTION_LOG_READ                 Action = 5
-	Action_ACTION_LOG_CREATE               Action = 6
-	Action_ACTION_LOG_EDIT                 Action = 7
-	Action_ACTION_LOG_DELETE               Action = 8
-	Action_ACTION_LOG_ATTACHMENTS_READ     Action = 9
-	Action_ACTION_HEALTH_READ              Action = 10
-	Action_ACTION_HEALTH_WRITE             Action = 11
-	Action_ACTION_TASK_READ                Action = 12
-	Action_ACTION_TASK_WRITE               Action = 13
-	Action_ACTION_MEMBERS_VIEW             Action = 14
-	Action_ACTION_MEMBERS_INVITE           Action = 15
-	Action_ACTION_MEMBERS_REMOVE           Action = 16
-	Action_ACTION_MEMBERS_EDIT_PERMISSIONS Action = 17
+	Action_ACTION_UNSPECIFIED   Action = 0
+	Action_ACTION_PET_READ      Action = 1
+	Action_ACTION_PET_WRITE     Action = 2
+	Action_ACTION_LOG_READ      Action = 5
+	Action_ACTION_LOG_WRITE     Action = 6
+	Action_ACTION_HEALTH_READ   Action = 10
+	Action_ACTION_HEALTH_WRITE  Action = 11
+	Action_ACTION_TASK_READ     Action = 12
+	Action_ACTION_TASK_WRITE    Action = 13
+	Action_ACTION_MEMBERS_READ  Action = 14
+	Action_ACTION_MEMBERS_WRITE Action = 15
 )
 
 // Enum value maps for Action.
@@ -147,42 +140,28 @@ var (
 	Action_name = map[int32]string{
 		0:  "ACTION_UNSPECIFIED",
 		1:  "ACTION_PET_READ",
-		2:  "ACTION_PET_EDIT",
-		3:  "ACTION_PET_STATUS_CHANGE",
-		4:  "ACTION_PET_DELETE",
+		2:  "ACTION_PET_WRITE",
 		5:  "ACTION_LOG_READ",
-		6:  "ACTION_LOG_CREATE",
-		7:  "ACTION_LOG_EDIT",
-		8:  "ACTION_LOG_DELETE",
-		9:  "ACTION_LOG_ATTACHMENTS_READ",
+		6:  "ACTION_LOG_WRITE",
 		10: "ACTION_HEALTH_READ",
 		11: "ACTION_HEALTH_WRITE",
 		12: "ACTION_TASK_READ",
 		13: "ACTION_TASK_WRITE",
-		14: "ACTION_MEMBERS_VIEW",
-		15: "ACTION_MEMBERS_INVITE",
-		16: "ACTION_MEMBERS_REMOVE",
-		17: "ACTION_MEMBERS_EDIT_PERMISSIONS",
+		14: "ACTION_MEMBERS_READ",
+		15: "ACTION_MEMBERS_WRITE",
 	}
 	Action_value = map[string]int32{
-		"ACTION_UNSPECIFIED":              0,
-		"ACTION_PET_READ":                 1,
-		"ACTION_PET_EDIT":                 2,
-		"ACTION_PET_STATUS_CHANGE":        3,
-		"ACTION_PET_DELETE":               4,
-		"ACTION_LOG_READ":                 5,
-		"ACTION_LOG_CREATE":               6,
-		"ACTION_LOG_EDIT":                 7,
-		"ACTION_LOG_DELETE":               8,
-		"ACTION_LOG_ATTACHMENTS_READ":     9,
-		"ACTION_HEALTH_READ":              10,
-		"ACTION_HEALTH_WRITE":             11,
-		"ACTION_TASK_READ":                12,
-		"ACTION_TASK_WRITE":               13,
-		"ACTION_MEMBERS_VIEW":             14,
-		"ACTION_MEMBERS_INVITE":           15,
-		"ACTION_MEMBERS_REMOVE":           16,
-		"ACTION_MEMBERS_EDIT_PERMISSIONS": 17,
+		"ACTION_UNSPECIFIED":   0,
+		"ACTION_PET_READ":      1,
+		"ACTION_PET_WRITE":     2,
+		"ACTION_LOG_READ":      5,
+		"ACTION_LOG_WRITE":     6,
+		"ACTION_HEALTH_READ":   10,
+		"ACTION_HEALTH_WRITE":  11,
+		"ACTION_TASK_READ":     12,
+		"ACTION_TASK_WRITE":    13,
+		"ACTION_MEMBERS_READ":  14,
+		"ACTION_MEMBERS_WRITE": 15,
 	}
 )
 
@@ -214,26 +193,19 @@ func (Action) EnumDescriptor() ([]byte, []int) {
 }
 
 type Policy struct {
-	state                  protoimpl.MessageState `protogen:"open.v1"`
-	PetRead                bool                   `protobuf:"varint,1,opt,name=pet_read,json=petRead,proto3" json:"pet_read,omitempty"`
-	PetEdit                bool                   `protobuf:"varint,2,opt,name=pet_edit,json=petEdit,proto3" json:"pet_edit,omitempty"`
-	PetStatusChange        bool                   `protobuf:"varint,3,opt,name=pet_status_change,json=petStatusChange,proto3" json:"pet_status_change,omitempty"`
-	PetDelete              bool                   `protobuf:"varint,4,opt,name=pet_delete,json=petDelete,proto3" json:"pet_delete,omitempty"`
-	LogRead                bool                   `protobuf:"varint,5,opt,name=log_read,json=logRead,proto3" json:"log_read,omitempty"`
-	LogCreate              bool                   `protobuf:"varint,6,opt,name=log_create,json=logCreate,proto3" json:"log_create,omitempty"`
-	LogEdit                bool                   `protobuf:"varint,7,opt,name=log_edit,json=logEdit,proto3" json:"log_edit,omitempty"`
-	LogDelete              bool                   `protobuf:"varint,8,opt,name=log_delete,json=logDelete,proto3" json:"log_delete,omitempty"`
-	LogAttachmentsRead     bool                   `protobuf:"varint,9,opt,name=log_attachments_read,json=logAttachmentsRead,proto3" json:"log_attachments_read,omitempty"`
-	HealthRead             bool                   `protobuf:"varint,10,opt,name=health_read,json=healthRead,proto3" json:"health_read,omitempty"`
-	HealthWrite            bool                   `protobuf:"varint,11,opt,name=health_write,json=healthWrite,proto3" json:"health_write,omitempty"`
-	TaskRead               bool                   `protobuf:"varint,12,opt,name=task_read,json=taskRead,proto3" json:"task_read,omitempty"`
-	TaskWrite              bool                   `protobuf:"varint,13,opt,name=task_write,json=taskWrite,proto3" json:"task_write,omitempty"`
-	MembersView            bool                   `protobuf:"varint,14,opt,name=members_view,json=membersView,proto3" json:"members_view,omitempty"`
-	MembersInvite          bool                   `protobuf:"varint,15,opt,name=members_invite,json=membersInvite,proto3" json:"members_invite,omitempty"`
-	MembersRemove          bool                   `protobuf:"varint,16,opt,name=members_remove,json=membersRemove,proto3" json:"members_remove,omitempty"`
-	MembersEditPermissions bool                   `protobuf:"varint,17,opt,name=members_edit_permissions,json=membersEditPermissions,proto3" json:"members_edit_permissions,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PetRead       bool                   `protobuf:"varint,1,opt,name=pet_read,json=petRead,proto3" json:"pet_read,omitempty"`
+	PetWrite      bool                   `protobuf:"varint,2,opt,name=pet_write,json=petWrite,proto3" json:"pet_write,omitempty"`
+	LogRead       bool                   `protobuf:"varint,5,opt,name=log_read,json=logRead,proto3" json:"log_read,omitempty"`
+	LogWrite      bool                   `protobuf:"varint,6,opt,name=log_write,json=logWrite,proto3" json:"log_write,omitempty"`
+	HealthRead    bool                   `protobuf:"varint,10,opt,name=health_read,json=healthRead,proto3" json:"health_read,omitempty"`
+	HealthWrite   bool                   `protobuf:"varint,11,opt,name=health_write,json=healthWrite,proto3" json:"health_write,omitempty"`
+	TaskRead      bool                   `protobuf:"varint,12,opt,name=task_read,json=taskRead,proto3" json:"task_read,omitempty"`
+	TaskWrite     bool                   `protobuf:"varint,13,opt,name=task_write,json=taskWrite,proto3" json:"task_write,omitempty"`
+	MembersRead   bool                   `protobuf:"varint,14,opt,name=members_read,json=membersRead,proto3" json:"members_read,omitempty"`
+	MembersWrite  bool                   `protobuf:"varint,15,opt,name=members_write,json=membersWrite,proto3" json:"members_write,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Policy) Reset() {
@@ -273,23 +245,9 @@ func (x *Policy) GetPetRead() bool {
 	return false
 }
 
-func (x *Policy) GetPetEdit() bool {
+func (x *Policy) GetPetWrite() bool {
 	if x != nil {
-		return x.PetEdit
-	}
-	return false
-}
-
-func (x *Policy) GetPetStatusChange() bool {
-	if x != nil {
-		return x.PetStatusChange
-	}
-	return false
-}
-
-func (x *Policy) GetPetDelete() bool {
-	if x != nil {
-		return x.PetDelete
+		return x.PetWrite
 	}
 	return false
 }
@@ -301,30 +259,9 @@ func (x *Policy) GetLogRead() bool {
 	return false
 }
 
-func (x *Policy) GetLogCreate() bool {
+func (x *Policy) GetLogWrite() bool {
 	if x != nil {
-		return x.LogCreate
-	}
-	return false
-}
-
-func (x *Policy) GetLogEdit() bool {
-	if x != nil {
-		return x.LogEdit
-	}
-	return false
-}
-
-func (x *Policy) GetLogDelete() bool {
-	if x != nil {
-		return x.LogDelete
-	}
-	return false
-}
-
-func (x *Policy) GetLogAttachmentsRead() bool {
-	if x != nil {
-		return x.LogAttachmentsRead
+		return x.LogWrite
 	}
 	return false
 }
@@ -357,30 +294,16 @@ func (x *Policy) GetTaskWrite() bool {
 	return false
 }
 
-func (x *Policy) GetMembersView() bool {
+func (x *Policy) GetMembersRead() bool {
 	if x != nil {
-		return x.MembersView
+		return x.MembersRead
 	}
 	return false
 }
 
-func (x *Policy) GetMembersInvite() bool {
+func (x *Policy) GetMembersWrite() bool {
 	if x != nil {
-		return x.MembersInvite
-	}
-	return false
-}
-
-func (x *Policy) GetMembersRemove() bool {
-	if x != nil {
-		return x.MembersRemove
-	}
-	return false
-}
-
-func (x *Policy) GetMembersEditPermissions() bool {
-	if x != nil {
-		return x.MembersEditPermissions
+		return x.MembersWrite
 	}
 	return false
 }
@@ -1069,20 +992,12 @@ var File_acl_proto protoreflect.FileDescriptor
 
 const file_acl_proto_rawDesc = "" +
 	"\n" +
-	"\tacl.proto\x12\x03acl\"\xda\x04\n" +
+	"\tacl.proto\x12\x03acl\"\xc0\x02\n" +
 	"\x06Policy\x12\x19\n" +
-	"\bpet_read\x18\x01 \x01(\bR\apetRead\x12\x19\n" +
-	"\bpet_edit\x18\x02 \x01(\bR\apetEdit\x12*\n" +
-	"\x11pet_status_change\x18\x03 \x01(\bR\x0fpetStatusChange\x12\x1d\n" +
-	"\n" +
-	"pet_delete\x18\x04 \x01(\bR\tpetDelete\x12\x19\n" +
-	"\blog_read\x18\x05 \x01(\bR\alogRead\x12\x1d\n" +
-	"\n" +
-	"log_create\x18\x06 \x01(\bR\tlogCreate\x12\x19\n" +
-	"\blog_edit\x18\a \x01(\bR\alogEdit\x12\x1d\n" +
-	"\n" +
-	"log_delete\x18\b \x01(\bR\tlogDelete\x120\n" +
-	"\x14log_attachments_read\x18\t \x01(\bR\x12logAttachmentsRead\x12\x1f\n" +
+	"\bpet_read\x18\x01 \x01(\bR\apetRead\x12\x1b\n" +
+	"\tpet_write\x18\x02 \x01(\bR\bpetWrite\x12\x19\n" +
+	"\blog_read\x18\x05 \x01(\bR\alogRead\x12\x1b\n" +
+	"\tlog_write\x18\x06 \x01(\bR\blogWrite\x12\x1f\n" +
 	"\vhealth_read\x18\n" +
 	" \x01(\bR\n" +
 	"healthRead\x12!\n" +
@@ -1090,10 +1005,8 @@ const file_acl_proto_rawDesc = "" +
 	"\ttask_read\x18\f \x01(\bR\btaskRead\x12\x1d\n" +
 	"\n" +
 	"task_write\x18\r \x01(\bR\ttaskWrite\x12!\n" +
-	"\fmembers_view\x18\x0e \x01(\bR\vmembersView\x12%\n" +
-	"\x0emembers_invite\x18\x0f \x01(\bR\rmembersInvite\x12%\n" +
-	"\x0emembers_remove\x18\x10 \x01(\bR\rmembersRemove\x128\n" +
-	"\x18members_edit_permissions\x18\x11 \x01(\bR\x16membersEditPermissions\"\xa7\x01\n" +
+	"\fmembers_read\x18\x0e \x01(\bR\vmembersRead\x12#\n" +
+	"\rmembers_write\x18\x0f \x01(\bR\fmembersWrite\"\xa7\x01\n" +
 	"\x04Role\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\r.acl.RoleKindR\x04kind\x12\x15\n" +
@@ -1144,27 +1057,20 @@ const file_acl_proto_rawDesc = "" +
 	"\bRoleKind\x12\x19\n" +
 	"\x15ROLE_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ROLE_KIND_SYSTEM\x10\x01\x12\x14\n" +
-	"\x10ROLE_KIND_CUSTOM\x10\x02*\xca\x03\n" +
+	"\x10ROLE_KIND_CUSTOM\x10\x02*\x87\x02\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x13\n" +
-	"\x0fACTION_PET_READ\x10\x01\x12\x13\n" +
-	"\x0fACTION_PET_EDIT\x10\x02\x12\x1c\n" +
-	"\x18ACTION_PET_STATUS_CHANGE\x10\x03\x12\x15\n" +
-	"\x11ACTION_PET_DELETE\x10\x04\x12\x13\n" +
-	"\x0fACTION_LOG_READ\x10\x05\x12\x15\n" +
-	"\x11ACTION_LOG_CREATE\x10\x06\x12\x13\n" +
-	"\x0fACTION_LOG_EDIT\x10\a\x12\x15\n" +
-	"\x11ACTION_LOG_DELETE\x10\b\x12\x1f\n" +
-	"\x1bACTION_LOG_ATTACHMENTS_READ\x10\t\x12\x16\n" +
+	"\x0fACTION_PET_READ\x10\x01\x12\x14\n" +
+	"\x10ACTION_PET_WRITE\x10\x02\x12\x13\n" +
+	"\x0fACTION_LOG_READ\x10\x05\x12\x14\n" +
+	"\x10ACTION_LOG_WRITE\x10\x06\x12\x16\n" +
 	"\x12ACTION_HEALTH_READ\x10\n" +
 	"\x12\x17\n" +
 	"\x13ACTION_HEALTH_WRITE\x10\v\x12\x14\n" +
 	"\x10ACTION_TASK_READ\x10\f\x12\x15\n" +
 	"\x11ACTION_TASK_WRITE\x10\r\x12\x17\n" +
-	"\x13ACTION_MEMBERS_VIEW\x10\x0e\x12\x19\n" +
-	"\x15ACTION_MEMBERS_INVITE\x10\x0f\x12\x19\n" +
-	"\x15ACTION_MEMBERS_REMOVE\x10\x10\x12#\n" +
-	"\x1fACTION_MEMBERS_EDIT_PERMISSIONS\x10\x112\xdf\x02\n" +
+	"\x13ACTION_MEMBERS_READ\x10\x0e\x12\x18\n" +
+	"\x14ACTION_MEMBERS_WRITE\x10\x0f2\xdf\x02\n" +
 	"\n" +
 	"ACLService\x127\n" +
 	"\bIsMember\x12\x14.acl.IsMemberRequest\x1a\x15.acl.IsMemberResponse\x12:\n" +

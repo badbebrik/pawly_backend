@@ -36,6 +36,7 @@ func (a *App) setupRoutes() http.Handler {
 
 		r.Get("/v1/pets/{pet_id}/acl/members", pub.ListMembers)
 		r.Get("/v1/pets/{pet_id}/acl/me", pub.GetMyAccess)
+		r.Get("/v1/pets/{pet_id}/acl/bootstrap", pub.GetBootstrap)
 		r.Patch("/v1/pets/{pet_id}/acl/members/{member_id}", pub.UpdateMemberPermissions)
 		r.Delete("/v1/pets/{pet_id}/acl/members/{member_id}", pub.RemoveMember)
 
@@ -45,6 +46,8 @@ func (a *App) setupRoutes() http.Handler {
 		r.Post("/v1/acl/invites/accept-by-code", pub.AcceptInviteByCode)
 		r.Post("/v1/acl/invites/accept-by-token", pub.AcceptInviteByToken)
 	})
+
+	r.Post("/v1/acl/invites/preview-by-token", pub.PreviewInviteByToken)
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithInternalToken(a.cfg.InternalServiceToken))

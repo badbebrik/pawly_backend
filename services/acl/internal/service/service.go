@@ -19,23 +19,16 @@ import (
 type Action string
 
 const (
-	ActionPetRead                Action = "pet_read"
-	ActionPetEdit                Action = "pet_edit"
-	ActionPetStatusChange        Action = "pet_status_change"
-	ActionPetDelete              Action = "pet_delete"
-	ActionLogRead                Action = "log_read"
-	ActionLogCreate              Action = "log_create"
-	ActionLogEdit                Action = "log_edit"
-	ActionLogDelete              Action = "log_delete"
-	ActionLogAttachmentsRead     Action = "log_attachments_read"
-	ActionHealthRead             Action = "health_read"
-	ActionHealthWrite            Action = "health_write"
-	ActionTaskRead               Action = "task_read"
-	ActionTaskWrite              Action = "task_write"
-	ActionMembersView            Action = "members_view"
-	ActionMembersInvite          Action = "members_invite"
-	ActionMembersRemove          Action = "members_remove"
-	ActionMembersEditPermissions Action = "members_edit_permissions"
+	ActionPetRead      Action = "pet_read"
+	ActionPetWrite     Action = "pet_write"
+	ActionLogRead      Action = "log_read"
+	ActionLogWrite     Action = "log_write"
+	ActionHealthRead   Action = "health_read"
+	ActionHealthWrite  Action = "health_write"
+	ActionTaskRead     Action = "task_read"
+	ActionTaskWrite    Action = "task_write"
+	ActionMembersRead  Action = "members_read"
+	ActionMembersWrite Action = "members_write"
 )
 
 const membershipStatusActive = "ACTIVE"
@@ -128,6 +121,16 @@ type RemoveMemberParams struct {
 	MemberID    uuid.UUID
 }
 
+type BootstrapResult struct {
+	Me              *repository.MemberView
+	Members         []repository.MemberView
+	Roles           []repository.RoleView
+	Presets         []repository.PermissionPresetView
+	Invites         []repository.InviteView
+	CanMembersRead  bool
+	CanMembersWrite bool
+}
+
 func (s *ACLService) IsMember(ctx context.Context, petID, userID uuid.UUID) (bool, error) {
 	_, err := s.memberships.GetActiveByPetAndUser(ctx, petID, userID)
 	if err != nil {
@@ -169,7 +172,7 @@ func (s *ACLService) Check(ctx context.Context, p CheckParams) (bool, error) {
 		return false, err
 	}
 
-	allowed, ok := isAllowed(policyRes.Policy, Action(strings.ToLower(p.Action)))
+	allowed, ok := isAllowed(policyRes.Policy, normalizeAction(strings.ToLower(p.Action)))
 	if !ok {
 		return false, ErrInvalidInput
 	}
@@ -213,11 +216,52 @@ func (s *ACLService) GetMyAccess(ctx context.Context, petID, userID uuid.UUID) (
 	return member, nil
 }
 
+func (s *ACLService) GetBootstrap(ctx context.Context, petID, userID uuid.UUID) (*BootstrapResult, error) {
+	if petID == uuid.Nil || userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	me, err := s.GetMyAccess(ctx, petID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !me.Policy.MembersRead {
+		return nil, ErrForbidden
+	}
+
+	members, err := s.memberships.ListActiveViewsByPet(ctx, petID)
+	if err != nil {
+		return nil, err
+	}
+	roles, err := s.roles.ListSystemAndPetRoles(ctx, petID)
+	if err != nil {
+		return nil, err
+	}
+	presets, err := s.presets.ListSystem(ctx)
+	if err != nil {
+		return nil, err
+	}
+	invites, err := s.invites.ListActiveByPet(ctx, petID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BootstrapResult{
+		Me:              me,
+		Members:         members,
+		Roles:           roles,
+		Presets:         presets,
+		Invites:         invites,
+		CanMembersRead:  me.Policy.MembersRead,
+		CanMembersWrite: me.Policy.MembersWrite,
+	}, nil
+}
+
 func (s *ACLService) ListMembers(ctx context.Context, petID, requesterID uuid.UUID) ([]repository.MemberView, error) {
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  petID,
 		UserID: requesterID,
-		Action: string(ActionMembersView),
+		Action: string(ActionMembersRead),
 	})
 	if err != nil {
 		return nil, err
@@ -233,7 +277,7 @@ func (s *ACLService) ListRoles(ctx context.Context, petID, requesterID uuid.UUID
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  petID,
 		UserID: requesterID,
-		Action: string(ActionMembersView),
+		Action: string(ActionMembersRead),
 	})
 	if err != nil {
 		return nil, err
@@ -253,7 +297,7 @@ func (s *ACLService) CreateCustomRole(ctx context.Context, p CreateCustomRolePar
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  p.PetID,
 		UserID: p.RequesterID,
-		Action: string(ActionMembersEditPermissions),
+		Action: string(ActionMembersWrite),
 	})
 	if err != nil {
 		return nil, err
@@ -283,7 +327,7 @@ func (s *ACLService) DeleteCustomRole(ctx context.Context, petID, requesterID, r
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  petID,
 		UserID: requesterID,
-		Action: string(ActionMembersEditPermissions),
+		Action: string(ActionMembersWrite),
 	})
 	if err != nil {
 		return err
@@ -310,7 +354,7 @@ func (s *ACLService) CreateInvite(ctx context.Context, p CreateInviteParams) (*C
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  p.PetID,
 		UserID: p.CreatedByUserID,
-		Action: string(ActionMembersInvite),
+		Action: string(ActionMembersWrite),
 	})
 	if err != nil {
 		return nil, err
@@ -387,7 +431,7 @@ func (s *ACLService) ListInvites(ctx context.Context, petID, requesterID uuid.UU
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  petID,
 		UserID: requesterID,
-		Action: string(ActionMembersView),
+		Action: string(ActionMembersRead),
 	})
 	if err != nil {
 		return nil, err
@@ -432,11 +476,27 @@ func (s *ACLService) AcceptInviteByToken(ctx context.Context, token string, acce
 	return &AcceptInviteResult{PetID: petID, Member: member}, nil
 }
 
+func (s *ACLService) PreviewInviteByToken(ctx context.Context, token string) (*repository.InviteView, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, ErrInvalidInput
+	}
+
+	invite, err := s.invites.GetActiveByTokenHash(ctx, sha256Hex(token))
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return invite, nil
+}
+
 func (s *ACLService) UpdateMemberPermissions(ctx context.Context, p UpdateMemberPermissionsParams) (*repository.MemberView, error) {
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  p.PetID,
 		UserID: p.RequesterID,
-		Action: string(ActionMembersEditPermissions),
+		Action: string(ActionMembersWrite),
 	})
 	if err != nil {
 		return nil, err
@@ -494,7 +554,7 @@ func (s *ACLService) RemoveMember(ctx context.Context, p RemoveMemberParams) (*r
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  p.PetID,
 		UserID: p.RequesterID,
-		Action: string(ActionMembersRemove),
+		Action: string(ActionMembersWrite),
 	})
 	if err != nil {
 		return nil, err
@@ -521,7 +581,7 @@ func (s *ACLService) RevokeInvite(ctx context.Context, petID, requesterID, invit
 	allowed, err := s.Check(ctx, CheckParams{
 		PetID:  petID,
 		UserID: requesterID,
-		Action: string(ActionMembersInvite),
+		Action: string(ActionMembersWrite),
 	})
 	if err != nil {
 		return err
@@ -557,34 +617,29 @@ func roleAllowedForPet(role *repository.RoleView, petID uuid.UUID) bool {
 
 func criticalOwnerPolicy(p model.Policy) bool {
 	return p.PetRead &&
-		p.PetEdit &&
-		p.PetStatusChange &&
-		p.PetDelete &&
-		p.MembersView &&
-		p.MembersInvite &&
-		p.MembersRemove &&
-		p.MembersEditPermissions
+		p.PetWrite &&
+		p.LogRead &&
+		p.LogWrite &&
+		p.HealthRead &&
+		p.HealthWrite &&
+		p.TaskRead &&
+		p.TaskWrite &&
+		p.MembersRead &&
+		p.MembersWrite
 }
 
 func ownerFullAccessPolicy() model.Policy {
 	return model.Policy{
-		PetRead:                true,
-		PetEdit:                true,
-		PetStatusChange:        true,
-		PetDelete:              true,
-		LogRead:                true,
-		LogCreate:              true,
-		LogEdit:                true,
-		LogDelete:              true,
-		LogAttachmentsRead:     true,
-		HealthRead:             true,
-		HealthWrite:            true,
-		TaskRead:               true,
-		TaskWrite:              true,
-		MembersView:            true,
-		MembersInvite:          true,
-		MembersRemove:          true,
-		MembersEditPermissions: true,
+		PetRead:      true,
+		PetWrite:     true,
+		LogRead:      true,
+		LogWrite:     true,
+		HealthRead:   true,
+		HealthWrite:  true,
+		TaskRead:     true,
+		TaskWrite:    true,
+		MembersRead:  true,
+		MembersWrite: true,
 	}
 }
 
@@ -623,26 +678,43 @@ func sha256Hex(raw string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func normalizeAction(raw string) Action {
+	switch Action(raw) {
+	case ActionPetRead:
+		return ActionPetRead
+	case ActionPetWrite:
+		return ActionPetWrite
+	case ActionLogRead:
+		return ActionLogRead
+	case ActionLogWrite:
+		return ActionLogWrite
+	case ActionHealthRead:
+		return ActionHealthRead
+	case ActionHealthWrite:
+		return ActionHealthWrite
+	case ActionTaskRead:
+		return ActionTaskRead
+	case ActionTaskWrite:
+		return ActionTaskWrite
+	case ActionMembersRead:
+		return ActionMembersRead
+	case ActionMembersWrite:
+		return ActionMembersWrite
+	default:
+		return ""
+	}
+}
+
 func isAllowed(p model.Policy, action Action) (bool, bool) {
 	switch action {
 	case ActionPetRead:
 		return p.PetRead, true
-	case ActionPetEdit:
-		return p.PetEdit, true
-	case ActionPetStatusChange:
-		return p.PetStatusChange, true
-	case ActionPetDelete:
-		return p.PetDelete, true
+	case ActionPetWrite:
+		return p.PetWrite, true
 	case ActionLogRead:
 		return p.LogRead, true
-	case ActionLogCreate:
-		return p.LogCreate, true
-	case ActionLogEdit:
-		return p.LogEdit, true
-	case ActionLogDelete:
-		return p.LogDelete, true
-	case ActionLogAttachmentsRead:
-		return p.LogAttachmentsRead, true
+	case ActionLogWrite:
+		return p.LogWrite, true
 	case ActionHealthRead:
 		return p.HealthRead, true
 	case ActionHealthWrite:
@@ -651,14 +723,10 @@ func isAllowed(p model.Policy, action Action) (bool, bool) {
 		return p.TaskRead, true
 	case ActionTaskWrite:
 		return p.TaskWrite, true
-	case ActionMembersView:
-		return p.MembersView, true
-	case ActionMembersInvite:
-		return p.MembersInvite, true
-	case ActionMembersRemove:
-		return p.MembersRemove, true
-	case ActionMembersEditPermissions:
-		return p.MembersEditPermissions, true
+	case ActionMembersRead:
+		return p.MembersRead, true
+	case ActionMembersWrite:
+		return p.MembersWrite, true
 	default:
 		return false, false
 	}

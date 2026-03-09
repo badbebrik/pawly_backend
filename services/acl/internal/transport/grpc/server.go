@@ -164,22 +164,12 @@ func mapAction(action aclpb.Action) string {
 	switch action {
 	case aclpb.Action_ACTION_PET_READ:
 		return string(service.ActionPetRead)
-	case aclpb.Action_ACTION_PET_EDIT:
-		return string(service.ActionPetEdit)
-	case aclpb.Action_ACTION_PET_STATUS_CHANGE:
-		return string(service.ActionPetStatusChange)
-	case aclpb.Action_ACTION_PET_DELETE:
-		return string(service.ActionPetDelete)
+	case aclpb.Action_ACTION_PET_WRITE:
+		return string(service.ActionPetWrite)
 	case aclpb.Action_ACTION_LOG_READ:
 		return string(service.ActionLogRead)
-	case aclpb.Action_ACTION_LOG_CREATE:
-		return string(service.ActionLogCreate)
-	case aclpb.Action_ACTION_LOG_EDIT:
-		return string(service.ActionLogEdit)
-	case aclpb.Action_ACTION_LOG_DELETE:
-		return string(service.ActionLogDelete)
-	case aclpb.Action_ACTION_LOG_ATTACHMENTS_READ:
-		return string(service.ActionLogAttachmentsRead)
+	case aclpb.Action_ACTION_LOG_WRITE:
+		return string(service.ActionLogWrite)
 	case aclpb.Action_ACTION_HEALTH_READ:
 		return string(service.ActionHealthRead)
 	case aclpb.Action_ACTION_HEALTH_WRITE:
@@ -188,14 +178,10 @@ func mapAction(action aclpb.Action) string {
 		return string(service.ActionTaskRead)
 	case aclpb.Action_ACTION_TASK_WRITE:
 		return string(service.ActionTaskWrite)
-	case aclpb.Action_ACTION_MEMBERS_VIEW:
-		return string(service.ActionMembersView)
-	case aclpb.Action_ACTION_MEMBERS_INVITE:
-		return string(service.ActionMembersInvite)
-	case aclpb.Action_ACTION_MEMBERS_REMOVE:
-		return string(service.ActionMembersRemove)
-	case aclpb.Action_ACTION_MEMBERS_EDIT_PERMISSIONS:
-		return string(service.ActionMembersEditPermissions)
+	case aclpb.Action_ACTION_MEMBERS_READ:
+		return string(service.ActionMembersRead)
+	case aclpb.Action_ACTION_MEMBERS_WRITE:
+		return string(service.ActionMembersWrite)
 	default:
 		return ""
 	}
@@ -203,23 +189,16 @@ func mapAction(action aclpb.Action) string {
 
 func toProtoPolicy(p model.Policy) *aclpb.Policy {
 	return &aclpb.Policy{
-		PetRead:                p.PetRead,
-		PetEdit:                p.PetEdit,
-		PetStatusChange:        p.PetStatusChange,
-		PetDelete:              p.PetDelete,
-		LogRead:                p.LogRead,
-		LogCreate:              p.LogCreate,
-		LogEdit:                p.LogEdit,
-		LogDelete:              p.LogDelete,
-		LogAttachmentsRead:     p.LogAttachmentsRead,
-		HealthRead:             p.HealthRead,
-		HealthWrite:            p.HealthWrite,
-		TaskRead:               p.TaskRead,
-		TaskWrite:              p.TaskWrite,
-		MembersView:            p.MembersView,
-		MembersInvite:          p.MembersInvite,
-		MembersRemove:          p.MembersRemove,
-		MembersEditPermissions: p.MembersEditPermissions,
+		PetRead:      p.PetRead,
+		PetWrite:     p.PetWrite,
+		LogRead:      p.LogRead,
+		LogWrite:     p.LogWrite,
+		HealthRead:   p.HealthRead,
+		HealthWrite:  p.HealthWrite,
+		TaskRead:     p.TaskRead,
+		TaskWrite:    p.TaskWrite,
+		MembersRead:  p.MembersRead,
+		MembersWrite: p.MembersWrite,
 	}
 }
 

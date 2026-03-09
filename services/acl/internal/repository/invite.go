@@ -39,6 +39,7 @@ type InviteView struct {
 type InviteRepository interface {
 	Create(ctx context.Context, in InviteCreateInput) (*InviteView, error)
 	ListActiveByPet(ctx context.Context, petID uuid.UUID) ([]InviteView, error)
+	GetActiveByTokenHash(ctx context.Context, tokenHash string) (*InviteView, error)
 	AcceptByCode(ctx context.Context, code string, acceptedByUserID uuid.UUID) (*MemberView, uuid.UUID, error)
 	AcceptByTokenHash(ctx context.Context, tokenHash string, acceptedByUserID uuid.UUID) (*MemberView, uuid.UUID, error)
 	RevokeByID(ctx context.Context, petID, inviteID uuid.UUID) error

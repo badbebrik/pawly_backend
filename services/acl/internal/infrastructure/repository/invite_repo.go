@@ -98,6 +98,32 @@ func (r *InviteRepository) ListActiveByPet(ctx context.Context, petID uuid.UUID)
 	return items, nil
 }
 
+func (r *InviteRepository) GetActiveByTokenHash(ctx context.Context, tokenHash string) (*repository.InviteView, error) {
+	const query = `
+		SELECT
+			i.id, i.pet_id, i.status, i.code, i.expires_at,
+			i.base_preset_id, i.created_by_user_id, i.created_at,
+			i.consumed_at, i.consumed_by_user_id, i.policy,
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+		FROM pet_invites i
+		JOIN roles r ON r.id = i.role_id
+		WHERE i.status = 'ACTIVE'
+		  AND i.expires_at > NOW()
+		  AND i.token_hash = $1
+		LIMIT 1
+	`
+
+	row := r.db.QueryRow(ctx, query, tokenHash)
+	invite, err := scanInviteRow(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, err
+	}
+	return invite, nil
+}
+
 func (r *InviteRepository) getByID(ctx context.Context, id uuid.UUID) (*repository.InviteView, error) {
 	const query = `
 		SELECT

@@ -172,6 +172,8 @@ type fakeInviteRepo struct {
 	createErrSeq   []error
 	createCalls    int
 	createInvite   *repository.InviteView
+	previewInvite  *repository.InviteView
+	previewErr     error
 	revokeErr      error
 	acceptCodeErr  error
 	acceptTokenErr error
@@ -191,6 +193,16 @@ func (f *fakeInviteRepo) Create(_ context.Context, _ repository.InviteCreateInpu
 
 func (f *fakeInviteRepo) ListActiveByPet(_ context.Context, _ uuid.UUID) ([]repository.InviteView, error) {
 	return []repository.InviteView{}, nil
+}
+
+func (f *fakeInviteRepo) GetActiveByTokenHash(_ context.Context, _ string) (*repository.InviteView, error) {
+	if f.previewErr != nil {
+		return nil, f.previewErr
+	}
+	if f.previewInvite == nil {
+		return nil, repository.ErrNotFound
+	}
+	return f.previewInvite, nil
 }
 
 func (f *fakeInviteRepo) AcceptByCode(_ context.Context, _ string, _ uuid.UUID) (*repository.MemberView, uuid.UUID, error) {
@@ -231,7 +243,7 @@ func TestListPresetsReturnsSystemPresets(t *testing.T) {
 			ID:       uuid.New(),
 			Name:     "Owner Full Access",
 			RoleCode: "OWNER",
-			Policy:   model.Policy{MembersEditPermissions: true},
+			Policy:   model.Policy{MembersWrite: true},
 		}},
 		exists: true,
 	}, nil)
@@ -293,7 +305,7 @@ func TestCreateCustomRoleRequiresNonEmptyTitle(t *testing.T) {
 
 	svc := newTestService(&fakeMembershipRepo{byPetUser: &repository.MembershipAccess{
 		Status: "ACTIVE",
-		Policy: model.Policy{MembersEditPermissions: true},
+		Policy: model.Policy{MembersWrite: true},
 	}}, &fakeRoleRepo{}, nil, nil)
 
 	_, err := svc.CreateCustomRole(context.Background(), CreateCustomRoleParams{PetID: uuid.New(), RequesterID: uuid.New(), Title: "   "})
@@ -311,7 +323,7 @@ func TestCreateInviteRetriesOnConflict(t *testing.T) {
 	role := &repository.RoleView{ID: roleID, Kind: "SYSTEM", Code: "VET"}
 	svc := newTestService(&fakeMembershipRepo{byPetUser: &repository.MembershipAccess{
 		Status: "ACTIVE",
-		Policy: model.Policy{MembersInvite: true},
+		Policy: model.Policy{MembersWrite: true},
 	}}, &fakeRoleRepo{byID: role}, &fakePresetRepo{exists: true}, inviteRepo)
 
 	res, err := svc.CreateInvite(context.Background(), CreateInviteParams{
@@ -342,7 +354,7 @@ func TestCreateInviteReturnsConflictAfterRetryExhausted(t *testing.T) {
 	role := &repository.RoleView{ID: roleID, Kind: "SYSTEM", Code: "VET"}
 	svc := newTestService(&fakeMembershipRepo{byPetUser: &repository.MembershipAccess{
 		Status: "ACTIVE",
-		Policy: model.Policy{MembersInvite: true},
+		Policy: model.Policy{MembersWrite: true},
 	}}, &fakeRoleRepo{byID: role}, &fakePresetRepo{exists: true}, inviteRepo)
 
 	_, err := svc.CreateInvite(context.Background(), CreateInviteParams{
@@ -367,7 +379,7 @@ func TestCreateInviteRejectsForeignCustomRole(t *testing.T) {
 	roleID := uuid.New()
 	svc := newTestService(&fakeMembershipRepo{byPetUser: &repository.MembershipAccess{
 		Status: "ACTIVE",
-		Policy: model.Policy{MembersInvite: true},
+		Policy: model.Policy{MembersWrite: true},
 	}}, &fakeRoleRepo{byID: &repository.RoleView{
 		ID:    roleID,
 		Kind:  "CUSTOM",
@@ -393,7 +405,7 @@ func TestUpdateMemberPermissionsBlocksWeakPrimaryOwnerPolicy(t *testing.T) {
 	roleID := uuid.New()
 	ownerMember := &repository.MemberView{ID: memberID, PetID: petID, Status: "ACTIVE", IsPrimaryOwner: true}
 	svc := newTestService(&fakeMembershipRepo{
-		byPetUser:    &repository.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersEditPermissions: true}},
+		byPetUser:    &repository.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersWrite: true}},
 		activeView:   ownerMember,
 		updateResult: ownerMember,
 	}, &fakeRoleRepo{byID: &repository.RoleView{ID: roleID, Kind: "SYSTEM"}}, &fakePresetRepo{exists: true}, nil)
@@ -414,7 +426,7 @@ func TestRemoveMemberMapsRepoConflict(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestService(&fakeMembershipRepo{
-		byPetUser: &repository.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersRemove: true}},
+		byPetUser: &repository.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersWrite: true}},
 		removeErr: repository.ErrConflict,
 	}, &fakeRoleRepo{}, nil, nil)
 
@@ -429,7 +441,7 @@ func TestRevokeInviteMapsRepoConflict(t *testing.T) {
 
 	svc := newTestService(&fakeMembershipRepo{byPetUser: &repository.MembershipAccess{
 		Status: "ACTIVE",
-		Policy: model.Policy{MembersInvite: true},
+		Policy: model.Policy{MembersWrite: true},
 	}}, &fakeRoleRepo{}, nil, &fakeInviteRepo{revokeErr: repository.ErrConflict})
 
 	err := svc.RevokeInvite(context.Background(), uuid.New(), uuid.New(), uuid.New())
@@ -462,13 +474,13 @@ func TestAcceptInviteByTokenMapsNotFound(t *testing.T) {
 	}
 }
 
-func TestListRolesRequiresMembersViewPermission(t *testing.T) {
+func TestListRolesRequiresMembersReadPermission(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestService(&fakeMembershipRepo{
 		byPetUser: &repository.MembershipAccess{
 			Status: "ACTIVE",
-			Policy: model.Policy{MembersView: false},
+			Policy: model.Policy{MembersRead: false},
 		},
 	}, &fakeRoleRepo{
 		roles: []repository.RoleView{{ID: uuid.New(), Kind: "SYSTEM", Code: "OWNER", Title: "Owner"}},
@@ -484,16 +496,22 @@ func TestCriticalOwnerPolicy(t *testing.T) {
 	t.Parallel()
 
 	weak := model.Policy{
-		PetRead: true, PetEdit: true, PetStatusChange: true, PetDelete: false,
-		MembersView: true, MembersInvite: true, MembersRemove: true, MembersEditPermissions: true,
+		PetRead: true, PetWrite: true,
+		LogRead: true, LogWrite: true,
+		HealthRead: true, HealthWrite: true,
+		TaskRead: true, TaskWrite: true,
+		MembersRead: true, MembersWrite: false,
 	}
 	if criticalOwnerPolicy(weak) {
 		t.Fatalf("expected weak policy to be non-critical")
 	}
 
 	strong := model.Policy{
-		PetRead: true, PetEdit: true, PetStatusChange: true, PetDelete: true,
-		MembersView: true, MembersInvite: true, MembersRemove: true, MembersEditPermissions: true,
+		PetRead: true, PetWrite: true,
+		LogRead: true, LogWrite: true,
+		HealthRead: true, HealthWrite: true,
+		TaskRead: true, TaskWrite: true,
+		MembersRead: true, MembersWrite: true,
 	}
 	if !criticalOwnerPolicy(strong) {
 		t.Fatalf("expected strong policy to be critical")
@@ -520,12 +538,58 @@ func TestAcceptInviteByTokenInvalidInput(t *testing.T) {
 	}
 }
 
-func TestListMembersRequiresMembersViewPermission(t *testing.T) {
+func TestPreviewInviteByTokenInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{}, &fakeRoleRepo{}, nil, nil)
+	_, err := svc.PreviewInviteByToken(context.Background(), " ")
+	if err != ErrInvalidInput {
+		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestPreviewInviteByTokenMapsNotFound(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{}, &fakeRoleRepo{}, nil, &fakeInviteRepo{
+		previewErr: repository.ErrNotFound,
+	})
+	_, err := svc.PreviewInviteByToken(context.Background(), "token")
+	if err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestGetBootstrapRequiresMembersReadPermission(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now().UTC()
 	svc := newTestService(&fakeMembershipRepo{
-		byPetUser: &repository.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersView: false}},
+		activeView: &repository.MemberView{
+			ID:             uuid.New(),
+			PetID:          uuid.New(),
+			UserID:         uuid.New(),
+			Status:         "ACTIVE",
+			IsPrimaryOwner: false,
+			Role:           repository.RoleView{ID: uuid.New(), Kind: "SYSTEM", Code: "OWNER", Title: "Owner"},
+			Policy:         model.Policy{MembersRead: false},
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		},
+	}, &fakeRoleRepo{}, nil, nil)
+
+	_, err := svc.GetBootstrap(context.Background(), uuid.New(), uuid.New())
+	if err != ErrForbidden {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+func TestListMembersRequiresMembersReadPermission(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	svc := newTestService(&fakeMembershipRepo{
+		byPetUser: &repository.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersRead: false}},
 		activeViews: []repository.MemberView{{
 			ID:             uuid.New(),
 			PetID:          uuid.New(),

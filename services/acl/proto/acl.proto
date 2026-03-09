@@ -19,35 +19,23 @@ enum RoleKind {
 enum Action {
   ACTION_UNSPECIFIED = 0;
   ACTION_PET_READ = 1;
-  ACTION_PET_EDIT = 2;
-  ACTION_PET_STATUS_CHANGE = 3;
-  ACTION_PET_DELETE = 4;
+  ACTION_PET_WRITE = 2;
   ACTION_LOG_READ = 5;
-  ACTION_LOG_CREATE = 6;
-  ACTION_LOG_EDIT = 7;
-  ACTION_LOG_DELETE = 8;
-  ACTION_LOG_ATTACHMENTS_READ = 9;
+  ACTION_LOG_WRITE = 6;
   ACTION_HEALTH_READ = 10;
   ACTION_HEALTH_WRITE = 11;
   ACTION_TASK_READ = 12;
   ACTION_TASK_WRITE = 13;
-  ACTION_MEMBERS_VIEW = 14;
-  ACTION_MEMBERS_INVITE = 15;
-  ACTION_MEMBERS_REMOVE = 16;
-  ACTION_MEMBERS_EDIT_PERMISSIONS = 17;
+  ACTION_MEMBERS_READ = 14;
+  ACTION_MEMBERS_WRITE = 15;
 }
 
 message Policy {
   bool pet_read = 1;
-  bool pet_edit = 2;
-  bool pet_status_change = 3;
-  bool pet_delete = 4;
+  bool pet_write = 2;
 
   bool log_read = 5;
-  bool log_create = 6;
-  bool log_edit = 7;
-  bool log_delete = 8;
-  bool log_attachments_read = 9;
+  bool log_write = 6;
 
   bool health_read = 10;
   bool health_write = 11;
@@ -55,10 +43,8 @@ message Policy {
   bool task_read = 12;
   bool task_write = 13;
 
-  bool members_view = 14;
-  bool members_invite = 15;
-  bool members_remove = 16;
-  bool members_edit_permissions = 17;
+  bool members_read = 14;
+  bool members_write = 15;
 }
 
 message Role {

@@ -11,8 +11,7 @@ import (
 )
 
 const ActionPetRead = "pet_read"
-const ActionPetEdit = "pet_edit"
-const ActionPetStatusChange = "pet_status_change"
+const ActionPetWrite = "pet_write"
 const MaxPetPhotoSizeBytes int64 = 20 * 1024 * 1024
 
 type ACLClient interface {
@@ -112,23 +111,16 @@ type ConfirmPetPhotoUploadParams struct {
 }
 
 type ACLPolicy struct {
-	PetRead                bool
-	PetEdit                bool
-	PetStatusChange        bool
-	PetDelete              bool
-	LogRead                bool
-	LogCreate              bool
-	LogEdit                bool
-	LogDelete              bool
-	LogAttachmentsRead     bool
-	HealthRead             bool
-	HealthWrite            bool
-	TaskRead               bool
-	TaskWrite              bool
-	MembersView            bool
-	MembersInvite          bool
-	MembersRemove          bool
-	MembersEditPermissions bool
+	PetRead      bool
+	PetWrite     bool
+	LogRead      bool
+	LogWrite     bool
+	HealthRead   bool
+	HealthWrite  bool
+	TaskRead     bool
+	TaskWrite    bool
+	MembersRead  bool
+	MembersWrite bool
 }
 
 type ACLRole struct {
@@ -308,7 +300,7 @@ func (s *PetService) UpdatePet(ctx context.Context, p UpdatePetParams) (*model.P
 		return nil, ErrInvalidInput
 	}
 
-	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetEdit)
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetWrite)
 	if err != nil {
 		if err == ErrNotFound {
 			return nil, ErrForbidden
@@ -362,7 +354,7 @@ func (s *PetService) ChangePetStatus(ctx context.Context, p ChangePetStatusParam
 		return nil, ErrInvalidInput
 	}
 
-	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetStatusChange)
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetWrite)
 	if err != nil {
 		if err == ErrNotFound {
 			return nil, ErrForbidden
@@ -414,7 +406,7 @@ func (s *PetService) InitPetPhotoUpload(ctx context.Context, p InitPetPhotoUploa
 		return uuid.Nil, UploadInfo{}, ErrInvalidInput
 	}
 
-	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetEdit)
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetWrite)
 	if err != nil {
 		if err == ErrNotFound {
 			return uuid.Nil, UploadInfo{}, ErrForbidden
@@ -448,7 +440,7 @@ func (s *PetService) ConfirmPetPhotoUpload(ctx context.Context, p ConfirmPetPhot
 		return nil, ErrInvalidInput
 	}
 
-	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetEdit)
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetWrite)
 	if err != nil {
 		if err == ErrNotFound {
 			return nil, ErrForbidden

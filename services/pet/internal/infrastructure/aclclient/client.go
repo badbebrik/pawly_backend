@@ -131,12 +131,8 @@ func mapAction(action string) aclpb.Action {
 	switch action {
 	case "pet_read":
 		return aclpb.Action_ACTION_PET_READ
-	case "pet_edit":
-		return aclpb.Action_ACTION_PET_EDIT
-	case "pet_status_change":
-		return aclpb.Action_ACTION_PET_STATUS_CHANGE
-	case "pet_delete":
-		return aclpb.Action_ACTION_PET_DELETE
+	case "pet_write":
+		return aclpb.Action_ACTION_PET_WRITE
 	default:
 		return aclpb.Action_ACTION_UNSPECIFIED
 	}
@@ -169,23 +165,16 @@ func mapPolicy(p *aclpb.Policy) service.ACLPolicy {
 		return service.ACLPolicy{}
 	}
 	return service.ACLPolicy{
-		PetRead:                p.GetPetRead(),
-		PetEdit:                p.GetPetEdit(),
-		PetStatusChange:        p.GetPetStatusChange(),
-		PetDelete:              p.GetPetDelete(),
-		LogRead:                p.GetLogRead(),
-		LogCreate:              p.GetLogCreate(),
-		LogEdit:                p.GetLogEdit(),
-		LogDelete:              p.GetLogDelete(),
-		LogAttachmentsRead:     p.GetLogAttachmentsRead(),
-		HealthRead:             p.GetHealthRead(),
-		HealthWrite:            p.GetHealthWrite(),
-		TaskRead:               p.GetTaskRead(),
-		TaskWrite:              p.GetTaskWrite(),
-		MembersView:            p.GetMembersView(),
-		MembersInvite:          p.GetMembersInvite(),
-		MembersRemove:          p.GetMembersRemove(),
-		MembersEditPermissions: p.GetMembersEditPermissions(),
+		PetRead:      p.GetPetRead(),
+		PetWrite:     p.GetPetWrite(),
+		LogRead:      p.GetLogRead(),
+		LogWrite:     p.GetLogWrite(),
+		HealthRead:   p.GetHealthRead(),
+		HealthWrite:  p.GetHealthWrite(),
+		TaskRead:     p.GetTaskRead(),
+		TaskWrite:    p.GetTaskWrite(),
+		MembersRead:  p.GetMembersRead(),
+		MembersWrite: p.GetMembersWrite(),
 	}
 }
 

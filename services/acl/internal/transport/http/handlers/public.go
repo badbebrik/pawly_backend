@@ -42,6 +42,10 @@ type acceptInviteByTokenRequest struct {
 	Token string `json:"token"`
 }
 
+type previewInviteByTokenRequest struct {
+	Token string `json:"token"`
+}
+
 func NewPublicHandlers(svc *service.ACLService) *PublicHandlers {
 	return &PublicHandlers{svc: svc}
 }
@@ -65,6 +69,52 @@ func (h *PublicHandlers) GetMyAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_id": petID.String(),
 		"member": memberToDTO(member),
+	})
+}
+
+func (h *PublicHandlers) GetBootstrap(w http.ResponseWriter, r *http.Request) {
+	petID, userID, ok := parsePetAndUser(w, r)
+	if !ok {
+		return
+	}
+
+	res, err := h.svc.GetBootstrap(r.Context(), petID, userID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	members := make([]any, 0, len(res.Members))
+	for i := range res.Members {
+		members = append(members, memberToDTO(&res.Members[i]))
+	}
+
+	roles := make([]any, 0, len(res.Roles))
+	for i := range res.Roles {
+		roles = append(roles, roleToDTO(res.Roles[i]))
+	}
+
+	presets := make([]any, 0, len(res.Presets))
+	for i := range res.Presets {
+		presets = append(presets, presetToDTO(res.Presets[i]))
+	}
+
+	invites := make([]any, 0, len(res.Invites))
+	for i := range res.Invites {
+		invites = append(invites, inviteToDTO(res.Invites[i], ""))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"pet_id": petID.String(),
+		"me":     memberToDTO(res.Me),
+		"capabilities": map[string]any{
+			"members_read":  res.CanMembersRead,
+			"members_write": res.CanMembersWrite,
+		},
+		"members": members,
+		"roles":   roles,
+		"presets": presets,
+		"invites": invites,
 	})
 }
 
@@ -236,18 +286,7 @@ func (h *PublicHandlers) ListPresets(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]any, 0, len(items))
 	for _, item := range items {
-		var roleCode any
-		if item.RoleCode == "" {
-			roleCode = nil
-		} else {
-			roleCode = item.RoleCode
-		}
-		out = append(out, map[string]any{
-			"id":        item.ID.String(),
-			"name":      item.Name,
-			"role_code": roleCode,
-			"policy":    item.Policy,
-		})
+		out = append(out, presetToDTO(item))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
@@ -391,6 +430,26 @@ func (h *PublicHandlers) AcceptInviteByToken(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (h *PublicHandlers) PreviewInviteByToken(w http.ResponseWriter, r *http.Request) {
+	var req previewInviteByTokenRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	invite, err := h.svc.PreviewInviteByToken(r.Context(), req.Token)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"invite": inviteToDTO(*invite, ""),
+	})
+}
+
 func parsePetAndUser(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {
 	petID, err := uuid.Parse(chi.URLParam(r, "pet_id"))
 	if err != nil {
@@ -513,5 +572,21 @@ func inviteToDTO(inv repository.InviteView, deeplink string) map[string]any {
 		"created_at":          inv.CreatedAt.UTC().Format(time.RFC3339),
 		"consumed_at":         consumedAt,
 		"consumed_by_user_id": consumedBy,
+	}
+}
+
+func presetToDTO(item repository.PermissionPresetView) map[string]any {
+	var roleCode any
+	if item.RoleCode == "" {
+		roleCode = nil
+	} else {
+		roleCode = item.RoleCode
+	}
+
+	return map[string]any{
+		"id":        item.ID.String(),
+		"name":      item.Name,
+		"role_code": roleCode,
+		"policy":    item.Policy,
 	}
 }

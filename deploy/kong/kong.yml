@@ -54,6 +54,23 @@ services:
           - /v1/pets
         strip_path: false
 
+  - name: health-service
+    url: http://health:8088
+    routes:
+      - name: health-routes
+        paths:
+          - ~/v1/pets/.+/logs/bootstrap$
+          - ~/v1/pets/.+/logs$
+          - ~/v1/pets/.+/logs/.+$
+          - ~/v1/pets/.+/log-types$
+          - ~/v1/pets/.+/log-types/.+$
+          - ~/v1/pets/.+/metrics$
+          - ~/v1/pets/.+/metrics/.+$
+          - ~/v1/pets/.+/analytics/metrics$
+          - ~/v1/pets/.+/analytics/metrics/.+/series$
+        regex_priority: 200
+        strip_path: false
+
   - name: notification-service
     url: http://notification:8083
     routes:
@@ -100,6 +117,13 @@ plugins:
         - exp
       secret_is_base64: false
   - name: jwt
+    route: health-routes
+    config:
+      key_claim_name: iss
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+  - name: jwt
     route: notification-routes
     config:
       key_claim_name: iss
@@ -135,6 +159,15 @@ plugins:
           end
   - name: pre-function
     route: pet-routes
+    config:
+      access:
+        - |
+          local jwt = ngx.ctx.authenticated_jwt_token
+          if jwt and jwt.sub then
+            ngx.req.set_header("X-User-ID", jwt.sub)
+          end
+  - name: pre-function
+    route: health-routes
     config:
       access:
         - |

@@ -1,0 +1,36 @@
+package config
+
+import "os"
+
+type Config struct {
+	AppPort string
+
+	PostgresUser     string
+	PostgresPassword string
+	PostgresDB       string
+	PostgresHost     string
+	PostgresPort     string
+
+	ACLGRPCAddr  string
+	FileGRPCAddr string
+}
+
+func Load() *Config {
+	return &Config{
+		AppPort:          getEnv("APP_PORT", "8088"),
+		PostgresUser:     getEnv("POSTGRES_USER", "health_user"),
+		PostgresPassword: getEnv("POSTGRES_PASSWORD", "supersecret"),
+		PostgresDB:       getEnv("POSTGRES_DB", "health_db"),
+		PostgresHost:     getEnv("POSTGRES_HOST", "localhost"),
+		PostgresPort:     getEnv("POSTGRES_PORT", "5437"),
+		ACLGRPCAddr:      getEnv("ACL_GRPC_ADDR", "localhost:50057"),
+		FileGRPCAddr:     getEnv("FILE_GRPC_ADDR", "localhost:50056"),
+	}
+}
+
+func getEnv(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
+	}
+	return fallback
+}

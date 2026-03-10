@@ -84,6 +84,23 @@ services:
       timeout: 3s
       retries: 20
 
+  health_postgres:
+    image: postgres:16
+    container_name: health_postgres
+    environment:
+      POSTGRES_USER: health_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: health_db
+    ports:
+      - "5437:5432"
+    volumes:
+      - health_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U health_user -d health_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:7
     container_name: auth_redis
@@ -336,6 +353,33 @@ services:
       timeout: 3s
       retries: 20
 
+  health:
+    build:
+      context: ../services/health
+    container_name: pawly_health
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8088"
+      POSTGRES_USER: health_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: health_db
+      POSTGRES_HOST: health_postgres
+      POSTGRES_PORT: "5432"
+      ACL_GRPC_ADDR: acl:50057
+      FILE_GRPC_ADDR: file:50056
+    depends_on:
+      health_postgres:
+        condition: service_healthy
+      acl:
+        condition: service_started
+      file:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8088/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
   kong:
     image: kong:3.6
     container_name: pawly_kong
@@ -360,6 +404,8 @@ services:
         condition: service_healthy
       pet:
         condition: service_healthy
+      health:
+        condition: service_healthy
       notification:
         condition: service_healthy
 
@@ -369,6 +415,7 @@ volumes:
   acl_postgres_data:
   pet_postgres_data:
   catalog_postgres_data:
+  health_postgres_data:
   redis_data:
   rabbitmq_data:
   minio_data:

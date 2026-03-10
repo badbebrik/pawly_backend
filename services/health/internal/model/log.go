@@ -64,15 +64,23 @@ type LogListItem struct {
 }
 
 type Metric struct {
-	ID        uuid.UUID
-	Scope     string
-	PetID     *uuid.UUID
-	Code      *string
-	Name      string
-	InputKind string
-	UnitCode  *string
-	MinValue  *float64
-	MaxValue  *float64
+	ID              uuid.UUID
+	Scope           string
+	PetID           *uuid.UUID
+	Code            *string
+	Name            string
+	InputKind       string
+	UnitCode        *string
+	MinValue        *float64
+	MaxValue        *float64
+	CreatedAt       time.Time
+	CreatedByUserID *uuid.UUID
+	UpdatedAt       time.Time
+	UpdatedByUserID *uuid.UUID
+	RowVersion      int
+	DeletedAt       *time.Time
+	DeletedByUserID *uuid.UUID
+	Usage           MetricUsage
 }
 
 type LogType struct {
@@ -82,9 +90,35 @@ type LogType struct {
 	Code               *string
 	Name               string
 	MetricRequirements []LogTypeMetricRequirement
+	CreatedAt          time.Time
+	CreatedByUserID    *uuid.UUID
+	UpdatedAt          time.Time
+	UpdatedByUserID    *uuid.UUID
+	RowVersion         int
+	DeletedAt          *time.Time
+	DeletedByUserID    *uuid.UUID
 }
 
 type LogTypeMetricRequirement struct {
 	MetricID   uuid.UUID `json:"metric_id"`
 	IsRequired bool      `json:"is_required"`
+}
+
+type MetricUsage struct {
+	LogTypesCount int
+	LogsCount     int
+}
+
+type LogComposerBootstrap struct {
+	Permissions    BootstrapPermissions
+	RecentLogTypes []LogType
+	SystemLogTypes []LogType
+	CustomLogTypes []LogType
+	SystemMetrics  []Metric
+	CustomMetrics  []Metric
+}
+
+type BootstrapPermissions struct {
+	LogRead  bool
+	LogWrite bool
 }

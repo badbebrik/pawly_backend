@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"health/internal/model"
@@ -403,39 +402,33 @@ func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInpu
 
 func (r *LogRepository) GetLogTypeByID(ctx context.Context, petID uuid.UUID, logTypeID uuid.UUID) (*model.LogType, error) {
 	const query = `
-		SELECT id, scope, pet_id, code, name, metric_requirements
+		SELECT
+			id,
+			scope,
+			pet_id,
+			code,
+			name,
+			metric_requirements,
+			created_at,
+			created_by_user_id,
+			updated_at,
+			updated_by_user_id,
+			row_version,
+			deleted_at,
+			deleted_by_user_id
 		FROM log_types
 		WHERE id = $1
-		  AND deleted_at IS NULL
 		  AND (scope = 'SYSTEM' OR pet_id = $2)
+		  AND deleted_at IS NULL
 	`
-	var (
-		item     model.LogType
-		reqBytes []byte
-	)
-	err := r.db.QueryRow(ctx, query, logTypeID, petID).Scan(
-		&item.ID,
-		&item.Scope,
-		&item.PetID,
-		&item.Code,
-		&item.Name,
-		&reqBytes,
-	)
+	item, err := scanLogType(r.db.QueryRow(ctx, query, logTypeID, petID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repo.ErrNotFound
 		}
 		return nil, err
 	}
-	if len(reqBytes) > 0 {
-		if err := json.Unmarshal(reqBytes, &item.MetricRequirements); err != nil {
-			return nil, err
-		}
-	}
-	if item.MetricRequirements == nil {
-		item.MetricRequirements = []model.LogTypeMetricRequirement{}
-	}
-	return &item, nil
+	return item, nil
 }
 
 func (r *LogRepository) GetMetricsByIDs(ctx context.Context, petID uuid.UUID, metricIDs []uuid.UUID) (map[uuid.UUID]model.Metric, error) {

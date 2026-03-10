@@ -43,8 +43,97 @@ type deleteLogRequest struct {
 	RowVersion int `json:"row_version"`
 }
 
+type logTypeMetricRequirementRequest struct {
+	MetricID   string `json:"metric_id"`
+	IsRequired bool   `json:"is_required"`
+}
+
+type createLogTypeRequest struct {
+	Name               string                            `json:"name"`
+	MetricRequirements []logTypeMetricRequirementRequest `json:"metric_requirements"`
+}
+
+type updateLogTypeRequest struct {
+	Name               string                            `json:"name"`
+	MetricRequirements []logTypeMetricRequirementRequest `json:"metric_requirements"`
+	RowVersion         int                               `json:"row_version"`
+}
+
+type createMetricRequest struct {
+	Name      string   `json:"name"`
+	InputKind string   `json:"input_kind"`
+	UnitCode  *string  `json:"unit_code"`
+	MinValue  *float64 `json:"min_value"`
+	MaxValue  *float64 `json:"max_value"`
+}
+
+type updateMetricRequest struct {
+	Name       string   `json:"name"`
+	InputKind  string   `json:"input_kind"`
+	UnitCode   *string  `json:"unit_code"`
+	MinValue   *float64 `json:"min_value"`
+	MaxValue   *float64 `json:"max_value"`
+	RowVersion int      `json:"row_version"`
+}
+
 func (h *Handlers) GetLogsBootstrap(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	includeCatalog := true
+	if raw := r.URL.Query().Get("include_catalog"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid include_catalog")
+			return
+		}
+		includeCatalog = v
+	}
+
+	data, err := h.svc.GetLogsBootstrap(r.Context(), service.GetBootstrapParams{
+		UserID:         userID,
+		PetID:          petID,
+		IncludeCatalog: includeCatalog,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	recent := make([]any, 0, len(data.RecentLogTypes))
+	for i := range data.RecentLogTypes {
+		recent = append(recent, logTypeToDTO(data.RecentLogTypes[i]))
+	}
+	systemTypes := make([]any, 0, len(data.SystemLogTypes))
+	for i := range data.SystemLogTypes {
+		systemTypes = append(systemTypes, logTypeToDTO(data.SystemLogTypes[i]))
+	}
+	customTypes := make([]any, 0, len(data.CustomLogTypes))
+	for i := range data.CustomLogTypes {
+		customTypes = append(customTypes, logTypeToDTO(data.CustomLogTypes[i]))
+	}
+	systemMetrics := make([]any, 0, len(data.SystemMetrics))
+	for i := range data.SystemMetrics {
+		systemMetrics = append(systemMetrics, metricToDTO(data.SystemMetrics[i]))
+	}
+	customMetrics := make([]any, 0, len(data.CustomMetrics))
+	for i := range data.CustomMetrics {
+		customMetrics = append(customMetrics, metricToDTO(data.CustomMetrics[i]))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"permissions": map[string]any{
+			"log_read":  data.Permissions.LogRead,
+			"log_write": data.Permissions.LogWrite,
+		},
+		"recent_log_types": recent,
+		"system_log_types": systemTypes,
+		"custom_log_types": customTypes,
+		"system_metrics":   systemMetrics,
+		"custom_metrics":   customMetrics,
+	})
 }
 
 func (h *Handlers) GetLogs(w http.ResponseWriter, r *http.Request) {
@@ -326,25 +415,313 @@ func (h *Handlers) DeleteLog(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handlers) GetLogTypes(w http.ResponseWriter, r *http.Request) { h.notImplemented(w) }
+func (h *Handlers) GetLogTypes(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	includeArchived := false
+	if raw := r.URL.Query().Get("include_archived"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid include_archived")
+			return
+		}
+		includeArchived = v
+	}
+	onlyWithMetrics := false
+	if raw := r.URL.Query().Get("only_with_metrics"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid only_with_metrics")
+			return
+		}
+		onlyWithMetrics = v
+	}
+
+	items, err := h.svc.ListLogTypes(r.Context(), service.ListLogTypesParams{
+		UserID:          userID,
+		PetID:           petID,
+		Scope:           r.URL.Query().Get("scope"),
+		Q:               r.URL.Query().Get("q"),
+		IncludeArchived: includeArchived,
+		OnlyWithMetrics: onlyWithMetrics,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	out := make([]any, 0, len(items))
+	for i := range items {
+		out = append(out, logTypeToDTO(items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
 func (h *Handlers) CreateLogType(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	var req createLogTypeRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+	metricRequirements, err := parseLogTypeRequirements(req.MetricRequirements)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid metric_requirements")
+		return
+	}
+
+	item, err := h.svc.CreateLogType(r.Context(), service.CreateLogTypeParams{
+		UserID:             userID,
+		PetID:              petID,
+		Name:               req.Name,
+		MetricRequirements: metricRequirements,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, logTypeToDTO(*item))
 }
 func (h *Handlers) UpdateLogType(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	logTypeID, err := uuid.Parse(chi.URLParam(r, "log_type_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid log_type_id")
+		return
+	}
+
+	var req updateLogTypeRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+	if req.RowVersion <= 0 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "row_version is required")
+		return
+	}
+	metricRequirements, err := parseLogTypeRequirements(req.MetricRequirements)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid metric_requirements")
+		return
+	}
+
+	item, err := h.svc.UpdateLogType(r.Context(), service.UpdateLogTypeParams{
+		UserID:             userID,
+		PetID:              petID,
+		LogTypeID:          logTypeID,
+		RowVersion:         req.RowVersion,
+		Name:               req.Name,
+		MetricRequirements: metricRequirements,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, logTypeToDTO(*item))
 }
 func (h *Handlers) DeleteLogType(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	logTypeID, err := uuid.Parse(chi.URLParam(r, "log_type_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid log_type_id")
+		return
+	}
+
+	var req deleteLogRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+	if req.RowVersion <= 0 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "row_version is required")
+		return
+	}
+
+	if err := h.svc.DeleteLogType(r.Context(), service.DeleteLogTypeParams{
+		UserID:     userID,
+		PetID:      petID,
+		LogTypeID:  logTypeID,
+		RowVersion: req.RowVersion,
+	}); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
-func (h *Handlers) GetMetrics(w http.ResponseWriter, r *http.Request) { h.notImplemented(w) }
+func (h *Handlers) GetMetrics(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	includeArchived := false
+	if raw := r.URL.Query().Get("include_archived"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid include_archived")
+			return
+		}
+		includeArchived = v
+	}
+	onlyWithData := false
+	if raw := r.URL.Query().Get("only_with_data"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid only_with_data")
+			return
+		}
+		onlyWithData = v
+	}
+	onlyWithUsage := false
+	if raw := r.URL.Query().Get("only_with_usage"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid only_with_usage")
+			return
+		}
+		onlyWithUsage = v
+	}
+
+	items, err := h.svc.ListMetrics(r.Context(), service.ListMetricsParams{
+		UserID:          userID,
+		PetID:           petID,
+		Scope:           r.URL.Query().Get("scope"),
+		Q:               r.URL.Query().Get("q"),
+		IncludeArchived: includeArchived,
+		OnlyWithData:    onlyWithData,
+		OnlyWithUsage:   onlyWithUsage,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	out := make([]any, 0, len(items))
+	for i := range items {
+		out = append(out, metricToDTO(items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
 func (h *Handlers) CreateMetric(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	var req createMetricRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	item, err := h.svc.CreateMetric(r.Context(), service.CreateMetricParams{
+		UserID:    userID,
+		PetID:     petID,
+		Name:      req.Name,
+		InputKind: req.InputKind,
+		UnitCode:  req.UnitCode,
+		MinValue:  req.MinValue,
+		MaxValue:  req.MaxValue,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, metricToDTO(*item))
 }
 func (h *Handlers) UpdateMetric(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	metricID, err := uuid.Parse(chi.URLParam(r, "metric_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid metric_id")
+		return
+	}
+
+	var req updateMetricRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+	if req.RowVersion <= 0 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "row_version is required")
+		return
+	}
+
+	item, err := h.svc.UpdateMetric(r.Context(), service.UpdateMetricParams{
+		UserID:     userID,
+		PetID:      petID,
+		MetricID:   metricID,
+		RowVersion: req.RowVersion,
+		Name:       req.Name,
+		InputKind:  req.InputKind,
+		UnitCode:   req.UnitCode,
+		MinValue:   req.MinValue,
+		MaxValue:   req.MaxValue,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, metricToDTO(*item))
 }
 func (h *Handlers) DeleteMetric(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	metricID, err := uuid.Parse(chi.URLParam(r, "metric_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid metric_id")
+		return
+	}
+
+	var req deleteLogRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+	if req.RowVersion <= 0 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "row_version is required")
+		return
+	}
+
+	if err := h.svc.DeleteMetric(r.Context(), service.DeleteMetricParams{
+		UserID:     userID,
+		PetID:      petID,
+		MetricID:   metricID,
+		RowVersion: req.RowVersion,
+	}); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 func (h *Handlers) GetAnalyticsMetrics(w http.ResponseWriter, r *http.Request) {
 	h.notImplemented(w)
@@ -409,6 +786,21 @@ func parseMetricValues(in []metricValueRequest) ([]service.CreateOrUpdateMetricV
 		out = append(out, service.CreateOrUpdateMetricValue{
 			MetricID: id,
 			ValueNum: in[i].ValueNum,
+		})
+	}
+	return out, nil
+}
+
+func parseLogTypeRequirements(in []logTypeMetricRequirementRequest) ([]service.LogTypeRequirementInput, error) {
+	out := make([]service.LogTypeRequirementInput, 0, len(in))
+	for i := range in {
+		id, err := uuid.Parse(in[i].MetricID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, service.LogTypeRequirementInput{
+			MetricID:   id,
+			IsRequired: in[i].IsRequired,
 		})
 	}
 	return out, nil
@@ -628,6 +1020,62 @@ func logToDTO(item *model.Log) map[string]any {
 	}
 }
 
+func logTypeToDTO(item model.LogType) map[string]any {
+	metricRequirements := make([]any, 0, len(item.MetricRequirements))
+	for i := range item.MetricRequirements {
+		req := item.MetricRequirements[i]
+		metricRequirements = append(metricRequirements, map[string]any{
+			"metric_id":    req.MetricID.String(),
+			"metric_name":  nil,
+			"metric_scope": nil,
+			"input_kind":   nil,
+			"unit_code":    nil,
+			"min_value":    nil,
+			"max_value":    nil,
+			"is_required":  req.IsRequired,
+		})
+	}
+
+	return map[string]any{
+		"id":                  item.ID.String(),
+		"scope":               item.Scope,
+		"pet_id":              uuidOrNil(item.PetID),
+		"code":                strOrNil(item.Code),
+		"name":                item.Name,
+		"metric_requirements": metricRequirements,
+		"created_at":          item.CreatedAt.UTC().Format(time.RFC3339),
+		"created_by_user_id":  uuidOrNil(item.CreatedByUserID),
+		"updated_at":          item.UpdatedAt.UTC().Format(time.RFC3339),
+		"updated_by_user_id":  uuidOrNil(item.UpdatedByUserID),
+		"row_version":         item.RowVersion,
+		"is_archived":         item.DeletedAt != nil,
+	}
+}
+
+func metricToDTO(item model.Metric) map[string]any {
+	return map[string]any{
+		"id":                 item.ID.String(),
+		"scope":              item.Scope,
+		"pet_id":             uuidOrNil(item.PetID),
+		"code":               strOrNil(item.Code),
+		"name":               item.Name,
+		"input_kind":         item.InputKind,
+		"unit_code":          strOrNil(item.UnitCode),
+		"min_value":          float64OrNil(item.MinValue),
+		"max_value":          float64OrNil(item.MaxValue),
+		"created_at":         item.CreatedAt.UTC().Format(time.RFC3339),
+		"created_by_user_id": uuidOrNil(item.CreatedByUserID),
+		"updated_at":         item.UpdatedAt.UTC().Format(time.RFC3339),
+		"updated_by_user_id": uuidOrNil(item.UpdatedByUserID),
+		"row_version":        item.RowVersion,
+		"is_archived":        item.DeletedAt != nil,
+		"usage": map[string]any{
+			"log_types_count": item.Usage.LogTypesCount,
+			"logs_count":      item.Usage.LogsCount,
+		},
+	}
+}
+
 func strOrNil(v *string) any {
 	if v == nil {
 		return nil
@@ -640,4 +1088,11 @@ func uuidOrNil(v *uuid.UUID) any {
 		return nil
 	}
 	return v.String()
+}
+
+func float64OrNil(v *float64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }

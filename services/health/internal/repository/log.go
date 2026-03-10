@@ -149,6 +149,14 @@ type ArchiveMetricInput struct {
 	DeletedByUserID uuid.UUID
 }
 
+type ListAnalyticsMetricsInput struct {
+	PetID    uuid.UUID
+	Q        string
+	DateFrom *time.Time
+	Source   *string
+	Limit    int
+}
+
 type LogRepository interface {
 	GetLog(ctx context.Context, petID, logID uuid.UUID) (*model.Log, error)
 	ListLogs(ctx context.Context, in ListLogsInput) (ListLogsOutput, error)
@@ -168,4 +176,5 @@ type LogRepository interface {
 	UpdateMetric(ctx context.Context, in UpdateMetricInput) (*model.Metric, error)
 	ArchiveMetric(ctx context.Context, in ArchiveMetricInput) error
 	HasMetricValuesOutOfRange(ctx context.Context, petID, metricID uuid.UUID, minValue, maxValue *float64) (bool, error)
+	ListAnalyticsMetrics(ctx context.Context, in ListAnalyticsMetricsInput) ([]model.AnalyticsMetricSummary, error)
 }

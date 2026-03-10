@@ -724,7 +724,35 @@ func (h *Handlers) DeleteMetric(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 func (h *Handlers) GetAnalyticsMetrics(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w)
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	limit := parseIntOrDefault(r.URL.Query().Get("limit"), 100)
+	if limit < 1 || limit > 500 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid limit")
+		return
+	}
+
+	items, err := h.svc.ListAnalyticsMetrics(r.Context(), service.ListAnalyticsMetricsParams{
+		UserID: userID,
+		PetID:  petID,
+		Q:      r.URL.Query().Get("q"),
+		Range:  r.URL.Query().Get("range"),
+		Source: r.URL.Query().Get("source"),
+		Limit:  limit,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	out := make([]any, 0, len(items))
+	for i := range items {
+		out = append(out, analyticsMetricSummaryToDTO(items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 func (h *Handlers) GetMetricSeries(w http.ResponseWriter, r *http.Request) { h.notImplemented(w) }
 
@@ -1073,6 +1101,28 @@ func metricToDTO(item model.Metric) map[string]any {
 			"log_types_count": item.Usage.LogTypesCount,
 			"logs_count":      item.Usage.LogsCount,
 		},
+	}
+}
+
+func analyticsMetricSummaryToDTO(item model.AnalyticsMetricSummary) map[string]any {
+	used := make([]any, 0, len(item.UsedInLogTypes))
+	for i := range item.UsedInLogTypes {
+		used = append(used, map[string]any{
+			"log_type_id":   item.UsedInLogTypes[i].LogTypeID.String(),
+			"log_type_name": item.UsedInLogTypes[i].LogTypeName,
+		})
+	}
+	return map[string]any{
+		"metric_id":         item.MetricID.String(),
+		"metric_name":       item.MetricName,
+		"metric_scope":      item.MetricScope,
+		"input_kind":        item.InputKind,
+		"unit_code":         strOrNil(item.UnitCode),
+		"points_count":      item.PointsCount,
+		"first_occurred_at": item.FirstOccurredAt.UTC().Format(time.RFC3339),
+		"last_occurred_at":  item.LastOccurredAt.UTC().Format(time.RFC3339),
+		"last_value_num":    item.LastValueNum,
+		"used_in_log_types": used,
 	}
 }
 

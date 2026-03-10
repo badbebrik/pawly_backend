@@ -122,3 +122,21 @@ type BootstrapPermissions struct {
 	LogRead  bool
 	LogWrite bool
 }
+
+type AnalyticsMetricSummary struct {
+	MetricID        uuid.UUID
+	MetricName      string
+	MetricScope     string
+	InputKind       string
+	UnitCode        *string
+	PointsCount     int
+	FirstOccurredAt time.Time
+	LastOccurredAt  time.Time
+	LastValueNum    float64
+	UsedInLogTypes  []AnalyticsUsedLogType
+}
+
+type AnalyticsUsedLogType struct {
+	LogTypeID   uuid.UUID
+	LogTypeName string
+}

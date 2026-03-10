@@ -22,7 +22,7 @@ func (a *App) setupRoutes() http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	pub := handlers.NewPublicHandlers(a.aclSvc, a.profile)
+	pub := handlers.NewPublicHandlers(a.aclSvc, a.profile, a.cfg.InviteDeeplinkBase)
 	internal := handlers.NewInternalHandlers(a.aclSvc)
 
 	r.Group(func(r chi.Router) {
@@ -42,6 +42,7 @@ func (a *App) setupRoutes() http.Handler {
 
 		r.Post("/v1/pets/{pet_id}/acl/invites", pub.CreateInvite)
 		r.Get("/v1/pets/{pet_id}/acl/invites", pub.ListInvites)
+		r.Post("/v1/pets/{pet_id}/acl/invites/{invite_id}/regenerate-link", pub.RegenerateInviteLink)
 		r.Delete("/v1/pets/{pet_id}/acl/invites/{invite_id}", pub.RevokeInvite)
 		r.Post("/v1/acl/invites/accept-by-code", pub.AcceptInviteByCode)
 		r.Post("/v1/acl/invites/accept-by-token", pub.AcceptInviteByToken)

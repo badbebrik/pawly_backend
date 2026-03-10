@@ -14,6 +14,7 @@ type InviteCreateInput struct {
 	CreatedByUserID uuid.UUID
 	Status          string
 	TokenHash       string
+	TokenValue      string
 	Code            string
 	ExpiresAt       time.Time
 	RoleID          uuid.UUID
@@ -25,6 +26,7 @@ type InviteView struct {
 	ID               uuid.UUID
 	PetID            uuid.UUID
 	Status           string
+	TokenValue       string
 	Code             string
 	ExpiresAt        time.Time
 	Role             RoleView
@@ -42,5 +44,6 @@ type InviteRepository interface {
 	GetActiveByTokenHash(ctx context.Context, tokenHash string) (*InviteView, error)
 	AcceptByCode(ctx context.Context, code string, acceptedByUserID uuid.UUID) (*MemberView, uuid.UUID, error)
 	AcceptByTokenHash(ctx context.Context, tokenHash string, acceptedByUserID uuid.UUID) (*MemberView, uuid.UUID, error)
+	RotateTokenHashByID(ctx context.Context, petID, inviteID uuid.UUID, tokenHash, tokenValue string) (*InviteView, error)
 	RevokeByID(ctx context.Context, petID, inviteID uuid.UUID) error
 }

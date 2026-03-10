@@ -95,6 +95,11 @@ type CreateInviteResult struct {
 	DeeplinkURL string
 }
 
+type RegenerateInviteLinkResult struct {
+	Invite      *repository.InviteView
+	DeeplinkURL string
+}
+
 type AcceptInviteResult struct {
 	PetID  uuid.UUID
 	Member *repository.MemberView
@@ -404,6 +409,7 @@ func (s *ACLService) CreateInvite(ctx context.Context, p CreateInviteParams) (*C
 			CreatedByUserID: p.CreatedByUserID,
 			Status:          "ACTIVE",
 			TokenHash:       sha256Hex(rawToken),
+			TokenValue:      rawToken,
 			Code:            code,
 			ExpiresAt:       time.Now().UTC().Add(s.opts.InviteTTL),
 			RoleID:          p.RoleID,
@@ -422,6 +428,49 @@ func (s *ACLService) CreateInvite(ctx context.Context, p CreateInviteParams) (*C
 	}
 
 	return &CreateInviteResult{
+		Invite:      invite,
+		DeeplinkURL: s.opts.InviteDeeplinkBase + rawToken,
+	}, nil
+}
+
+func (s *ACLService) RegenerateInviteLink(ctx context.Context, petID, requesterID, inviteID uuid.UUID) (*RegenerateInviteLinkResult, error) {
+	allowed, err := s.Check(ctx, CheckParams{
+		PetID:  petID,
+		UserID: requesterID,
+		Action: string(ActionMembersWrite),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	var (
+		invite   *repository.InviteView
+		rawToken string
+	)
+	for i := 0; i < 5; i++ {
+		rawToken, err = generateToken(32)
+		if err != nil {
+			return nil, err
+		}
+		invite, err = s.invites.RotateTokenHashByID(ctx, petID, inviteID, sha256Hex(rawToken), rawToken)
+		if err == nil {
+			break
+		}
+		if err != repository.ErrConflict {
+			if err == repository.ErrNotFound {
+				return nil, ErrNotFound
+			}
+			return nil, err
+		}
+	}
+	if invite == nil {
+		return nil, ErrConflict
+	}
+
+	return &RegenerateInviteLinkResult{
 		Invite:      invite,
 		DeeplinkURL: s.opts.InviteDeeplinkBase + rawToken,
 	}, nil

@@ -30,11 +30,11 @@ func (r *InviteRepository) Create(ctx context.Context, in repository.InviteCreat
 	const insertQ = `
 		INSERT INTO pet_invites (
 			id, pet_id, created_by_user_id, status, token_hash,
-			code, expires_at, role_id, policy, base_preset_id,
+			token_value, code, expires_at, role_id, policy, base_preset_id,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9, $10,
+			$6, $7, $8, $9, $10, $11,
 			NOW(), NOW()
 		)
 	`
@@ -45,6 +45,7 @@ func (r *InviteRepository) Create(ctx context.Context, in repository.InviteCreat
 		in.CreatedByUserID,
 		in.Status,
 		in.TokenHash,
+		in.TokenValue,
 		in.Code,
 		in.ExpiresAt,
 		in.RoleID,
@@ -65,7 +66,7 @@ func (r *InviteRepository) Create(ctx context.Context, in repository.InviteCreat
 func (r *InviteRepository) ListActiveByPet(ctx context.Context, petID uuid.UUID) ([]repository.InviteView, error) {
 	const query = `
 		SELECT
-			i.id, i.pet_id, i.status, i.code, i.expires_at,
+			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
 			i.base_preset_id, i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
 			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
@@ -101,7 +102,7 @@ func (r *InviteRepository) ListActiveByPet(ctx context.Context, petID uuid.UUID)
 func (r *InviteRepository) GetActiveByTokenHash(ctx context.Context, tokenHash string) (*repository.InviteView, error) {
 	const query = `
 		SELECT
-			i.id, i.pet_id, i.status, i.code, i.expires_at,
+			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
 			i.base_preset_id, i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
 			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
@@ -127,7 +128,7 @@ func (r *InviteRepository) GetActiveByTokenHash(ctx context.Context, tokenHash s
 func (r *InviteRepository) getByID(ctx context.Context, id uuid.UUID) (*repository.InviteView, error) {
 	const query = `
 		SELECT
-			i.id, i.pet_id, i.status, i.code, i.expires_at,
+			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
 			i.base_preset_id, i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
 			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
@@ -174,6 +175,45 @@ func (r *InviteRepository) RevokeByID(ctx context.Context, petID, inviteID uuid.
 	return nil
 }
 
+func (r *InviteRepository) RotateTokenHashByID(ctx context.Context, petID, inviteID uuid.UUID, tokenHash, tokenValue string) (*repository.InviteView, error) {
+	const updateQ = `
+		UPDATE pet_invites
+		SET token_hash = $3,
+		    token_value = $4,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND pet_id = $2
+		  AND status = 'ACTIVE'
+		  AND expires_at > NOW()
+		RETURNING id
+	`
+
+	var updatedID uuid.UUID
+	err := r.db.QueryRow(ctx, updateQ, inviteID, petID, tokenHash, tokenValue).Scan(&updatedID)
+	if err == nil {
+		return r.getByID(ctx, updatedID)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, repository.ErrConflict
+		}
+		return nil, err
+	}
+
+	state, exists, stateErr := r.getInviteStateByIDAndPet(ctx, inviteID, petID)
+	if stateErr != nil {
+		return nil, stateErr
+	}
+	if !exists {
+		return nil, repository.ErrNotFound
+	}
+	if state != "ACTIVE" {
+		return nil, repository.ErrConflict
+	}
+	return nil, repository.ErrConflict
+}
+
 func (r *InviteRepository) acceptTx(ctx context.Context, key string, value string, acceptedByUserID uuid.UUID) (*repository.MemberView, uuid.UUID, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -215,7 +255,7 @@ func (r *InviteRepository) acceptTx(ctx context.Context, key string, value strin
 func (r *InviteRepository) selectInviteForUpdate(ctx context.Context, tx pgx.Tx, key string, value string) (*repository.InviteView, error) {
 	query := `
 		SELECT
-			i.id, i.pet_id, i.status, i.code, i.expires_at,
+			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
 			i.base_preset_id, i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
 			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
@@ -344,6 +384,7 @@ func scanInviteRow(s inviteScanner) (*repository.InviteView, error) {
 		&inv.ID,
 		&inv.PetID,
 		&inv.Status,
+		&inv.TokenValue,
 		&inv.Code,
 		&inv.ExpiresAt,
 		&inv.BasePresetID,
@@ -387,6 +428,25 @@ func (r *InviteRepository) existsByIDAndPet(ctx context.Context, inviteID, petID
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *InviteRepository) getInviteStateByIDAndPet(ctx context.Context, inviteID, petID uuid.UUID) (string, bool, error) {
+	const query = `
+		SELECT status
+		FROM pet_invites
+		WHERE id = $1
+		  AND pet_id = $2
+		LIMIT 1
+	`
+	var status string
+	err := r.db.QueryRow(ctx, query, inviteID, petID).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return status, true, nil
 }
 
 var _ repository.InviteRepository = (*InviteRepository)(nil)

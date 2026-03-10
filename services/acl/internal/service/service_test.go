@@ -172,6 +172,9 @@ type fakeInviteRepo struct {
 	createErrSeq   []error
 	createCalls    int
 	createInvite   *repository.InviteView
+	rotateErrSeq   []error
+	rotateCalls    int
+	rotateInvite   *repository.InviteView
 	previewInvite  *repository.InviteView
 	previewErr     error
 	revokeErr      error
@@ -219,6 +222,18 @@ func (f *fakeInviteRepo) AcceptByTokenHash(_ context.Context, _ string, _ uuid.U
 	}
 	member := &repository.MemberView{ID: uuid.New(), PetID: uuid.New(), UserID: uuid.New(), Status: "ACTIVE"}
 	return member, member.PetID, nil
+}
+
+func (f *fakeInviteRepo) RotateTokenHashByID(_ context.Context, _, _ uuid.UUID, _, _ string) (*repository.InviteView, error) {
+	call := f.rotateCalls
+	f.rotateCalls++
+	if call < len(f.rotateErrSeq) && f.rotateErrSeq[call] != nil {
+		return nil, f.rotateErrSeq[call]
+	}
+	if f.rotateInvite == nil {
+		return &repository.InviteView{ID: uuid.New(), PetID: uuid.New(), Status: "ACTIVE"}, nil
+	}
+	return f.rotateInvite, nil
 }
 
 func (f *fakeInviteRepo) RevokeByID(_ context.Context, _, _ uuid.UUID) error {
@@ -447,6 +462,49 @@ func TestRevokeInviteMapsRepoConflict(t *testing.T) {
 	err := svc.RevokeInvite(context.Background(), uuid.New(), uuid.New(), uuid.New())
 	if err != ErrConflict {
 		t.Fatalf("expected ErrConflict, got %v", err)
+	}
+}
+
+func TestRegenerateInviteLinkRetriesOnConflict(t *testing.T) {
+	t.Parallel()
+
+	inviteRepo := &fakeInviteRepo{
+		rotateErrSeq: []error{repository.ErrConflict, nil},
+		rotateInvite: &repository.InviteView{ID: uuid.New(), PetID: uuid.New(), Status: "ACTIVE"},
+	}
+	svc := newTestService(&fakeMembershipRepo{byPetUser: &repository.MembershipAccess{
+		Status: "ACTIVE",
+		Policy: model.Policy{MembersWrite: true},
+	}}, &fakeRoleRepo{}, nil, inviteRepo)
+
+	res, err := svc.RegenerateInviteLink(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil || res.Invite == nil {
+		t.Fatalf("expected regenerate invite result")
+	}
+	if res.DeeplinkURL == "" {
+		t.Fatalf("expected deeplink url")
+	}
+	if inviteRepo.rotateCalls != 2 {
+		t.Fatalf("expected 2 rotate attempts, got %d", inviteRepo.rotateCalls)
+	}
+}
+
+func TestRegenerateInviteLinkForbiddenWithoutMembersWrite(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{
+		byPetUser: &repository.MembershipAccess{
+			Status: "ACTIVE",
+			Policy: model.Policy{MembersWrite: false},
+		},
+	}, &fakeRoleRepo{}, nil, &fakeInviteRepo{})
+
+	_, err := svc.RegenerateInviteLink(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	if err != ErrForbidden {
+		t.Fatalf("expected ErrForbidden, got %v", err)
 	}
 }
 

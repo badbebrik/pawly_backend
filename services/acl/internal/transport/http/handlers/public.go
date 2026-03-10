@@ -17,8 +17,9 @@ import (
 )
 
 type PublicHandlers struct {
-	svc      *service.ACLService
-	profiles ProfileBatchClient
+	svc                *service.ACLService
+	profiles           ProfileBatchClient
+	inviteDeeplinkBase string
 }
 
 type ProfileBatchClient interface {
@@ -53,8 +54,12 @@ type previewInviteByTokenRequest struct {
 	Token string `json:"token"`
 }
 
-func NewPublicHandlers(svc *service.ACLService, profiles ProfileBatchClient) *PublicHandlers {
-	return &PublicHandlers{svc: svc, profiles: profiles}
+func NewPublicHandlers(svc *service.ACLService, profiles ProfileBatchClient, inviteDeeplinkBase string) *PublicHandlers {
+	return &PublicHandlers{
+		svc:                svc,
+		profiles:           profiles,
+		inviteDeeplinkBase: inviteDeeplinkBase,
+	}
 }
 
 func (h *PublicHandlers) NotImplemented(w http.ResponseWriter, _ *http.Request) {
@@ -113,7 +118,7 @@ func (h *PublicHandlers) GetBootstrap(w http.ResponseWriter, r *http.Request) {
 
 	invites := make([]any, 0, len(res.Invites))
 	for i := range res.Invites {
-		invites = append(invites, inviteToDTO(res.Invites[i], ""))
+		invites = append(invites, inviteToDTO(res.Invites[i], "", h.inviteDeeplinkBase))
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -351,7 +356,7 @@ func (h *PublicHandlers) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"invite": inviteToDTO(*res.Invite, res.DeeplinkURL),
+		"invite": inviteToDTO(*res.Invite, res.DeeplinkURL, h.inviteDeeplinkBase),
 	})
 }
 
@@ -369,9 +374,32 @@ func (h *PublicHandlers) ListInvites(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]any, 0, len(items))
 	for _, item := range items {
-		out = append(out, inviteToDTO(item, ""))
+		out = append(out, inviteToDTO(item, "", h.inviteDeeplinkBase))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+func (h *PublicHandlers) RegenerateInviteLink(w http.ResponseWriter, r *http.Request) {
+	petID, userID, ok := parsePetAndUser(w, r)
+	if !ok {
+		return
+	}
+
+	inviteID, err := uuid.Parse(chi.URLParam(r, "invite_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid invite_id")
+		return
+	}
+
+	res, err := h.svc.RegenerateInviteLink(r.Context(), petID, userID, inviteID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"invite": inviteToDTO(*res.Invite, res.DeeplinkURL, h.inviteDeeplinkBase),
+	})
 }
 
 func (h *PublicHandlers) RevokeInvite(w http.ResponseWriter, r *http.Request) {
@@ -465,7 +493,7 @@ func (h *PublicHandlers) PreviewInviteByToken(w http.ResponseWriter, r *http.Req
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"invite": inviteToDTO(*invite, ""),
+		"invite": inviteToDTO(*invite, "", h.inviteDeeplinkBase),
 	})
 }
 
@@ -602,7 +630,7 @@ func roleToDTO(r repository.RoleView) map[string]any {
 	}
 }
 
-func inviteToDTO(inv repository.InviteView, deeplink string) map[string]any {
+func inviteToDTO(inv repository.InviteView, deeplink, deeplinkBase string) map[string]any {
 	var basePresetID any
 	if inv.BasePresetID != nil {
 		basePresetID = inv.BasePresetID.String()
@@ -621,6 +649,8 @@ func inviteToDTO(inv repository.InviteView, deeplink string) map[string]any {
 	var deeplinkURL any
 	if deeplink != "" {
 		deeplinkURL = deeplink
+	} else {
+		deeplinkURL = deeplinkBase + inv.TokenValue
 	}
 
 	return map[string]any{

@@ -70,6 +70,7 @@ CREATE TABLE pet_invites (
     created_by_user_id UUID NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'CONSUMED', 'EXPIRED', 'REVOKED')),
     token_hash TEXT NOT NULL,
+    token_value TEXT NOT NULL,
     code TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ NULL,
@@ -81,6 +82,7 @@ CREATE TABLE pet_invites (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT invites_code_format CHECK (code ~ '^[0-9]{6}$'),
+    CONSTRAINT invites_token_value_non_empty CHECK (length(token_value) > 0),
     CONSTRAINT invites_consumed_fields CHECK (
         (status = 'CONSUMED' AND consumed_at IS NOT NULL AND consumed_by_user_id IS NOT NULL)
         OR

@@ -1,15 +1,22 @@
 package fileclient
 
 import (
+	"context"
 	"fmt"
+	"health/internal/service"
+	filepb "health/proto/filepb"
 	"strings"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type Client struct {
-	conn *grpc.ClientConn
+	conn   *grpc.ClientConn
+	client filepb.FileServiceClient
 }
 
 func New(addr string) (*Client, error) {
@@ -22,7 +29,10 @@ func New(addr string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{conn: conn}, nil
+	return &Client{
+		conn:   conn,
+		client: filepb.NewFileServiceClient(conn),
+	}, nil
 }
 
 func (c *Client) Close() {
@@ -30,3 +40,88 @@ func (c *Client) Close() {
 		_ = c.conn.Close()
 	}
 }
+
+func (c *Client) EnsureFilesExist(ctx context.Context, fileIDs []uuid.UUID) error {
+	for i := range fileIDs {
+		_, err := c.client.GetFile(ctx, &filepb.GetFileRequest{
+			FileId: fileIDs[i].String(),
+		})
+		if err != nil {
+			return mapErr(err)
+		}
+	}
+	return nil
+}
+
+func (c *Client) BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	if len(fileIDs) == 0 {
+		return map[uuid.UUID]string{}, nil
+	}
+	in := make([]string, 0, len(fileIDs))
+	for i := range fileIDs {
+		in = append(in, fileIDs[i].String())
+	}
+	resp, err := c.client.BatchGetDownloadUrls(ctx, &filepb.BatchGetDownloadUrlsRequest{
+		FileIds: in,
+	})
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	out := make(map[uuid.UUID]string, len(resp.GetItems()))
+	for i := range resp.GetItems() {
+		item := resp.GetItems()[i]
+		id, err := uuid.Parse(item.GetFileId())
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(item.GetUrl()) == "" {
+			continue
+		}
+		out[id] = item.GetUrl()
+	}
+	return out, nil
+}
+
+func (c *Client) LinkLogAttachments(ctx context.Context, petID, logID uuid.UUID, fileIDs []uuid.UUID) error {
+	for i := range fileIDs {
+		_, err := c.client.LinkFile(ctx, &filepb.LinkFileRequest{
+			FileId:       fileIDs[i].String(),
+			OwnerService: filepb.OwnerService_OWNER_SERVICE_LOG,
+			OwnerType:    "LOG_ATTACHMENT",
+			OwnerId:      logID.String(),
+			PetId:        petID.String(),
+		})
+		if err != nil {
+			mapped := mapErr(err)
+			if mapped == service.ErrConflict {
+				continue
+			}
+			return mapped
+		}
+	}
+	return nil
+}
+
+func mapErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		return err
+	}
+	switch st.Code() {
+	case codes.NotFound:
+		return service.ErrNotFound
+	case codes.PermissionDenied:
+		return service.ErrForbidden
+	case codes.InvalidArgument:
+		return service.ErrInvalidInput
+	case codes.FailedPrecondition, codes.AlreadyExists:
+		return service.ErrConflict
+	default:
+		return err
+	}
+}
+
+var _ service.FileClient = (*Client)(nil)

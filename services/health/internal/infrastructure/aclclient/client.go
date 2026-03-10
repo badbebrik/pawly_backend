@@ -1,15 +1,22 @@
 package aclclient
 
 import (
+	"context"
 	"fmt"
+	"health/internal/service"
+	aclpb "health/proto"
 	"strings"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type Client struct {
-	conn *grpc.ClientConn
+	conn   *grpc.ClientConn
+	client aclpb.ACLServiceClient
 }
 
 func New(addr string) (*Client, error) {
@@ -22,7 +29,10 @@ func New(addr string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{conn: conn}, nil
+	return &Client{
+		conn:   conn,
+		client: aclpb.NewACLServiceClient(conn),
+	}, nil
 }
 
 func (c *Client) Close() {
@@ -30,3 +40,49 @@ func (c *Client) Close() {
 		_ = c.conn.Close()
 	}
 }
+
+func (c *Client) Check(ctx context.Context, petID, userID uuid.UUID, action string) (bool, error) {
+	resp, err := c.client.Check(ctx, &aclpb.CheckRequest{
+		PetId:  petID.String(),
+		UserId: userID.String(),
+		Action: mapAction(action),
+	})
+	if err != nil {
+		return false, mapErr(err)
+	}
+	return resp.GetAllowed(), nil
+}
+
+func mapAction(action string) aclpb.Action {
+	switch action {
+	case service.ActionLogRead:
+		return aclpb.Action_ACTION_LOG_READ
+	case service.ActionLogWrite:
+		return aclpb.Action_ACTION_LOG_WRITE
+	case service.ActionHealthRead:
+		return aclpb.Action_ACTION_HEALTH_READ
+	default:
+		return aclpb.Action_ACTION_UNSPECIFIED
+	}
+}
+
+func mapErr(err error) error {
+	st, ok := status.FromError(err)
+	if !ok {
+		return err
+	}
+	switch st.Code() {
+	case codes.NotFound:
+		return service.ErrNotFound
+	case codes.PermissionDenied:
+		return service.ErrForbidden
+	case codes.InvalidArgument:
+		return service.ErrInvalidInput
+	case codes.FailedPrecondition, codes.AlreadyExists:
+		return service.ErrConflict
+	default:
+		return err
+	}
+}
+
+var _ service.ACLClient = (*Client)(nil)

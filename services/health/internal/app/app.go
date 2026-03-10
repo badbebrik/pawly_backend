@@ -6,6 +6,8 @@ import (
 	"health/internal/infrastructure"
 	"health/internal/infrastructure/aclclient"
 	"health/internal/infrastructure/fileclient"
+	pgrepo "health/internal/infrastructure/repository"
+	"health/internal/service"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +22,8 @@ type App struct {
 	pg   *infrastructure.Postgres
 	acl  *aclclient.Client
 	file *fileclient.Client
+
+	logSvc *service.Service
 
 	httpSrv *http.Server
 }
@@ -43,11 +47,15 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	logRepo := pgrepo.NewLogRepository(pg.Pool)
+	logSvc := service.New(logRepo, acl, file)
+
 	a := &App{
-		cfg:  cfg,
-		pg:   pg,
-		acl:  acl,
-		file: file,
+		cfg:    cfg,
+		pg:     pg,
+		acl:    acl,
+		file:   file,
+		logSvc: logSvc,
 	}
 
 	a.httpSrv = &http.Server{

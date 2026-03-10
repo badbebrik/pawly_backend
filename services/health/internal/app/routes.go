@@ -22,7 +22,7 @@ func (a *App) setupRoutes() http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	h := handlers.NewStubHandlers()
+	h := handlers.New(a.logSvc)
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID)

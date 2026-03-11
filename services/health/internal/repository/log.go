@@ -157,6 +157,17 @@ type ListAnalyticsMetricsInput struct {
 	Limit    int
 }
 
+type ListMetricSeriesInput struct {
+	PetID          uuid.UUID
+	MetricID       uuid.UUID
+	DateFrom       *time.Time
+	DateTo         *time.Time
+	Source         *string
+	TypeIDs        []uuid.UUID
+	Sort           string
+	IncludeSummary bool
+}
+
 type LogRepository interface {
 	GetLog(ctx context.Context, petID, logID uuid.UUID) (*model.Log, error)
 	ListLogs(ctx context.Context, in ListLogsInput) (ListLogsOutput, error)
@@ -177,4 +188,5 @@ type LogRepository interface {
 	ArchiveMetric(ctx context.Context, in ArchiveMetricInput) error
 	HasMetricValuesOutOfRange(ctx context.Context, petID, metricID uuid.UUID, minValue, maxValue *float64) (bool, error)
 	ListAnalyticsMetrics(ctx context.Context, in ListAnalyticsMetricsInput) ([]model.AnalyticsMetricSummary, error)
+	ListMetricSeries(ctx context.Context, in ListMetricSeriesInput) ([]model.MetricSeriesPoint, *model.MetricSeriesSummary, error)
 }

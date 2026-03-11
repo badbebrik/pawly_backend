@@ -140,3 +140,21 @@ type AnalyticsUsedLogType struct {
 	LogTypeID   uuid.UUID
 	LogTypeName string
 }
+
+type MetricSeriesPoint struct {
+	OccurredAt  time.Time
+	ValueNum    float64
+	LogID       uuid.UUID
+	LogTypeID   *uuid.UUID
+	LogTypeName *string
+	Source      string
+}
+
+type MetricSeriesSummary struct {
+	PointsCount       int
+	MinValueNum       float64
+	MaxValueNum       float64
+	LastValueNum      float64
+	AvgValueNum       float64
+	DeltaFromFirstNum float64
+}

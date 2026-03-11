@@ -172,4 +172,120 @@ func (r *LogRepository) loadUsedLogTypes(ctx context.Context, petID uuid.UUID, m
 	return result, nil
 }
 
+func (r *LogRepository) ListMetricSeries(ctx context.Context, in repo.ListMetricSeriesInput) ([]model.MetricSeriesPoint, *model.MetricSeriesSummary, error) {
+	sort := strings.ToLower(strings.TrimSpace(in.Sort))
+	if sort != "occurred_at_desc" {
+		sort = "occurred_at_asc"
+	}
+	orderDir := "ASC"
+	if sort == "occurred_at_desc" {
+		orderDir = "DESC"
+	}
+
+	args := []any{in.PetID, in.MetricID}
+	where := []string{
+		"l.pet_id = $1",
+		"mv.metric_id = $2",
+		"l.deleted_at IS NULL",
+	}
+	if in.Source != nil {
+		args = append(args, *in.Source)
+		where = append(where, fmt.Sprintf("l.source = $%d", len(args)))
+	}
+	if in.DateFrom != nil {
+		args = append(args, *in.DateFrom)
+		where = append(where, fmt.Sprintf("l.occurred_at >= $%d", len(args)))
+	}
+	if in.DateTo != nil {
+		args = append(args, *in.DateTo)
+		where = append(where, fmt.Sprintf("l.occurred_at <= $%d", len(args)))
+	}
+	if len(in.TypeIDs) > 0 {
+		args = append(args, in.TypeIDs)
+		where = append(where, fmt.Sprintf("l.log_type_id = ANY($%d::uuid[])", len(args)))
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			l.occurred_at,
+			mv.value_num,
+			l.id,
+			l.log_type_id,
+			lt.name,
+			l.source
+		FROM metric_values mv
+		JOIN logs l ON l.id = mv.log_id
+		LEFT JOIN log_types lt ON lt.id = l.log_type_id
+		WHERE %s
+		ORDER BY l.occurred_at %s, l.id %s
+	`, strings.Join(where, " AND "), orderDir, orderDir)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	points := make([]model.MetricSeriesPoint, 0)
+	for rows.Next() {
+		var p model.MetricSeriesPoint
+		if err := rows.Scan(
+			&p.OccurredAt,
+			&p.ValueNum,
+			&p.LogID,
+			&p.LogTypeID,
+			&p.LogTypeName,
+			&p.Source,
+		); err != nil {
+			return nil, nil, err
+		}
+		points = append(points, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	if !in.IncludeSummary {
+		return points, nil, nil
+	}
+
+	return points, buildMetricSeriesSummary(points, sort), nil
+}
+
+func buildMetricSeriesSummary(points []model.MetricSeriesPoint, sort string) *model.MetricSeriesSummary {
+	summary := &model.MetricSeriesSummary{}
+	if len(points) == 0 {
+		return summary
+	}
+
+	minValue := points[0].ValueNum
+	maxValue := points[0].ValueNum
+	sum := 0.0
+	for i := range points {
+		value := points[i].ValueNum
+		if value < minValue {
+			minValue = value
+		}
+		if value > maxValue {
+			maxValue = value
+		}
+		sum += value
+	}
+
+	firstValue := points[0].ValueNum
+	lastValue := points[len(points)-1].ValueNum
+	if sort == "occurred_at_desc" {
+		firstValue = points[len(points)-1].ValueNum
+		lastValue = points[0].ValueNum
+	}
+
+	summary.PointsCount = len(points)
+	summary.MinValueNum = minValue
+	summary.MaxValueNum = maxValue
+	summary.LastValueNum = lastValue
+	summary.AvgValueNum = sum / float64(len(points))
+	summary.DeltaFromFirstNum = lastValue - firstValue
+	return summary
+}
+
 var _ repo.LogRepository = (*LogRepository)(nil)

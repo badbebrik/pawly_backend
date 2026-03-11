@@ -754,7 +754,81 @@ func (h *Handlers) GetAnalyticsMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
-func (h *Handlers) GetMetricSeries(w http.ResponseWriter, r *http.Request) { h.notImplemented(w) }
+func (h *Handlers) GetMetricSeries(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	metricID, err := uuid.Parse(chi.URLParam(r, "metric_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid metric_id")
+		return
+	}
+
+	typeIDs, err := parseUUIDCSVOrMulti(r.URL.Query()["type_ids"])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid type_ids")
+		return
+	}
+
+	dateFrom, err := parseOptionalDateTime(r.URL.Query().Get("date_from"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_from")
+		return
+	}
+	dateTo, err := parseOptionalDateTime(r.URL.Query().Get("date_to"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_to")
+		return
+	}
+
+	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
+	if sort == "" {
+		sort = "occurred_at_asc"
+	}
+	if sort != "occurred_at_asc" && sort != "occurred_at_desc" {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid sort")
+		return
+	}
+
+	includeSummary := true
+	if raw := r.URL.Query().Get("include_summary"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid include_summary")
+			return
+		}
+		includeSummary = v
+	}
+
+	result, err := h.svc.GetMetricSeries(r.Context(), service.GetMetricSeriesParams{
+		UserID:         userID,
+		PetID:          petID,
+		MetricID:       metricID,
+		Range:          r.URL.Query().Get("range"),
+		DateFrom:       dateFrom,
+		DateTo:         dateTo,
+		Source:         r.URL.Query().Get("source"),
+		TypeIDs:        typeIDs,
+		Sort:           sort,
+		IncludeSummary: includeSummary,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	points := make([]any, 0, len(result.Points))
+	for i := range result.Points {
+		points = append(points, metricSeriesPointToDTO(result.Points[i]))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"metric":  metricToDTO(result.Metric),
+		"summary": metricSeriesSummaryToDTO(result.Summary),
+		"points":  points,
+	})
+}
 
 func (h *Handlers) notImplemented(w http.ResponseWriter) {
 	writeError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "health service endpoint is not implemented yet")
@@ -1123,6 +1197,31 @@ func analyticsMetricSummaryToDTO(item model.AnalyticsMetricSummary) map[string]a
 		"last_occurred_at":  item.LastOccurredAt.UTC().Format(time.RFC3339),
 		"last_value_num":    item.LastValueNum,
 		"used_in_log_types": used,
+	}
+}
+
+func metricSeriesPointToDTO(item model.MetricSeriesPoint) map[string]any {
+	return map[string]any{
+		"occurred_at":   item.OccurredAt.UTC().Format(time.RFC3339),
+		"value_num":     item.ValueNum,
+		"log_id":        item.LogID.String(),
+		"log_type_id":   uuidOrNil(item.LogTypeID),
+		"log_type_name": strOrNil(item.LogTypeName),
+		"source":        item.Source,
+	}
+}
+
+func metricSeriesSummaryToDTO(item *model.MetricSeriesSummary) any {
+	if item == nil {
+		return nil
+	}
+	return map[string]any{
+		"points_count":         item.PointsCount,
+		"min_value_num":        item.MinValueNum,
+		"max_value_num":        item.MaxValueNum,
+		"last_value_num":       item.LastValueNum,
+		"avg_value_num":        item.AvgValueNum,
+		"delta_from_first_num": item.DeltaFromFirstNum,
 	}
 }
 

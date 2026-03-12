@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	ActionLogRead    = "log_read"
-	ActionLogWrite   = "log_write"
-	ActionHealthRead = "health_read"
+	ActionLogRead     = "log_read"
+	ActionLogWrite    = "log_write"
+	ActionHealthRead  = "health_read"
+	ActionHealthWrite = "health_write"
 )
 
 type ACLClient interface {
@@ -24,15 +25,18 @@ type FileClient interface {
 	EnsureFilesExist(ctx context.Context, fileIDs []uuid.UUID) error
 	BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error)
 	LinkLogAttachments(ctx context.Context, petID, logID uuid.UUID, fileIDs []uuid.UUID) error
+	GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]model.HealthFile, error)
+	LinkHealthAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
+	UnlinkHealthAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
 }
 
 type Service struct {
-	repo repository.LogRepository
+	repo repository.Repository
 	acl  ACLClient
 	file FileClient
 }
 
-func New(repo repository.LogRepository, acl ACLClient, file FileClient) *Service {
+func New(repo repository.Repository, acl ACLClient, file FileClient) *Service {
 	return &Service{repo: repo, acl: acl, file: file}
 }
 

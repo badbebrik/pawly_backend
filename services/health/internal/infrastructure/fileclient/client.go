@@ -3,8 +3,10 @@ package fileclient
 import (
 	"context"
 	"fmt"
+	"health/internal/model"
 	"health/internal/service"
 	filepb "health/proto/filepb"
+	"path"
 	"strings"
 
 	"github.com/google/uuid"
@@ -82,6 +84,24 @@ func (c *Client) BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) 
 	return out, nil
 }
 
+func (c *Client) GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]model.HealthFile, error) {
+	out := make(map[uuid.UUID]model.HealthFile, len(fileIDs))
+	for i := range fileIDs {
+		resp, err := c.client.GetFile(ctx, &filepb.GetFileRequest{FileId: fileIDs[i].String()})
+		if err != nil {
+			return nil, mapErr(err)
+		}
+		file := resp.GetFile()
+		fileName := deriveFileName(file.GetObjectKey())
+		out[fileIDs[i]] = model.HealthFile{
+			ID:       fileIDs[i],
+			MimeType: file.GetMimeType(),
+			FileName: fileName,
+		}
+	}
+	return out, nil
+}
+
 func (c *Client) LinkLogAttachments(ctx context.Context, petID, logID uuid.UUID, fileIDs []uuid.UUID) error {
 	for i := range fileIDs {
 		_, err := c.client.LinkFile(ctx, &filepb.LinkFileRequest{
@@ -100,6 +120,57 @@ func (c *Client) LinkLogAttachments(ctx context.Context, petID, logID uuid.UUID,
 		}
 	}
 	return nil
+}
+
+func (c *Client) LinkHealthAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
+	for i := range fileIDs {
+		_, err := c.client.LinkFile(ctx, &filepb.LinkFileRequest{
+			FileId:       fileIDs[i].String(),
+			OwnerService: filepb.OwnerService_OWNER_SERVICE_HEALTH,
+			OwnerType:    entityType,
+			OwnerId:      entityID.String(),
+			PetId:        petID.String(),
+		})
+		if err != nil {
+			mapped := mapErr(err)
+			if mapped == service.ErrConflict {
+				continue
+			}
+			return mapped
+		}
+	}
+	return nil
+}
+
+func (c *Client) UnlinkHealthAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
+	for i := range fileIDs {
+		_, err := c.client.UnlinkFile(ctx, &filepb.UnlinkFileRequest{
+			FileId:       fileIDs[i].String(),
+			OwnerService: filepb.OwnerService_OWNER_SERVICE_HEALTH,
+			OwnerType:    entityType,
+			OwnerId:      entityID.String(),
+		})
+		if err != nil {
+			mapped := mapErr(err)
+			if mapped == service.ErrNotFound {
+				continue
+			}
+			return mapped
+		}
+	}
+	return nil
+}
+
+func deriveFileName(objectKey string) *string {
+	trimmed := strings.TrimSpace(objectKey)
+	if trimmed == "" {
+		return nil
+	}
+	base := strings.TrimSpace(path.Base(trimmed))
+	if base == "" || base == "." || base == "/" {
+		return nil
+	}
+	return &base
 }
 
 func mapErr(err error) error {

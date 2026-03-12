@@ -61,6 +61,8 @@ func mapAction(action string) aclpb.Action {
 		return aclpb.Action_ACTION_LOG_WRITE
 	case service.ActionHealthRead:
 		return aclpb.Action_ACTION_HEALTH_READ
+	case service.ActionHealthWrite:
+		return aclpb.Action_ACTION_HEALTH_WRITE
 	default:
 		return aclpb.Action_ACTION_UNSPECIFIED
 	}

@@ -26,6 +26,35 @@ func (a *App) setupRoutes() http.Handler {
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID)
+		r.Get("/v1/pets/{pet_id}/health/bootstrap", h.GetHealthBootstrap)
+		r.Get("/v1/pets/{pet_id}/health/day", h.GetHealthDay)
+
+		r.Get("/v1/pets/{pet_id}/vet-visits", h.GetVetVisits)
+		r.Post("/v1/pets/{pet_id}/vet-visits", h.CreateVetVisit)
+		r.Get("/v1/pets/{pet_id}/vet-visits/{visit_id}", h.GetVetVisit)
+		r.Patch("/v1/pets/{pet_id}/vet-visits/{visit_id}", h.UpdateVetVisit)
+		r.Delete("/v1/pets/{pet_id}/vet-visits/{visit_id}", h.DeleteVetVisit)
+		r.Post("/v1/pets/{pet_id}/vet-visits/{visit_id}/logs", h.LinkVetVisitLog)
+		r.Delete("/v1/pets/{pet_id}/vet-visits/{visit_id}/logs/{log_id}", h.UnlinkVetVisitLog)
+
+		r.Get("/v1/pets/{pet_id}/vaccinations", h.GetVaccinations)
+		r.Post("/v1/pets/{pet_id}/vaccinations", h.CreateVaccination)
+		r.Get("/v1/pets/{pet_id}/vaccinations/{vaccination_id}", h.GetVaccination)
+		r.Patch("/v1/pets/{pet_id}/vaccinations/{vaccination_id}", h.UpdateVaccination)
+		r.Delete("/v1/pets/{pet_id}/vaccinations/{vaccination_id}", h.DeleteVaccination)
+
+		r.Get("/v1/pets/{pet_id}/procedures", h.GetProcedures)
+		r.Post("/v1/pets/{pet_id}/procedures", h.CreateProcedure)
+		r.Get("/v1/pets/{pet_id}/procedures/{procedure_id}", h.GetProcedure)
+		r.Patch("/v1/pets/{pet_id}/procedures/{procedure_id}", h.UpdateProcedure)
+		r.Delete("/v1/pets/{pet_id}/procedures/{procedure_id}", h.DeleteProcedure)
+
+		r.Get("/v1/pets/{pet_id}/medical-records", h.GetMedicalRecords)
+		r.Post("/v1/pets/{pet_id}/medical-records", h.CreateMedicalRecord)
+		r.Get("/v1/pets/{pet_id}/medical-records/{record_id}", h.GetMedicalRecord)
+		r.Patch("/v1/pets/{pet_id}/medical-records/{record_id}", h.UpdateMedicalRecord)
+		r.Delete("/v1/pets/{pet_id}/medical-records/{record_id}", h.DeleteMedicalRecord)
+
 		r.Get("/v1/pets/{pet_id}/logs/bootstrap", h.GetLogsBootstrap)
 		r.Get("/v1/pets/{pet_id}/logs", h.GetLogs)
 		r.Get("/v1/pets/{pet_id}/logs/{log_id}", h.GetLog)

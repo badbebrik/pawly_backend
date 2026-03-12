@@ -13,6 +13,12 @@ const userIDKey ctxKey = "user_id"
 
 func WithUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if len(auth) < len("Bearer x") || auth[:7] != "Bearer " {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		raw := r.Header.Get("X-User-ID")
 		if raw == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)

@@ -59,6 +59,18 @@ services:
     routes:
       - name: health-routes
         paths:
+          - ~/v1/pets/.+/health/bootstrap$
+          - ~/v1/pets/.+/health/day$
+          - ~/v1/pets/.+/vet-visits$
+          - ~/v1/pets/.+/vet-visits/.+$
+          - ~/v1/pets/.+/vet-visits/.+/logs$
+          - ~/v1/pets/.+/vet-visits/.+/logs/.+$
+          - ~/v1/pets/.+/vaccinations$
+          - ~/v1/pets/.+/vaccinations/.+$
+          - ~/v1/pets/.+/procedures$
+          - ~/v1/pets/.+/procedures/.+$
+          - ~/v1/pets/.+/medical-records$
+          - ~/v1/pets/.+/medical-records/.+$
           - ~/v1/pets/.+/logs/bootstrap$
           - ~/v1/pets/.+/logs$
           - ~/v1/pets/.+/logs/.+$

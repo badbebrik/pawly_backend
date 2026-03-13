@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v4.25.3
-// source: proto/profilepb/profile.proto
+// source: profile.proto
 
 package profilepb
 
@@ -33,7 +33,7 @@ type CreateProfileRequest struct {
 
 func (x *CreateProfileRequest) Reset() {
 	*x = CreateProfileRequest{}
-	mi := &file_proto_profilepb_profile_proto_msgTypes[0]
+	mi := &file_profile_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +45,7 @@ func (x *CreateProfileRequest) String() string {
 func (*CreateProfileRequest) ProtoMessage() {}
 
 func (x *CreateProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_profilepb_profile_proto_msgTypes[0]
+	mi := &file_profile_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +58,7 @@ func (x *CreateProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProfileRequest.ProtoReflect.Descriptor instead.
 func (*CreateProfileRequest) Descriptor() ([]byte, []int) {
-	return file_proto_profilepb_profile_proto_rawDescGZIP(), []int{0}
+	return file_profile_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CreateProfileRequest) GetUserId() string {
@@ -98,7 +98,7 @@ type CreateProfileResponse struct {
 
 func (x *CreateProfileResponse) Reset() {
 	*x = CreateProfileResponse{}
-	mi := &file_proto_profilepb_profile_proto_msgTypes[1]
+	mi := &file_profile_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -110,7 +110,7 @@ func (x *CreateProfileResponse) String() string {
 func (*CreateProfileResponse) ProtoMessage() {}
 
 func (x *CreateProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_profilepb_profile_proto_msgTypes[1]
+	mi := &file_profile_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -123,7 +123,7 @@ func (x *CreateProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProfileResponse.ProtoReflect.Descriptor instead.
 func (*CreateProfileResponse) Descriptor() ([]byte, []int) {
-	return file_proto_profilepb_profile_proto_rawDescGZIP(), []int{1}
+	return file_profile_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CreateProfileResponse) GetUserId() string {
@@ -133,11 +133,99 @@ func (x *CreateProfileResponse) GetUserId() string {
 	return ""
 }
 
-var File_proto_profilepb_profile_proto protoreflect.FileDescriptor
+type DeleteProfileRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_proto_profilepb_profile_proto_rawDesc = "" +
+func (x *DeleteProfileRequest) Reset() {
+	*x = DeleteProfileRequest{}
+	mi := &file_profile_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteProfileRequest) ProtoMessage() {}
+
+func (x *DeleteProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_profile_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteProfileRequest.ProtoReflect.Descriptor instead.
+func (*DeleteProfileRequest) Descriptor() ([]byte, []int) {
+	return file_profile_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DeleteProfileRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type DeleteProfileResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteProfileResponse) Reset() {
+	*x = DeleteProfileResponse{}
+	mi := &file_profile_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteProfileResponse) ProtoMessage() {}
+
+func (x *DeleteProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_profile_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteProfileResponse.ProtoReflect.Descriptor instead.
+func (*DeleteProfileResponse) Descriptor() ([]byte, []int) {
+	return file_profile_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DeleteProfileResponse) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+var File_profile_proto protoreflect.FileDescriptor
+
+const file_profile_proto_rawDesc = "" +
 	"\n" +
-	"\x1dproto/profilepb/profile.proto\x12\aprofile\"\x83\x01\n" +
+	"\rprofile.proto\x12\aprofile\"\x83\x01\n" +
 	"\x14CreateProfileRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
 	"\x06locale\x18\x02 \x01(\tR\x06locale\x12\x1d\n" +
@@ -145,57 +233,66 @@ const file_proto_profilepb_profile_proto_rawDesc = "" +
 	"first_name\x18\x03 \x01(\tR\tfirstName\x12\x1b\n" +
 	"\tlast_name\x18\x04 \x01(\tR\blastName\"0\n" +
 	"\x15CreateProfileResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId2`\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"/\n" +
+	"\x14DeleteProfileRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"0\n" +
+	"\x15DeleteProfileResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId2\xb0\x01\n" +
 	"\x0eProfileService\x12N\n" +
-	"\rCreateProfile\x12\x1d.profile.CreateProfileRequest\x1a\x1e.profile.CreateProfileResponseB Z\x1eauth/proto/profilepb;profilepbb\x06proto3"
+	"\rCreateProfile\x12\x1d.profile.CreateProfileRequest\x1a\x1e.profile.CreateProfileResponse\x12N\n" +
+	"\rDeleteProfile\x12\x1d.profile.DeleteProfileRequest\x1a\x1e.profile.DeleteProfileResponseB Z\x1eauth/proto/profilepb;profilepbb\x06proto3"
 
 var (
-	file_proto_profilepb_profile_proto_rawDescOnce sync.Once
-	file_proto_profilepb_profile_proto_rawDescData []byte
+	file_profile_proto_rawDescOnce sync.Once
+	file_profile_proto_rawDescData []byte
 )
 
-func file_proto_profilepb_profile_proto_rawDescGZIP() []byte {
-	file_proto_profilepb_profile_proto_rawDescOnce.Do(func() {
-		file_proto_profilepb_profile_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_profilepb_profile_proto_rawDesc), len(file_proto_profilepb_profile_proto_rawDesc)))
+func file_profile_proto_rawDescGZIP() []byte {
+	file_profile_proto_rawDescOnce.Do(func() {
+		file_profile_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_profile_proto_rawDesc), len(file_profile_proto_rawDesc)))
 	})
-	return file_proto_profilepb_profile_proto_rawDescData
+	return file_profile_proto_rawDescData
 }
 
-var file_proto_profilepb_profile_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_proto_profilepb_profile_proto_goTypes = []any{
+var file_profile_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_profile_proto_goTypes = []any{
 	(*CreateProfileRequest)(nil),  // 0: profile.CreateProfileRequest
 	(*CreateProfileResponse)(nil), // 1: profile.CreateProfileResponse
+	(*DeleteProfileRequest)(nil),  // 2: profile.DeleteProfileRequest
+	(*DeleteProfileResponse)(nil), // 3: profile.DeleteProfileResponse
 }
-var file_proto_profilepb_profile_proto_depIdxs = []int32{
+var file_profile_proto_depIdxs = []int32{
 	0, // 0: profile.ProfileService.CreateProfile:input_type -> profile.CreateProfileRequest
-	1, // 1: profile.ProfileService.CreateProfile:output_type -> profile.CreateProfileResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 1: profile.ProfileService.DeleteProfile:input_type -> profile.DeleteProfileRequest
+	1, // 2: profile.ProfileService.CreateProfile:output_type -> profile.CreateProfileResponse
+	3, // 3: profile.ProfileService.DeleteProfile:output_type -> profile.DeleteProfileResponse
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_proto_profilepb_profile_proto_init() }
-func file_proto_profilepb_profile_proto_init() {
-	if File_proto_profilepb_profile_proto != nil {
+func init() { file_profile_proto_init() }
+func file_profile_proto_init() {
+	if File_profile_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_profilepb_profile_proto_rawDesc), len(file_proto_profilepb_profile_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_profile_proto_rawDesc), len(file_profile_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_profilepb_profile_proto_goTypes,
-		DependencyIndexes: file_proto_profilepb_profile_proto_depIdxs,
-		MessageInfos:      file_proto_profilepb_profile_proto_msgTypes,
+		GoTypes:           file_profile_proto_goTypes,
+		DependencyIndexes: file_profile_proto_depIdxs,
+		MessageInfos:      file_profile_proto_msgTypes,
 	}.Build()
-	File_proto_profilepb_profile_proto = out.File
-	file_proto_profilepb_profile_proto_goTypes = nil
-	file_proto_profilepb_profile_proto_depIdxs = nil
+	File_profile_proto = out.File
+	file_profile_proto_goTypes = nil
+	file_profile_proto_depIdxs = nil
 }

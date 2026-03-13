@@ -65,14 +65,14 @@ func (r *SessionRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Session
 	return &s, nil
 }
 
-func (r *SessionRepo) UpdateRefreshToken(ctx context.Context, id uuid.UUID, newHash string, newExpires time.Time) error {
+func (r *SessionRepo) UpdateRefreshToken(ctx context.Context, id uuid.UUID, oldHash string, newHash string, newExpires time.Time) error {
 	query := `
         UPDATE sessions
         SET refresh_token_hash = $2, expires_at = $3, updated_at = NOW()
-        WHERE id = $1 AND is_revoked = FALSE
+        WHERE id = $1 AND refresh_token_hash = $4 AND is_revoked = FALSE
     `
 
-	cmd, err := r.db.Exec(ctx, query, id, newHash, newExpires)
+	cmd, err := r.db.Exec(ctx, query, id, newHash, newExpires, oldHash)
 	if err != nil {
 		return err
 	}

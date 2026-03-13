@@ -81,9 +81,9 @@ func (s *Service) Refresh(ctx context.Context, in RefreshInput) (*RefreshOutput,
 	newHash := security.HashTokenSHA256(newRefresh)
 	newExpires := time.Now().Add(time.Duration(s.refreshTTLDays) * 24 * time.Hour)
 
-	if err := s.sessions.UpdateRefreshToken(ctx, sessionID, newHash, newExpires); err != nil {
+	if err := s.sessions.UpdateRefreshToken(ctx, sessionID, inHash, newHash, newExpires); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return nil, ErrSessionNotFound
+			return nil, ErrRefreshMismatch
 		}
 		return nil, err
 	}

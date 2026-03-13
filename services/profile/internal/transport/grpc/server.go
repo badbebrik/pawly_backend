@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"profile/internal/repository"
 	"profile/internal/service"
 	profilepb "profile/proto"
 	"strings"
@@ -49,6 +50,27 @@ func (s *Server) CreateProfile(ctx context.Context, req *profilepb.CreateProfile
 
 	return &profilepb.CreateProfileResponse{
 		UserId: profile.UserID.String(),
+	}, nil
+}
+
+func (s *Server) DeleteProfile(ctx context.Context, req *profilepb.DeleteProfileRequest) (*profilepb.DeleteProfileResponse, error) {
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+
+	if err := s.svc.DeleteProfile(ctx, userID); err != nil {
+		if errors.Is(err, service.ErrInvalidInput) {
+			return nil, status.Error(codes.InvalidArgument, "invalid input")
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "profile not found")
+		}
+		return nil, status.Error(codes.Internal, "internal error")
+	}
+
+	return &profilepb.DeleteProfileResponse{
+		UserId: userID.String(),
 	}, nil
 }
 

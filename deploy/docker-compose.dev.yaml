@@ -50,6 +50,23 @@ services:
       timeout: 3s
       retries: 20
 
+  profile_postgres:
+    image: postgres:16
+    container_name: profile_postgres
+    environment:
+      POSTGRES_USER: profile_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: profile_db
+    ports:
+      - "5438:5432"
+    volumes:
+      - profile_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U profile_user -d profile_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   pet_postgres:
     image: postgres:16
     container_name: pet_postgres
@@ -190,18 +207,17 @@ services:
     environment:
       APP_PORT: "8086"
       APP_GRPC_PORT: "50058"
-      POSTGRES_USER: auth_user
+      POSTGRES_USER: profile_user
       POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: auth_db
-      POSTGRES_HOST: postgres
+      POSTGRES_DB: profile_db
+      POSTGRES_HOST: profile_postgres
       POSTGRES_PORT: "5432"
       PROFILE_DEFAULT_LOCALE: ru
       PROFILE_DEFAULT_TIMEZONE: Europe/Moscow
-      PROFILE_DEFAULT_DATE_FORMAT: dd.MM.yyyy
       FILE_SERVICE_GRPC_ADDR: file:50056
       INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
     depends_on:
-      postgres:
+      profile_postgres:
         condition: service_healthy
       file:
         condition: service_started
@@ -233,6 +249,8 @@ services:
       JWT_ISSUER: pawly
       ACCESS_TOKEN_TTL_MINUTES: "15"
       REFRESH_TOKEN_TTL_DAYS: "30"
+      OUTBOX_WORKER_INTERVAL_MS: "2000"
+      OUTBOX_WORKER_BATCH_SIZE: "100"
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
       RABBITMQ_USER: auth_user
@@ -413,6 +431,7 @@ volumes:
   postgres_data:
   file_postgres_data:
   acl_postgres_data:
+  profile_postgres_data:
   pet_postgres_data:
   catalog_postgres_data:
   health_postgres_data:

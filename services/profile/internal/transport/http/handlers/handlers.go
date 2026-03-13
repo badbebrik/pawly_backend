@@ -27,18 +27,14 @@ func NewHandlers(svc *service.ProfileService) *Handlers {
 }
 
 type ProfileResponse struct {
-	UserID            uuid.UUID                   `json:"user_id"`
-	FirstName         *string                     `json:"first_name"`
-	LastName          *string                     `json:"last_name"`
-	Phone             *string                     `json:"phone"`
-	AvatarDownloadURL *string                     `json:"avatar_download_url"`
-	Locale            string                      `json:"locale"`
-	Timezone          string                      `json:"time_zone"`
-	DateFormat        string                      `json:"date_format"`
-	PublicContact     model.PublicContactSettings `json:"public_contact_settings"`
-	ExtraContacts     model.ExtraContacts         `json:"extra_contacts"`
-	CreatedAt         string                      `json:"created_at"`
-	UpdatedAt         string                      `json:"updated_at"`
+	UserID            uuid.UUID `json:"user_id"`
+	FirstName         *string   `json:"first_name"`
+	LastName          *string   `json:"last_name"`
+	AvatarDownloadURL *string   `json:"avatar_download_url"`
+	Locale            string    `json:"locale"`
+	Timezone          string    `json:"time_zone"`
+	CreatedAt         string    `json:"created_at"`
+	UpdatedAt         string    `json:"updated_at"`
 }
 
 func (h *Handlers) fromModel(ctx context.Context, p *model.Profile) ProfileResponse {
@@ -52,27 +48,14 @@ func (h *Handlers) fromModel(ctx context.Context, p *model.Profile) ProfileRespo
 		UserID:            p.UserID,
 		FirstName:         p.FirstName,
 		LastName:          p.LastName,
-		Phone:             p.Phone,
 		AvatarDownloadURL: avatarURL,
 		Locale:            p.Locale,
 		Timezone:          p.Timezone,
-		DateFormat:        p.DateFormat,
-		PublicContact:     p.PublicContact,
-		ExtraContacts:     p.ExtraContacts,
 		CreatedAt:         p.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:         p.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
-// GetMe godoc
-// @Summary Get my profile
-// @Tags profile
-// @Produce json
-// @Param X-User-ID header string true "User ID"
-// @Success 200 {object} ProfileResponse
-// @Failure 401 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Router /v1/profile/me [get]
 func (h *Handlers) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -95,27 +78,12 @@ func (h *Handlers) GetMe(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateProfileRequest struct {
-	FirstName     *string                      `json:"first_name"`
-	LastName      *string                      `json:"last_name"`
-	Phone         *string                      `json:"phone"`
-	Locale        *string                      `json:"locale"`
-	Timezone      *string                      `json:"time_zone"`
-	DateFormat    *string                      `json:"date_format"`
-	PublicContact *model.PublicContactSettings `json:"public_contact_settings"`
-	ExtraContacts *model.ExtraContacts         `json:"extra_contacts"`
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+	Locale    *string `json:"locale"`
+	Timezone  *string `json:"time_zone"`
 }
 
-// PutMe godoc
-// @Summary Update my profile
-// @Tags profile
-// @Accept json
-// @Produce json
-// @Param X-User-ID header string true "User ID"
-// @Param request body UpdateProfileRequest true "request"
-// @Success 200 {object} ProfileResponse
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Router /v1/profile/me [put]
 func (h *Handlers) PutMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -130,14 +98,10 @@ func (h *Handlers) PutMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	in := service.UpdateProfileInput{
-		FirstName:     req.FirstName,
-		LastName:      req.LastName,
-		Phone:         req.Phone,
-		Locale:        req.Locale,
-		Timezone:      req.Timezone,
-		DateFormat:    req.DateFormat,
-		PublicContact: req.PublicContact,
-		ExtraContacts: req.ExtraContacts,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Locale:    req.Locale,
+		Timezone:  req.Timezone,
 	}
 
 	p, err := h.svc.UpdateProfile(r.Context(), userID, in)
@@ -171,17 +135,6 @@ type UploadInfoDTO struct {
 	ExpiresAt string            `json:"expires_at"`
 }
 
-// InitAvatarUpload godoc
-// @Summary Init avatar upload
-// @Tags profile
-// @Accept json
-// @Produce json
-// @Param X-User-ID header string true "User ID"
-// @Param request body InitAvatarUploadRequest true "request"
-// @Success 201 {object} InitAvatarUploadResponse
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Router /v1/profile/me/avatar:init-upload [post]
 func (h *Handlers) InitAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -221,17 +174,6 @@ type ConfirmAvatarUploadResponse struct {
 	Profile ProfileResponse `json:"profile"`
 }
 
-// ConfirmAvatarUpload godoc
-// @Summary Confirm avatar upload
-// @Tags profile
-// @Accept json
-// @Produce json
-// @Param X-User-ID header string true "User ID"
-// @Param request body ConfirmAvatarUploadRequest true "request"
-// @Success 200 {object} ConfirmAvatarUploadResponse
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Router /v1/profile/me/avatar:confirm-upload [post]
 func (h *Handlers) ConfirmAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -255,21 +197,10 @@ func (h *Handlers) ConfirmAvatarUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 type PublicOwnerContactDTO struct {
-	DisplayName   *string             `json:"display_name"`
-	Phone         *string             `json:"phone"`
-	Email         *string             `json:"email"`
-	ExtraContacts model.ExtraContacts `json:"extra_contacts"`
+	DisplayName *string `json:"display_name"`
+	Email       *string `json:"email"`
 }
 
-// GetPublicContact godoc
-// @Summary Get public contact by user id
-// @Tags profile
-// @Produce json
-// @Param user_id path string true "user id"
-// @Success 200 {object} PublicOwnerContactDTO
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Router /internal/v1/profile/users/{user_id}/public-contact [get]
 func (h *Handlers) GetPublicContact(w http.ResponseWriter, r *http.Request) {
 	userIDRaw := chi.URLParam(r, "user_id")
 	userID, err := uuid.Parse(userIDRaw)
@@ -289,33 +220,16 @@ func (h *Handlers) GetPublicContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var displayName *string
-	if p.PublicContact.PublicDisplayNameOverride != nil && *p.PublicContact.PublicDisplayNameOverride != "" {
-		displayName = p.PublicContact.PublicDisplayNameOverride
-	} else if p.PublicContact.ShowOwnerName {
-		name := strings.TrimSpace(strings.Join([]string{valueOrEmpty(p.FirstName), valueOrEmpty(p.LastName)}, " "))
-		if name != "" {
-			displayName = &name
-		}
+	name := strings.TrimSpace(strings.Join([]string{valueOrEmpty(p.FirstName), valueOrEmpty(p.LastName)}, " "))
+	if name != "" {
+		displayName = &name
 	}
 
-	var phone *string
-	if p.PublicContact.ShowPhone {
-		phone = p.Phone
-	}
-
-	var extra model.ExtraContacts = model.ExtraContacts{}
-	if p.PublicContact.ShowExtraContacts {
-		extra = p.ExtraContacts
-	}
-
-	// Email пока не запрашиваем из Auth
 	var email *string = nil
 
 	writeJSON(w, http.StatusOK, PublicOwnerContactDTO{
-		DisplayName:   displayName,
-		Phone:         phone,
-		Email:         email,
-		ExtraContacts: extra,
+		DisplayName: displayName,
+		Email:       email,
 	})
 }
 

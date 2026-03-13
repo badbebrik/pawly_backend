@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"profile/internal/config"
 	"profile/internal/model"
 	"profile/internal/repository"
@@ -66,14 +65,11 @@ func (s *ProfileService) CreateProfile(ctx context.Context, in CreateProfileInpu
 	}
 
 	profile := &model.Profile{
-		UserID:        in.UserID,
-		FirstName:     firstName,
-		LastName:      lastName,
-		Locale:        locale,
-		Timezone:      s.cfg.DefaultTimezone,
-		DateFormat:    s.cfg.DefaultDateFmt,
-		PublicContact: defaultPublicContactSettings(),
-		ExtraContacts: model.ExtraContacts{},
+		UserID:     in.UserID,
+		FirstName:  firstName,
+		LastName:   lastName,
+		Locale:     locale,
+		Timezone:   s.cfg.DefaultTimezone,
 	}
 
 	if err := s.repo.Create(ctx, profile); err != nil {
@@ -96,6 +92,13 @@ type ProfileBrief struct {
 
 func (s *ProfileService) GetProfile(ctx context.Context, userID uuid.UUID) (*model.Profile, error) {
 	return s.repo.GetByUserID(ctx, userID)
+}
+
+func (s *ProfileService) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
+	if userID == uuid.Nil {
+		return ErrInvalidInput
+	}
+	return s.repo.Delete(ctx, userID)
 }
 
 func (s *ProfileService) BatchGetProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([]ProfileBrief, []uuid.UUID, error) {
@@ -182,26 +185,11 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, pa
 	if patch.LastName != nil {
 		p.LastName = patch.LastName
 	}
-	if patch.Phone != nil {
-		p.Phone = patch.Phone
-	}
 	if patch.Locale != nil && *patch.Locale != "" {
 		p.Locale = *patch.Locale
 	}
 	if patch.Timezone != nil && *patch.Timezone != "" {
 		p.Timezone = *patch.Timezone
-	}
-	if patch.DateFormat != nil && *patch.DateFormat != "" {
-		p.DateFormat = *patch.DateFormat
-	}
-	if patch.PublicContact != nil {
-		p.PublicContact = *patch.PublicContact
-	}
-	if patch.ExtraContacts != nil {
-		if err := validateExtraContacts(*patch.ExtraContacts); err != nil {
-			return nil, err
-		}
-		p.ExtraContacts = *patch.ExtraContacts
 	}
 
 	if err := s.repo.Update(ctx, p); err != nil {
@@ -212,23 +200,10 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, pa
 }
 
 type UpdateProfileInput struct {
-	FirstName     *string
-	LastName      *string
-	Phone         *string
-	Locale        *string
-	Timezone      *string
-	DateFormat    *string
-	PublicContact *model.PublicContactSettings
-	ExtraContacts *model.ExtraContacts
-}
-
-func defaultPublicContactSettings() model.PublicContactSettings {
-	return model.PublicContactSettings{
-		ShowOwnerName:     true,
-		ShowPhone:         true,
-		ShowEmail:         false,
-		ShowExtraContacts: false,
-	}
+	FirstName  *string
+	LastName   *string
+	Locale     *string
+	Timezone   *string
 }
 
 func (s *ProfileService) GetAvatarDownloadURL(ctx context.Context, fileID uuid.UUID) (string, time.Time, error) {
@@ -273,17 +248,6 @@ func (s *ProfileService) ConfirmAvatarUpload(ctx context.Context, userID uuid.UU
 		return nil, err
 	}
 	return p, nil
-}
-
-func validateExtraContacts(m model.ExtraContacts) error {
-	for k := range m {
-		switch k {
-		case "telegram", "whatsapp", "vk":
-		default:
-			return fmt.Errorf("invalid extra_contact key: %s", k)
-		}
-	}
-	return nil
 }
 
 func normalizeOptionalString(raw *string) *string {

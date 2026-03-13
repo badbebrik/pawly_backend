@@ -2,10 +2,8 @@ package service
 
 import (
 	"auth/internal/domain/model"
-	"auth/internal/infrastructure/rabbit"
 	"auth/internal/repository"
 	"auth/internal/security"
-	"auth/internal/transport/http/middleware"
 	"context"
 	"errors"
 	"github.com/google/uuid"
@@ -44,20 +42,7 @@ func (s *Service) LoginEmail(ctx context.Context, in LoginEmailInput) (*LoginEma
 	}
 
 	if !u.IsVerified {
-		loc := middleware.LocaleFromCtx(ctx, "ru")
-
-		code, ttlSeconds, _, verr := s.verification.RequestCode(ctx, email, "registration")
-		if verr == nil {
-			_ = s.notifier.SendEmailVerification(ctx, rabbit.EmailVerificationPayload{
-				UserID:     u.ID,
-				Email:      email,
-				FirstName:  "",
-				LastName:   "",
-				Code:       code,
-				TTLSeconds: ttlSeconds,
-				Locale:     loc,
-			})
-		}
+		_, _ = s.sendRegistrationVerification(ctx, u.ID, email, "", "")
 		return nil, ErrEmailNotVerified
 	}
 

@@ -11,6 +11,7 @@ import (
 	"regexp"
 
 	"github.com/google/uuid"
+	"time"
 )
 
 var resetCodeRe = regexp.MustCompile(`^\d{6}$`)
@@ -121,6 +122,18 @@ func (s *Service) ConfirmPasswordReset(ctx context.Context, in PasswordResetConf
 		return ErrUnauthorized
 	}
 	if err := s.jwt.EnsureTokenType(p, tokens.TokenTypeReset); err != nil {
+		return ErrUnauthorized
+	}
+	if p.SessionID == "" {
+		return ErrUnauthorized
+	}
+
+	ttl := time.Until(time.Unix(p.Exp, 0))
+	consumed, err := s.resetTokens.ConsumeOnce(ctx, p.SessionID, ttl)
+	if err != nil {
+		return err
+	}
+	if !consumed {
 		return ErrUnauthorized
 	}
 

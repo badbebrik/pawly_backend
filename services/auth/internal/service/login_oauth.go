@@ -78,7 +78,7 @@ func (s *Service) LoginOAuth(ctx context.Context, in LoginOAuthInput) (*LoginOAu
 				IsVerified:   true,
 				IsActive:     true,
 			}
-			if err := s.users.Create(ctx, user); err != nil {
+			if err := s.createUserWithProfile(ctx, user, "", claims.FirstName, claims.LastName); err != nil {
 				if !errors.Is(err, repository.ErrConflict) {
 					return nil, err
 				}
@@ -88,10 +88,6 @@ func (s *Service) LoginOAuth(ctx context.Context, in LoginOAuthInput) (*LoginOAu
 				}
 			} else {
 				createdUser = true
-				if err := s.profile.CreateProfile(ctx, user.ID, "", claims.FirstName, claims.LastName); err != nil {
-					_ = s.users.Delete(ctx, user.ID)
-					return nil, ErrProfileCreationFailed
-				}
 			}
 		}
 
@@ -105,7 +101,7 @@ func (s *Service) LoginOAuth(ctx context.Context, in LoginOAuthInput) (*LoginOAu
 		}
 		if err := s.oauth.Create(ctx, newIdentity); err != nil {
 			if createdUser {
-				_ = s.users.Delete(ctx, user.ID)
+				s.compensateUserWithProfile(ctx, user.ID)
 			}
 			if identity, getErr := s.oauth.GetByProviderAndExternalID(ctx, provider, claims.Subject); getErr == nil {
 				user, err = s.users.GetByID(ctx, identity.UserID)

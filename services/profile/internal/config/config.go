@@ -14,7 +14,6 @@ type Config struct {
 
 	DefaultLocale   string
 	DefaultTimezone string
-	DefaultDateFmt  string
 
 	FileServiceGRPCAddr  string
 	InternalServiceToken string
@@ -31,7 +30,6 @@ func Load() *Config {
 		PostgresPort:         getEnv("POSTGRES_PORT", ""),
 		DefaultLocale:        getEnv("PROFILE_DEFAULT_LOCALE", ""),
 		DefaultTimezone:      getEnv("PROFILE_DEFAULT_TIMEZONE", ""),
-		DefaultDateFmt:       getEnv("PROFILE_DEFAULT_DATE_FORMAT", ""),
 		FileServiceGRPCAddr:  getEnv("FILE_SERVICE_GRPC_ADDR", ""),
 		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}

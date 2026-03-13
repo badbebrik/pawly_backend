@@ -2,8 +2,10 @@ package tokens
 
 import (
 	"auth/internal/config"
-	"github.com/golang-jwt/jwt/v5"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type JWTService struct {
@@ -11,6 +13,7 @@ type JWTService struct {
 	issuer     string
 	accessTTL  time.Duration
 	refreshTTL time.Duration
+	resetTTL   time.Duration
 }
 
 type TokenManager interface {
@@ -27,6 +30,7 @@ func NewJWTService(cnf config.Config) *JWTService {
 		issuer:     cnf.JWTIssuer,
 		accessTTL:  time.Duration(cnf.AccessTokenTTLMin) * time.Minute,
 		refreshTTL: time.Duration(cnf.RefreshTokenTTLDays) * time.Hour * 24,
+		resetTTL:   time.Duration(cnf.PasswordResetTokenTTLMin) * time.Minute,
 	}
 	return svc
 }
@@ -38,6 +42,9 @@ func (s *JWTService) Sign(payload Payload) (string, error) {
 		"session_id": payload.SessionID,
 		"type":       payload.Type,
 		"exp":        payload.Exp,
+	}
+	if payload.Email != "" {
+		claims["email"] = payload.Email
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.secretKey)
@@ -59,6 +66,8 @@ func parsePayload(claims jwt.MapClaims) (*Payload, error) {
 		return nil, ErrPayloadMalformed
 	}
 
+	email, _ := claims["email"].(string)
+
 	var exp int64
 	switch v := claims["exp"].(type) {
 	case float64:
@@ -76,6 +85,7 @@ func parsePayload(claims jwt.MapClaims) (*Payload, error) {
 		SessionID: sessionID,
 		Type:      typee,
 		Exp:       exp,
+		Email:     email,
 	}, nil
 }
 
@@ -133,9 +143,10 @@ func (s *JWTService) GenerateAccessToken(userID, sessionID string) (string, erro
 func (s *JWTService) GeneratePasswordResetToken(userID, email string) (string, error) {
 	payload := Payload{
 		Sub:       userID,
-		SessionID: email,
+		SessionID: uuid.NewString(),
 		Type:      TokenTypeReset,
-		Exp:       time.Now().Add(time.Minute * 15).Unix(), // TODO: Просунуть в конфиг
+		Exp:       time.Now().Add(s.resetTTL).Unix(),
+		Email:     email,
 	}
 	return s.Sign(payload)
 }

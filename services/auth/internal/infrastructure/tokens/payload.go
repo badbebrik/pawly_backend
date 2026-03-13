@@ -5,6 +5,7 @@ type Payload struct {
 	SessionID string `json:"session_id"`
 	Type      string `json:"type"`
 	Exp       int64  `json:"exp"`
+	Email     string `json:"email,omitempty"`
 }
 
 const (

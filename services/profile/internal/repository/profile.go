@@ -11,4 +11,5 @@ type ProfileRepository interface {
 	GetByUserIDs(ctx context.Context, userIDs []uuid.UUID) ([]model.Profile, error)
 	Create(ctx context.Context, p *model.Profile) error
 	Update(ctx context.Context, p *model.Profile) error
+	Delete(ctx context.Context, userID uuid.UUID) error
 }

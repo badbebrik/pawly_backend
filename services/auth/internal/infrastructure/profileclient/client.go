@@ -13,6 +13,7 @@ import (
 
 type Client interface {
 	CreateProfile(ctx context.Context, userID uuid.UUID, locale string, firstName string, lastName string) error
+	DeleteProfile(ctx context.Context, userID uuid.UUID) error
 	Close()
 }
 
@@ -49,6 +50,13 @@ func (c *GRPCClient) CreateProfile(ctx context.Context, userID uuid.UUID, locale
 		Locale:    locale,
 		FirstName: firstName,
 		LastName:  lastName,
+	})
+	return err
+}
+
+func (c *GRPCClient) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
+	_, err := c.client.DeleteProfile(ctx, &profilepb.DeleteProfileRequest{
+		UserId: userID.String(),
 	})
 	return err
 }

@@ -13,6 +13,7 @@ type Service struct {
 	users        repository.UserRepository
 	sessions     repository.SessionRepository
 	oauth        repository.OAuthIdentityRepository
+	resetTokens  repository.ResetTokenRepository
 	verification verification.Store
 	notifier     rabbit.Publisher
 	jwt          tokens.TokenManager
@@ -27,6 +28,7 @@ func NewService(
 	users repository.UserRepository,
 	sessions repository.SessionRepository,
 	oauth repository.OAuthIdentityRepository,
+	resetTokens repository.ResetTokenRepository,
 	verification verification.Store,
 	notifier rabbit.Publisher,
 	jwt tokens.TokenManager,
@@ -39,6 +41,7 @@ func NewService(
 		users:            users,
 		sessions:         sessions,
 		oauth:            oauth,
+		resetTokens:      resetTokens,
 		verification:     verification,
 		notifier:         notifier,
 		jwt:              jwt,

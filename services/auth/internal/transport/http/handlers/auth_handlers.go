@@ -52,6 +52,9 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, authsvc.ErrEmailAlreadyTaken):
 			writeServiceError(w, http.StatusConflict, err)
 			return
+		case errors.Is(err, authsvc.ErrUserBlocked):
+			writeServiceError(w, http.StatusForbidden, err)
+			return
 		case errors.Is(err, authsvc.ErrWeakPassword),
 			errors.Is(err, authsvc.ErrIncorrectFormat):
 			writeServiceError(w, http.StatusBadRequest, err)
@@ -128,6 +131,57 @@ func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		TokenType:    "Bearer",
 		ExpiresIn:    resp.ExpiresIn,
 	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *AuthHandlers) ResendEmailVerification(w http.ResponseWriter, r *http.Request) {
+	var req dto.ResendEmailVerificationRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		return
+	}
+
+	resp, err := h.svc.ResendEmailVerification(r.Context(), authsvc.ResendEmailVerificationInput{
+		Email: req.Email,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("email", req.Email).Msg("ResendEmailVerification failed")
+		switch {
+		case errors.Is(err, authsvc.ErrIncorrectFormat):
+			writeServiceError(w, http.StatusBadRequest, err)
+			return
+		case errors.Is(err, authsvc.ErrUserNotFound):
+			writeServiceError(w, http.StatusNotFound, err)
+			return
+		case errors.Is(err, authsvc.ErrUserBlocked):
+			writeServiceError(w, http.StatusForbidden, err)
+			return
+		case errors.Is(err, authsvc.ErrEmailAlreadyVerified):
+			writeServiceError(w, http.StatusConflict, err)
+			return
+		case errors.Is(err, authsvc.ErrCannotResendYet):
+			writeError(w, http.StatusTooManyRequests, err.Error(), map[string]any{
+				"user_id":          resp.UserID,
+				"channel":          resp.Verification.Channel,
+				"code_ttl_seconds": resp.Verification.CodeTTLSeconds,
+				"can_resend_in":    resp.Verification.CanResendInSeconds,
+			})
+			return
+		case errors.Is(err, authsvc.ErrVerificationFailed):
+			writeServiceError(w, http.StatusServiceUnavailable, err)
+			return
+		default:
+			writeInternalError(w)
+			return
+		}
+	}
+
+	var out dto.ResendEmailVerificationResponse
+	out.UserID = resp.UserID
+	out.Verification.Channel = resp.Verification.Channel
+	out.Verification.CodeTTLSeconds = resp.Verification.CodeTTLSeconds
+	out.Verification.CanResendInSeconds = resp.Verification.CanResendInSeconds
+
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -258,6 +312,52 @@ func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, dto.LogoutResponse{})
+}
+
+func (h *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	tok, err := authz.BearerToken(r)
+	if err != nil {
+		writeServiceError(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	var req dto.ChangePasswordRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		return
+	}
+
+	err = h.svc.ChangePassword(r.Context(), authsvc.ChangePasswordInput{
+		AccessToken: tok,
+		OldPassword: req.OldPassword,
+		NewPassword: req.NewPassword,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("ChangePassword failed")
+		switch {
+		case errors.Is(err, authsvc.ErrUnauthorized):
+			writeServiceError(w, http.StatusUnauthorized, err)
+			return
+		case errors.Is(err, authsvc.ErrInvalidEmailOrPassword):
+			writeServiceError(w, http.StatusUnauthorized, err)
+			return
+		case errors.Is(err, authsvc.ErrIncorrectFormat),
+			errors.Is(err, authsvc.ErrWeakPassword):
+			writeServiceError(w, http.StatusBadRequest, err)
+			return
+		case errors.Is(err, authsvc.ErrUserNotFound):
+			writeServiceError(w, http.StatusNotFound, err)
+			return
+		case errors.Is(err, authsvc.ErrUserBlocked):
+			writeServiceError(w, http.StatusForbidden, err)
+			return
+		default:
+			writeInternalError(w)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, dto.ChangePasswordResponse{Status: "ok"})
 }
 
 func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {

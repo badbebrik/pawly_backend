@@ -20,10 +20,13 @@ type Config struct {
 	RedisPassword string
 	RedisDB       int
 
-	JWTSecret           string
-	JWTIssuer           string
-	AccessTokenTTLMin   int
-	RefreshTokenTTLDays int
+	JWTSecret                string
+	JWTIssuer                string
+	AccessTokenTTLMin        int
+	RefreshTokenTTLDays      int
+	PasswordResetTokenTTLMin int
+	OutboxWorkerIntervalMS   int
+	OutboxWorkerBatchSize    int
 
 	RabbitHost               string
 	RabbitPort               string
@@ -52,6 +55,9 @@ func Load() *Config {
 		JWTIssuer:                getEnv("JWT_ISSUER", "pawly"),
 		AccessTokenTTLMin:        getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 15),
 		RefreshTokenTTLDays:      getEnvInt("REFRESH_TOKEN_TTL_DAYS", 30),
+		PasswordResetTokenTTLMin: getEnvInt("PASSWORD_RESET_TOKEN_TTL_MINUTES", 15),
+		OutboxWorkerIntervalMS:   getEnvInt("OUTBOX_WORKER_INTERVAL_MS", 2000),
+		OutboxWorkerBatchSize:    getEnvInt("OUTBOX_WORKER_BATCH_SIZE", 100),
 		RabbitHost:               getEnv("RABBITMQ_HOST", "localhost"),
 		RabbitPort:               getEnv("RABBITMQ_PORT", "5672"),
 		RabbitUser:               getEnv("RABBITMQ_USER", ""),

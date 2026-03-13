@@ -19,7 +19,7 @@ func NewRabbitPublisher(ch *amqp091.Channel, queue string) *RabbitPublisher {
 	}
 }
 
-func (p *RabbitPublisher) publish(ctx context.Context, ev NotificationEvent) error {
+func (p *RabbitPublisher) PublishEvent(ctx context.Context, ev NotificationEvent) error {
 	body, err := json.Marshal(ev)
 	if err != nil {
 		return err
@@ -36,4 +36,8 @@ func (p *RabbitPublisher) publish(ctx context.Context, ev NotificationEvent) err
 			Body:        body,
 		},
 	)
+}
+
+func (p *RabbitPublisher) publish(ctx context.Context, ev NotificationEvent) error {
+	return p.PublishEvent(ctx, ev)
 }

@@ -5,6 +5,7 @@ import (
 	"auth/internal/infrastructure/db"
 	pgrepo "auth/internal/infrastructure/db/repository"
 	"auth/internal/infrastructure/oauth"
+	"auth/internal/infrastructure/outbox"
 	"auth/internal/infrastructure/profileclient"
 	"auth/internal/infrastructure/rabbit"
 	"auth/internal/infrastructure/redis"
@@ -32,6 +33,7 @@ type App struct {
 	rabbitConn *amqp091.Connection
 	rabbitCh   *amqp091.Channel
 	profile    profileclient.Client
+	outboxWkr  *outbox.Worker
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -73,12 +75,21 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("rabbit queue declare: %w", err)
 	}
 
-	publisher := rabbit.NewRabbitPublisher(ch, cfg.RabbitNotificationsQueue)
+	rabbitPublisher := rabbit.NewRabbitPublisher(ch, cfg.RabbitNotificationsQueue)
 
 	userRepo := pgrepo.NewUserRepo(pg.Pool)
 	sessionRepo := pgrepo.NewSessionRepo(pg.Pool)
 	oauthRepo := pgrepo.NewOAuthIdentityRepo(pg.Pool)
+	outboxRepo := pgrepo.NewOutboxRepo(pg.Pool)
+	resetTokenRepo := redisdb.NewResetTokenStore(redis.Client())
 	verificationRepo := redisstore.NewRedisStore(redis.Client())
+	outboxPublisher := outbox.NewPublisher(outboxRepo)
+	outboxWorker := outbox.NewWorker(
+		outboxRepo,
+		rabbitPublisher,
+		time.Duration(cfg.OutboxWorkerIntervalMS)*time.Millisecond,
+		cfg.OutboxWorkerBatchSize,
+	)
 
 	jwtSvc := tokens.NewJWTService(*cfg)
 	profileSvc, err := profileclient.New(cfg.ProfileServiceGRPCAddr)
@@ -95,8 +106,9 @@ func New(cfg *config.Config) (*App, error) {
 		userRepo,
 		sessionRepo,
 		oauthRepo,
+		resetTokenRepo,
 		verificationRepo,
-		publisher,
+		outboxPublisher,
 		jwtSvc,
 		profileSvc,
 		oauthVerifier,
@@ -112,6 +124,7 @@ func New(cfg *config.Config) (*App, error) {
 		rabbitConn: conn,
 		rabbitCh:   ch,
 		profile:    profileSvc,
+		outboxWkr:  outboxWorker,
 	}, nil
 }
 
@@ -158,11 +171,19 @@ func (a *App) Run() error {
 		}
 	}()
 
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+
+	if a.outboxWkr != nil {
+		go a.outboxWkr.Run(runCtx)
+	}
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
 	log.Info().Msg("shutting down HTTP server...")
+	cancelRun()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

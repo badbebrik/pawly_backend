@@ -6,6 +6,7 @@ option go_package = "auth/proto/profilepb;profilepb";
 
 service ProfileService {
   rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse);
+  rpc DeleteProfile(DeleteProfileRequest) returns (DeleteProfileResponse);
 }
 
 message CreateProfileRequest {
@@ -16,5 +17,13 @@ message CreateProfileRequest {
 }
 
 message CreateProfileResponse {
+  string user_id = 1;
+}
+
+message DeleteProfileRequest {
+  string user_id = 1;
+}
+
+message DeleteProfileResponse {
   string user_id = 1;
 }

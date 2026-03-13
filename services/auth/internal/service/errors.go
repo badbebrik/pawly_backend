@@ -7,9 +7,10 @@ var (
 	ErrIncorrectFormat        = errors.New("incorrect_format")
 	ErrWeakPassword           = errors.New("weak_password")
 
-	ErrEmailAlreadyTaken  = errors.New("email_taken")
-	ErrVerificationFailed = errors.New("verification_failed")
-	ErrCannotResendYet    = errors.New("cannot_resend_yet")
+	ErrEmailAlreadyTaken    = errors.New("email_taken")
+	ErrEmailAlreadyVerified = errors.New("email_already_verified")
+	ErrVerificationFailed   = errors.New("verification_failed")
+	ErrCannotResendYet      = errors.New("cannot_resend_yet")
 
 	ErrUserNotFound     = errors.New("user_not_found")
 	ErrSessionNotFound  = errors.New("session_not_found")

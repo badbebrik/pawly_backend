@@ -275,13 +275,13 @@ func (s *stubTokenManager) RefreshTTL() time.Duration {
 }
 
 type stubProfileProvisioner struct {
-	createProfileFn func(context.Context, uuid.UUID, string, string, string) error
+	createProfileFn func(context.Context, uuid.UUID, string, string, string, string) error
 	deleteProfileFn func(context.Context, uuid.UUID) error
 }
 
-func (s *stubProfileProvisioner) CreateProfile(ctx context.Context, userID uuid.UUID, locale string, firstName string, lastName string) error {
+func (s *stubProfileProvisioner) CreateProfile(ctx context.Context, userID uuid.UUID, locale string, timezone string, firstName string, lastName string) error {
 	if s.createProfileFn != nil {
-		return s.createProfileFn(ctx, userID, locale, firstName, lastName)
+		return s.createProfileFn(ctx, userID, locale, timezone, firstName, lastName)
 	}
 	return nil
 }
@@ -340,7 +340,7 @@ func TestRegisterEmail_UsesExplicitLocaleForProfileAndVerification(t *testing.T)
 		},
 		Tokens: &stubTokenManager{},
 		Profiles: &stubProfileProvisioner{
-			createProfileFn: func(_ context.Context, _ uuid.UUID, locale string, _, _ string) error {
+			createProfileFn: func(_ context.Context, _ uuid.UUID, locale string, _ string, _, _ string) error {
 				createdProfileLocale = locale
 				return nil
 			},

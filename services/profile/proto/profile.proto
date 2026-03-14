@@ -7,6 +7,8 @@ option go_package = "profile/proto;profilepb";
 service ProfileService {
   rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse);
   rpc DeleteProfile(DeleteProfileRequest) returns (DeleteProfileResponse);
+  rpc GetPreferences(GetPreferencesRequest) returns (GetPreferencesResponse);
+  rpc BatchGetPreferences(BatchGetPreferencesRequest) returns (BatchGetPreferencesResponse);
   rpc BatchProfilesBrief(BatchProfilesBriefRequest) returns (BatchProfilesBriefResponse);
 }
 
@@ -15,6 +17,7 @@ message CreateProfileRequest {
   string locale = 2;
   string first_name = 3;
   string last_name = 4;
+  string timezone = 5;
 }
 
 message CreateProfileResponse {
@@ -27,6 +30,31 @@ message DeleteProfileRequest {
 
 message DeleteProfileResponse {
   string user_id = 1;
+}
+
+message GetPreferencesRequest {
+  string user_id = 1;
+}
+
+message GetPreferencesResponse {
+  string user_id = 1;
+  string locale = 2;
+  string timezone = 3;
+}
+
+message BatchGetPreferencesRequest {
+  repeated string user_ids = 1;
+}
+
+message ProfilePreferences {
+  string user_id = 1;
+  string locale = 2;
+  string timezone = 3;
+}
+
+message BatchGetPreferencesResponse {
+  repeated ProfilePreferences items = 1;
+  repeated string not_found_user_ids = 2;
 }
 
 message BatchProfilesBriefRequest {

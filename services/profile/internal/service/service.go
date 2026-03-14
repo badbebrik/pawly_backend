@@ -6,6 +6,7 @@ import (
 	"profile/internal/config"
 	"profile/internal/model"
 	"profile/internal/repository"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ func NewService(repo repository.ProfileRepository, cfg *config.Config, fileClien
 type CreateProfileInput struct {
 	UserID    uuid.UUID
 	Locale    *string
+	Timezone  *string
 	FirstName *string
 	LastName  *string
 }
@@ -34,48 +36,27 @@ func (s *ProfileService) CreateProfile(ctx context.Context, in CreateProfileInpu
 		return nil, ErrInvalidInput
 	}
 
-	firstName := normalizeOptionalString(in.FirstName)
-	lastName := normalizeOptionalString(in.LastName)
-
-	p, err := s.repo.GetByUserID(ctx, in.UserID)
-	if err == nil {
-		changed := false
-		if p.FirstName == nil && firstName != nil {
-			p.FirstName = firstName
-			changed = true
-		}
-		if p.LastName == nil && lastName != nil {
-			p.LastName = lastName
-			changed = true
-		}
-		if changed {
-			if err := s.repo.Update(ctx, p); err != nil {
-				return nil, err
-			}
-		}
-		return p, nil
+	locale, err := s.normalizeLocale(in.Locale)
+	if err != nil {
+		return nil, err
 	}
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+	timezone, err := s.normalizeTimezone(in.Timezone)
+	if err != nil {
 		return nil, err
 	}
 
-	locale := s.cfg.DefaultLocale
-	if in.Locale != nil && *in.Locale != "" {
-		locale = *in.Locale
-	}
+	firstName := normalizeOptionalString(in.FirstName)
+	lastName := normalizeOptionalString(in.LastName)
 
 	profile := &model.Profile{
-		UserID:     in.UserID,
-		FirstName:  firstName,
-		LastName:   lastName,
-		Locale:     locale,
-		Timezone:   s.cfg.DefaultTimezone,
+		UserID:    in.UserID,
+		FirstName: firstName,
+		LastName:  lastName,
+		Locale:    locale,
+		Timezone:  timezone,
 	}
 
 	if err := s.repo.Create(ctx, profile); err != nil {
-		if errors.Is(err, repository.ErrConflict) {
-			return s.repo.GetByUserID(ctx, in.UserID)
-		}
 		return nil, err
 	}
 
@@ -101,24 +82,73 @@ func (s *ProfileService) DeleteProfile(ctx context.Context, userID uuid.UUID) er
 	return s.repo.Delete(ctx, userID)
 }
 
+type Preferences struct {
+	UserID   uuid.UUID
+	Locale   string
+	Timezone string
+}
+
+func (s *ProfileService) GetPreferences(ctx context.Context, userID uuid.UUID) (*Preferences, error) {
+	if userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	profile, err := s.repo.GetByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Preferences{
+		UserID:   profile.UserID,
+		Locale:   profile.Locale,
+		Timezone: profile.Timezone,
+	}, nil
+}
+
+func (s *ProfileService) BatchGetPreferences(ctx context.Context, userIDs []uuid.UUID) ([]Preferences, []uuid.UUID, error) {
+	if len(userIDs) == 0 {
+		return []Preferences{}, []uuid.UUID{}, nil
+	}
+
+	unique := uniqueUserIDs(userIDs)
+	if len(unique) == 0 {
+		return []Preferences{}, []uuid.UUID{}, nil
+	}
+
+	profiles, err := s.repo.GetByUserIDs(ctx, unique)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	profilesByUser := make(map[uuid.UUID]model.Profile, len(profiles))
+	for i := range profiles {
+		profilesByUser[profiles[i].UserID] = profiles[i]
+	}
+
+	items := make([]Preferences, 0, len(profilesByUser))
+	notFound := make([]uuid.UUID, 0)
+	for i := range unique {
+		profile, ok := profilesByUser[unique[i]]
+		if !ok {
+			notFound = append(notFound, unique[i])
+			continue
+		}
+		items = append(items, Preferences{
+			UserID:   profile.UserID,
+			Locale:   profile.Locale,
+			Timezone: profile.Timezone,
+		})
+	}
+
+	return items, notFound, nil
+}
+
 func (s *ProfileService) BatchGetProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([]ProfileBrief, []uuid.UUID, error) {
 	if len(userIDs) == 0 {
 		return []ProfileBrief{}, []uuid.UUID{}, nil
 	}
 
-	unique := make([]uuid.UUID, 0, len(userIDs))
-	seen := make(map[uuid.UUID]struct{}, len(userIDs))
-	for i := range userIDs {
-		id := userIDs[i]
-		if id == uuid.Nil {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		unique = append(unique, id)
-	}
+	unique := uniqueUserIDs(userIDs)
 	if len(unique) == 0 {
 		return []ProfileBrief{}, []uuid.UUID{}, nil
 	}
@@ -173,23 +203,21 @@ func (s *ProfileService) BatchGetProfilesBrief(ctx context.Context, userIDs []uu
 	return items, notFound, nil
 }
 
-func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, patch UpdateProfileInput) (*model.Profile, error) {
+func (s *ProfileService) UpdateProfileInfo(ctx context.Context, userID uuid.UUID, patch UpdateProfileInfoInput) (*model.Profile, error) {
+	if userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
 	p, err := s.repo.GetByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	if patch.FirstName != nil {
-		p.FirstName = patch.FirstName
+		p.FirstName = normalizeOptionalString(patch.FirstName)
 	}
 	if patch.LastName != nil {
-		p.LastName = patch.LastName
-	}
-	if patch.Locale != nil && *patch.Locale != "" {
-		p.Locale = *patch.Locale
-	}
-	if patch.Timezone != nil && *patch.Timezone != "" {
-		p.Timezone = *patch.Timezone
+		p.LastName = normalizeOptionalString(patch.LastName)
 	}
 
 	if err := s.repo.Update(ctx, p); err != nil {
@@ -199,11 +227,46 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID uuid.UUID, pa
 	return p, nil
 }
 
-type UpdateProfileInput struct {
-	FirstName  *string
-	LastName   *string
-	Locale     *string
-	Timezone   *string
+type UpdateProfileInfoInput struct {
+	FirstName *string
+	LastName  *string
+}
+
+type UpdatePreferencesInput struct {
+	Locale   *string
+	Timezone *string
+}
+
+func (s *ProfileService) UpdatePreferences(ctx context.Context, userID uuid.UUID, patch UpdatePreferencesInput) (*model.Profile, error) {
+	if userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	p, err := s.repo.GetByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if patch.Locale != nil {
+		locale, err := s.normalizeLocale(patch.Locale)
+		if err != nil {
+			return nil, err
+		}
+		p.Locale = locale
+	}
+	if patch.Timezone != nil {
+		timezone, err := s.normalizeTimezone(patch.Timezone)
+		if err != nil {
+			return nil, err
+		}
+		p.Timezone = timezone
+	}
+
+	if err := s.repo.Update(ctx, p); err != nil {
+		return nil, err
+	}
+
+	return p, nil
 }
 
 func (s *ProfileService) GetAvatarDownloadURL(ctx context.Context, fileID uuid.UUID) (string, time.Time, error) {
@@ -259,4 +322,57 @@ func normalizeOptionalString(raw *string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+var localePattern = regexp.MustCompile(`^[a-z]{2}(-[a-z]{2})?$`)
+
+func (s *ProfileService) normalizeLocale(raw *string) (string, error) {
+	locale := strings.ToLower(strings.TrimSpace(s.cfg.DefaultLocale))
+	if locale == "" {
+		locale = "ru"
+	}
+	if raw != nil {
+		candidate := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(*raw, "_", "-")))
+		if candidate != "" {
+			locale = candidate
+		}
+	}
+	if !localePattern.MatchString(locale) {
+		return "", ErrInvalidLocale
+	}
+	return locale, nil
+}
+
+func (s *ProfileService) normalizeTimezone(raw *string) (string, error) {
+	timezone := strings.TrimSpace(s.cfg.DefaultTimezone)
+	if timezone == "" {
+		timezone = "UTC"
+	}
+	if raw != nil {
+		candidate := strings.TrimSpace(*raw)
+		if candidate != "" {
+			timezone = candidate
+		}
+	}
+	if _, err := time.LoadLocation(timezone); err != nil {
+		return "", ErrInvalidTimezone
+	}
+	return timezone, nil
+}
+
+func uniqueUserIDs(userIDs []uuid.UUID) []uuid.UUID {
+	unique := make([]uuid.UUID, 0, len(userIDs))
+	seen := make(map[uuid.UUID]struct{}, len(userIDs))
+	for i := range userIDs {
+		id := userIDs[i]
+		if id == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	return unique
 }

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
@@ -80,11 +79,9 @@ func (h *Handlers) GetMe(w http.ResponseWriter, r *http.Request) {
 type UpdateProfileRequest struct {
 	FirstName *string `json:"first_name"`
 	LastName  *string `json:"last_name"`
-	Locale    *string `json:"locale"`
-	Timezone  *string `json:"time_zone"`
 }
 
-func (h *Handlers) PutMe(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) PatchMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -97,14 +94,12 @@ func (h *Handlers) PutMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	in := service.UpdateProfileInput{
+	in := service.UpdateProfileInfoInput{
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Locale:    req.Locale,
-		Timezone:  req.Timezone,
 	}
 
-	p, err := h.svc.UpdateProfile(r.Context(), userID, in)
+	p, err := h.svc.UpdateProfileInfo(r.Context(), userID, in)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			http.Error(w, "profile not found", http.StatusNotFound)
@@ -112,6 +107,46 @@ func (h *Handlers) PutMe(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Error().Err(err).Msg("UpdateProfile failed")
 		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.fromModel(r.Context(), p))
+}
+
+type UpdatePreferencesRequest struct {
+	Locale   *string `json:"locale"`
+	Timezone *string `json:"time_zone"`
+}
+
+func (h *Handlers) PatchPreferences(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdatePreferencesRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	p, err := h.svc.UpdatePreferences(r.Context(), userID, service.UpdatePreferencesInput{
+		Locale:   req.Locale,
+		Timezone: req.Timezone,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			http.Error(w, "profile not found", http.StatusNotFound)
+		case errors.Is(err, service.ErrInvalidLocale), errors.Is(err, service.ErrInvalidTimezone):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			log.Error().Err(err).Msg("UpdatePreferences failed")
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -194,43 +229,6 @@ func (h *Handlers) ConfirmAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, ConfirmAvatarUploadResponse{Profile: h.fromModel(r.Context(), p)})
-}
-
-type PublicOwnerContactDTO struct {
-	DisplayName *string `json:"display_name"`
-	Email       *string `json:"email"`
-}
-
-func (h *Handlers) GetPublicContact(w http.ResponseWriter, r *http.Request) {
-	userIDRaw := chi.URLParam(r, "user_id")
-	userID, err := uuid.Parse(userIDRaw)
-	if err != nil {
-		http.Error(w, "invalid user id", http.StatusBadRequest)
-		return
-	}
-
-	p, err := h.svc.GetProfile(r.Context(), userID)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			http.Error(w, "profile not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	var displayName *string
-	name := strings.TrimSpace(strings.Join([]string{valueOrEmpty(p.FirstName), valueOrEmpty(p.LastName)}, " "))
-	if name != "" {
-		displayName = &name
-	}
-
-	var email *string = nil
-
-	writeJSON(w, http.StatusOK, PublicOwnerContactDTO{
-		DisplayName: displayName,
-		Email:       email,
-	})
 }
 
 type BatchProfilesBriefRequest struct {

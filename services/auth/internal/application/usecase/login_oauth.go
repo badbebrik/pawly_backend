@@ -19,6 +19,7 @@ type LoginOAuthInput struct {
 	Provider string
 	IDToken  string
 	Locale   string
+	Timezone string
 }
 
 type LoginOAuthOutput struct {
@@ -80,7 +81,7 @@ func (uc *LoginOAuthUseCase) Execute(ctx context.Context, in LoginOAuthInput) (*
 				IsVerified: true,
 				IsActive:   true,
 			}
-			if err := uc.deps.createUserWithProfile(ctx, user, normalizeLocale(in.Locale), claims.FirstName, claims.LastName); err != nil {
+			if err := uc.deps.createUserWithProfile(ctx, user, normalizeLocale(in.Locale), normalizeTimezone(in.Timezone), claims.FirstName, claims.LastName); err != nil {
 				if !errors.Is(err, ports.ErrConflict) {
 					return nil, err
 				}

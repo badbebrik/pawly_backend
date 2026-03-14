@@ -45,7 +45,8 @@ func (h *AuthHandlers) LoginOAuth(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.uc.LoginOAuth.Execute(r.Context(), authuc.LoginOAuthInput{
 		Provider: req.Provider,
 		IDToken:  req.IDToken,
-		Locale:   localemw.LocaleFromCtx(r.Context(), "ru"),
+		Locale:   firstNonEmpty(req.Locale, localemw.LocaleFromCtx(r.Context(), "ru")),
+		Timezone: req.Timezone,
 	})
 	if err != nil {
 		log.Error().Err(err).Str("provider", req.Provider).Msg("LoginOAuth failed")

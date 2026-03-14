@@ -24,7 +24,8 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 		Password:  req.Password,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Locale:    localemw.LocaleFromCtx(r.Context(), "ru"),
+		Locale:    firstNonEmpty(req.Locale, localemw.LocaleFromCtx(r.Context(), "ru")),
+		Timezone:  req.Timezone,
 	})
 	if err != nil {
 		log.Warn().Err(err).Msg("RegisterEmail failed")

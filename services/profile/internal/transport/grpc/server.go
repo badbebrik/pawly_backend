@@ -41,6 +41,7 @@ func (s *Server) CreateProfile(ctx context.Context, req *profilepb.CreateProfile
 	profile, err := s.svc.CreateProfile(ctx, service.CreateProfileInput{
 		UserID:    userID,
 		Locale:    optionalString(req.GetLocale()),
+		Timezone:  optionalString(req.GetTimezone()),
 		FirstName: optionalString(req.GetFirstName()),
 		LastName:  optionalString(req.GetLastName()),
 	})
@@ -71,6 +72,69 @@ func (s *Server) DeleteProfile(ctx context.Context, req *profilepb.DeleteProfile
 
 	return &profilepb.DeleteProfileResponse{
 		UserId: userID.String(),
+	}, nil
+}
+
+func (s *Server) GetPreferences(ctx context.Context, req *profilepb.GetPreferencesRequest) (*profilepb.GetPreferencesResponse, error) {
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+
+	prefs, err := s.svc.GetPreferences(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "profile not found")
+		}
+		return nil, mapSvcErr(err)
+	}
+
+	return &profilepb.GetPreferencesResponse{
+		UserId:   prefs.UserID.String(),
+		Locale:   prefs.Locale,
+		Timezone: prefs.Timezone,
+	}, nil
+}
+
+func (s *Server) BatchGetPreferences(ctx context.Context, req *profilepb.BatchGetPreferencesRequest) (*profilepb.BatchGetPreferencesResponse, error) {
+	if len(req.GetUserIds()) == 0 {
+		return &profilepb.BatchGetPreferencesResponse{
+			Items:           []*profilepb.ProfilePreferences{},
+			NotFoundUserIds: []string{},
+		}, nil
+	}
+
+	userIDs := make([]uuid.UUID, 0, len(req.GetUserIds()))
+	for i := range req.GetUserIds() {
+		userID, err := uuid.Parse(req.GetUserIds()[i])
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid user_ids")
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	items, notFound, err := s.svc.BatchGetPreferences(ctx, userIDs)
+	if err != nil {
+		return nil, mapSvcErr(err)
+	}
+
+	out := make([]*profilepb.ProfilePreferences, 0, len(items))
+	for i := range items {
+		out = append(out, &profilepb.ProfilePreferences{
+			UserId:   items[i].UserID.String(),
+			Locale:   items[i].Locale,
+			Timezone: items[i].Timezone,
+		})
+	}
+
+	notFoundRaw := make([]string, 0, len(notFound))
+	for i := range notFound {
+		notFoundRaw = append(notFoundRaw, notFound[i].String())
+	}
+
+	return &profilepb.BatchGetPreferencesResponse{
+		Items:           out,
+		NotFoundUserIds: notFoundRaw,
 	}, nil
 }
 
@@ -123,6 +187,12 @@ func mapSvcErr(err error) error {
 	switch {
 	case errors.Is(err, service.ErrInvalidInput):
 		return status.Error(codes.InvalidArgument, "invalid input")
+	case errors.Is(err, service.ErrInvalidLocale):
+		return status.Error(codes.InvalidArgument, "invalid locale")
+	case errors.Is(err, service.ErrInvalidTimezone):
+		return status.Error(codes.InvalidArgument, "invalid timezone")
+	case errors.Is(err, repository.ErrConflict):
+		return status.Error(codes.AlreadyExists, "profile already exists")
 	default:
 		return status.Error(codes.Internal, "internal error")
 	}

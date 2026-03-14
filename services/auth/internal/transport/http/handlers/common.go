@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type errorResponse struct {
@@ -38,4 +39,13 @@ func decodeJSON(r *http.Request, dst any) error {
 	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
 	dec.DisallowUnknownFields()
 	return dec.Decode(dst)
+}
+
+func firstNonEmpty(values ...string) string {
+	for i := range values {
+		if strings.TrimSpace(values[i]) != "" {
+			return values[i]
+		}
+	}
+	return ""
 }

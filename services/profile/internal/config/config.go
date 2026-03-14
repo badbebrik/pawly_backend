@@ -28,8 +28,8 @@ func Load() *Config {
 		PostgresDB:           getEnv("POSTGRES_DB", ""),
 		PostgresHost:         getEnv("POSTGRES_HOST", ""),
 		PostgresPort:         getEnv("POSTGRES_PORT", ""),
-		DefaultLocale:        getEnv("PROFILE_DEFAULT_LOCALE", ""),
-		DefaultTimezone:      getEnv("PROFILE_DEFAULT_TIMEZONE", ""),
+		DefaultLocale:        getEnv("PROFILE_DEFAULT_LOCALE", "ru"),
+		DefaultTimezone:      getEnv("PROFILE_DEFAULT_TIMEZONE", "UTC"),
 		FileServiceGRPCAddr:  getEnv("FILE_SERVICE_GRPC_ADDR", ""),
 		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}

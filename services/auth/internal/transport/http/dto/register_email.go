@@ -7,6 +7,8 @@ type RegisterEmailRequest struct {
 	Password  string `json:"password"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
+	Locale    string `json:"locale"`
+	Timezone  string `json:"time_zone"`
 }
 
 type RegisterEmailResponse struct {

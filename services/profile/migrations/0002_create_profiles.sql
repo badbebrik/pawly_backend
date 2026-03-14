@@ -5,7 +5,7 @@ CREATE TABLE profiles (
     last_name     TEXT,
     avatar_file_id UUID NULL,
     locale        VARCHAR(8)  NOT NULL DEFAULT 'ru',
-    timezone      VARCHAR(64) NOT NULL DEFAULT 'Europe/Moscow',
+    timezone      VARCHAR(64) NOT NULL DEFAULT 'UTC',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

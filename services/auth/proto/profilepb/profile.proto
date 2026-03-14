@@ -14,6 +14,7 @@ message CreateProfileRequest {
   string locale = 2;
   string first_name = 3;
   string last_name = 4;
+  string timezone = 5;
 }
 
 message CreateProfileResponse {

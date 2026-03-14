@@ -35,16 +35,6 @@ func LocaleFromCtx(ctx context.Context, fallback string) string {
 }
 
 func fromRequest(r *http.Request, fallback string) string {
-	if v := strings.TrimSpace(r.Header.Get("X-Locale")); v != "" {
-		v = strings.ToLower(v)
-		if v == "ru" || strings.HasPrefix(v, "ru-") {
-			return "ru"
-		}
-		if v == "en" || strings.HasPrefix(v, "en-") {
-			return "en"
-		}
-	}
-
 	al := strings.ToLower(r.Header.Get("Accept-Language"))
 	if al == "" {
 		return fallback

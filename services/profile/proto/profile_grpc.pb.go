@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ProfileService_CreateProfile_FullMethodName      = "/profile.ProfileService/CreateProfile"
-	ProfileService_DeleteProfile_FullMethodName      = "/profile.ProfileService/DeleteProfile"
-	ProfileService_BatchProfilesBrief_FullMethodName = "/profile.ProfileService/BatchProfilesBrief"
+	ProfileService_CreateProfile_FullMethodName       = "/profile.ProfileService/CreateProfile"
+	ProfileService_DeleteProfile_FullMethodName       = "/profile.ProfileService/DeleteProfile"
+	ProfileService_GetPreferences_FullMethodName      = "/profile.ProfileService/GetPreferences"
+	ProfileService_BatchGetPreferences_FullMethodName = "/profile.ProfileService/BatchGetPreferences"
+	ProfileService_BatchProfilesBrief_FullMethodName  = "/profile.ProfileService/BatchProfilesBrief"
 )
 
 // ProfileServiceClient is the client API for ProfileService service.
@@ -30,6 +32,8 @@ const (
 type ProfileServiceClient interface {
 	CreateProfile(ctx context.Context, in *CreateProfileRequest, opts ...grpc.CallOption) (*CreateProfileResponse, error)
 	DeleteProfile(ctx context.Context, in *DeleteProfileRequest, opts ...grpc.CallOption) (*DeleteProfileResponse, error)
+	GetPreferences(ctx context.Context, in *GetPreferencesRequest, opts ...grpc.CallOption) (*GetPreferencesResponse, error)
+	BatchGetPreferences(ctx context.Context, in *BatchGetPreferencesRequest, opts ...grpc.CallOption) (*BatchGetPreferencesResponse, error)
 	BatchProfilesBrief(ctx context.Context, in *BatchProfilesBriefRequest, opts ...grpc.CallOption) (*BatchProfilesBriefResponse, error)
 }
 
@@ -61,6 +65,26 @@ func (c *profileServiceClient) DeleteProfile(ctx context.Context, in *DeleteProf
 	return out, nil
 }
 
+func (c *profileServiceClient) GetPreferences(ctx context.Context, in *GetPreferencesRequest, opts ...grpc.CallOption) (*GetPreferencesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPreferencesResponse)
+	err := c.cc.Invoke(ctx, ProfileService_GetPreferences_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *profileServiceClient) BatchGetPreferences(ctx context.Context, in *BatchGetPreferencesRequest, opts ...grpc.CallOption) (*BatchGetPreferencesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchGetPreferencesResponse)
+	err := c.cc.Invoke(ctx, ProfileService_BatchGetPreferences_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *profileServiceClient) BatchProfilesBrief(ctx context.Context, in *BatchProfilesBriefRequest, opts ...grpc.CallOption) (*BatchProfilesBriefResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BatchProfilesBriefResponse)
@@ -77,6 +101,8 @@ func (c *profileServiceClient) BatchProfilesBrief(ctx context.Context, in *Batch
 type ProfileServiceServer interface {
 	CreateProfile(context.Context, *CreateProfileRequest) (*CreateProfileResponse, error)
 	DeleteProfile(context.Context, *DeleteProfileRequest) (*DeleteProfileResponse, error)
+	GetPreferences(context.Context, *GetPreferencesRequest) (*GetPreferencesResponse, error)
+	BatchGetPreferences(context.Context, *BatchGetPreferencesRequest) (*BatchGetPreferencesResponse, error)
 	BatchProfilesBrief(context.Context, *BatchProfilesBriefRequest) (*BatchProfilesBriefResponse, error)
 	mustEmbedUnimplementedProfileServiceServer()
 }
@@ -93,6 +119,12 @@ func (UnimplementedProfileServiceServer) CreateProfile(context.Context, *CreateP
 }
 func (UnimplementedProfileServiceServer) DeleteProfile(context.Context, *DeleteProfileRequest) (*DeleteProfileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteProfile not implemented")
+}
+func (UnimplementedProfileServiceServer) GetPreferences(context.Context, *GetPreferencesRequest) (*GetPreferencesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPreferences not implemented")
+}
+func (UnimplementedProfileServiceServer) BatchGetPreferences(context.Context, *BatchGetPreferencesRequest) (*BatchGetPreferencesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BatchGetPreferences not implemented")
 }
 func (UnimplementedProfileServiceServer) BatchProfilesBrief(context.Context, *BatchProfilesBriefRequest) (*BatchProfilesBriefResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchProfilesBrief not implemented")
@@ -154,6 +186,42 @@ func _ProfileService_DeleteProfile_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProfileService_GetPreferences_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPreferencesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProfileServiceServer).GetPreferences(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProfileService_GetPreferences_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProfileServiceServer).GetPreferences(ctx, req.(*GetPreferencesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProfileService_BatchGetPreferences_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchGetPreferencesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProfileServiceServer).BatchGetPreferences(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProfileService_BatchGetPreferences_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProfileServiceServer).BatchGetPreferences(ctx, req.(*BatchGetPreferencesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProfileService_BatchProfilesBrief_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BatchProfilesBriefRequest)
 	if err := dec(in); err != nil {
@@ -186,6 +254,14 @@ var ProfileService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteProfile",
 			Handler:    _ProfileService_DeleteProfile_Handler,
+		},
+		{
+			MethodName: "GetPreferences",
+			Handler:    _ProfileService_GetPreferences_Handler,
+		},
+		{
+			MethodName: "BatchGetPreferences",
+			Handler:    _ProfileService_BatchGetPreferences_Handler,
 		},
 		{
 			MethodName: "BatchProfilesBrief",

@@ -33,6 +33,14 @@ func normalizeLocale(locale string) string {
 	return locale
 }
 
+func normalizeTimezone(timezone string) string {
+	timezone = strings.TrimSpace(timezone)
+	if timezone == "" {
+		return "UTC"
+	}
+	return timezone
+}
+
 func (d *dependencies) issueTokenPair(userID, sessionID uuid.UUID) (*tokenPair, error) {
 	refreshToken, err := d.tokens.GenerateRefreshToken(userID.String(), sessionID.String())
 	if err != nil {
@@ -94,7 +102,7 @@ func (d *dependencies) touchLastLogin(ctx context.Context, userID uuid.UUID) {
 	_ = d.users.UpdateLastLoginAt(ctx, userID, d.now())
 }
 
-func (d *dependencies) createUserWithProfile(ctx context.Context, user *model.User, locale, firstName, lastName string) error {
+func (d *dependencies) createUserWithProfile(ctx context.Context, user *model.User, locale, timezone, firstName, lastName string) error {
 	if err := d.users.Create(ctx, user); err != nil {
 		if errors.Is(err, ports.ErrConflict) {
 			return ports.ErrConflict
@@ -102,7 +110,7 @@ func (d *dependencies) createUserWithProfile(ctx context.Context, user *model.Us
 		return err
 	}
 
-	if err := d.profiles.CreateProfile(ctx, user.ID, locale, firstName, lastName); err != nil {
+	if err := d.profiles.CreateProfile(ctx, user.ID, locale, timezone, firstName, lastName); err != nil {
 		_ = d.users.Delete(ctx, user.ID)
 		return ErrProfileCreationFailed
 	}

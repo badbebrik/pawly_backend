@@ -39,10 +39,11 @@ func (c *GRPCClient) Close() {
 	}
 }
 
-func (c *GRPCClient) CreateProfile(ctx context.Context, userID uuid.UUID, locale string, firstName string, lastName string) error {
+func (c *GRPCClient) CreateProfile(ctx context.Context, userID uuid.UUID, locale string, timezone string, firstName string, lastName string) error {
 	_, err := c.client.CreateProfile(ctx, &profilepb.CreateProfileRequest{
 		UserId:    userID.String(),
 		Locale:    locale,
+		Timezone:  timezone,
 		FirstName: firstName,
 		LastName:  lastName,
 	})

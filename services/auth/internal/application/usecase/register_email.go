@@ -20,6 +20,7 @@ type RegisterEmailInput struct {
 	FirstName string
 	LastName  string
 	Locale    string
+	Timezone  string
 }
 
 type RegisterEmailOutput struct {
@@ -62,10 +63,6 @@ func (uc *RegisterEmailUseCase) Execute(ctx context.Context, in RegisterEmailInp
 		if err := uc.deps.users.UpdatePasswordHash(ctx, existing.ID, hash); err != nil {
 			return nil, err
 		}
-		if err := uc.deps.profiles.CreateProfile(ctx, existing.ID, locale, in.FirstName, in.LastName); err != nil {
-			return nil, ErrProfileCreationFailed
-		}
-
 		meta, sendErr := sendRegistrationVerification(ctx, uc.deps, existing.ID, email, in.FirstName, in.LastName, locale)
 		out := &RegisterEmailOutput{UserID: existing.ID}
 		out.Verification.Channel = meta.Channel
@@ -90,7 +87,7 @@ func (uc *RegisterEmailUseCase) Execute(ctx context.Context, in RegisterEmailInp
 		IsActive:     true,
 	}
 
-	if err := uc.deps.createUserWithProfile(ctx, user, locale, in.FirstName, in.LastName); err != nil {
+	if err := uc.deps.createUserWithProfile(ctx, user, locale, normalizeTimezone(in.Timezone), in.FirstName, in.LastName); err != nil {
 		if errors.Is(err, ports.ErrConflict) {
 			return nil, ErrEmailAlreadyTaken
 		}

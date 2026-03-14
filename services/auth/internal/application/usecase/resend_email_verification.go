@@ -1,11 +1,8 @@
-package service
+package usecase
 
 import (
-	"auth/internal/infrastructure/rabbit"
-	"auth/internal/repository"
+	"auth/internal/application/ports"
 	"auth/internal/security"
-	"auth/internal/transport/http/middleware"
-	"auth/internal/verification"
 	"context"
 	"errors"
 
@@ -18,8 +15,13 @@ type EmailVerificationMeta struct {
 	CanResendInSeconds int
 }
 
+type ResendEmailVerificationUseCase struct {
+	deps *dependencies
+}
+
 type ResendEmailVerificationInput struct {
-	Email string
+	Email  string
+	Locale string
 }
 
 type ResendEmailVerificationOutput struct {
@@ -27,62 +29,60 @@ type ResendEmailVerificationOutput struct {
 	Verification EmailVerificationMeta
 }
 
-func (s *Service) ResendEmailVerification(ctx context.Context, in ResendEmailVerificationInput) (*ResendEmailVerificationOutput, error) {
+func (uc *ResendEmailVerificationUseCase) Execute(ctx context.Context, in ResendEmailVerificationInput) (*ResendEmailVerificationOutput, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) {
 		return nil, ErrIncorrectFormat
 	}
 
-	u, err := s.users.GetByEmail(ctx, email)
+	user, err := uc.deps.users.GetByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
+		if errors.Is(err, ports.ErrNotFound) {
 			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
-	if !u.IsActive {
+	if err := user.RequireActive(); err != nil {
 		return nil, ErrUserBlocked
 	}
-	if u.IsVerified {
+	if user.IsVerified {
 		return nil, ErrEmailAlreadyVerified
 	}
 
-	meta, err := s.sendRegistrationVerification(ctx, u.ID, email, "", "")
+	meta, sendErr := sendRegistrationVerification(ctx, uc.deps, user.ID, email, "", "", in.Locale)
 	out := &ResendEmailVerificationOutput{
-		UserID:       u.ID,
+		UserID:       user.ID,
 		Verification: meta,
 	}
-	if err != nil {
-		return out, err
+	if sendErr != nil {
+		return out, sendErr
 	}
 
 	return out, nil
 }
 
-func (s *Service) sendRegistrationVerification(ctx context.Context, userID uuid.UUID, email, firstName, lastName string) (EmailVerificationMeta, error) {
-	loc := middleware.LocaleFromCtx(ctx, "ru")
-
-	code, ttlSeconds, resendInSeconds, err := s.verification.RequestCode(ctx, email, "registration")
+func sendRegistrationVerification(ctx context.Context, deps *dependencies, userID uuid.UUID, email, firstName, lastName, locale string) (EmailVerificationMeta, error) {
+	code, ttlSeconds, resendInSeconds, err := deps.verification.RequestCode(ctx, email, "registration")
 	meta := EmailVerificationMeta{
 		Channel:            "email",
 		CodeTTLSeconds:     ttlSeconds,
 		CanResendInSeconds: resendInSeconds,
 	}
 	if err != nil {
-		if errors.Is(err, verification.ErrResendTooSoon) {
+		if errors.Is(err, ports.ErrResendTooSoon) {
 			return meta, ErrCannotResendYet
 		}
 		return meta, ErrVerificationFailed
 	}
 
-	if err := s.notifier.SendEmailVerification(ctx, rabbit.EmailVerificationPayload{
+	if err := deps.notifier.SendEmailVerification(ctx, ports.EmailVerificationMessage{
 		UserID:     userID,
 		Email:      email,
 		FirstName:  firstName,
 		LastName:   lastName,
 		Code:       code,
 		TTLSeconds: ttlSeconds,
-		Locale:     loc,
+		Locale:     normalizeLocale(locale),
 	}); err != nil {
 		return meta, ErrVerificationFailed
 	}

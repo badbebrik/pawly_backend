@@ -20,3 +20,59 @@ type User struct {
 func (u *User) HasPassword() bool {
 	return u.PasswordHash != nil && *u.PasswordHash != ""
 }
+
+func (u *User) IsPasswordAccount() bool {
+	return u.HasPassword()
+}
+
+func (u *User) RequireActive() error {
+	if !u.IsActive {
+		return ErrUserInactive
+	}
+	return nil
+}
+
+func (u *User) RequireVerified() error {
+	if !u.IsVerified {
+		return ErrUserUnverified
+	}
+	return nil
+}
+
+func (u *User) RequirePasswordAccount() error {
+	if !u.IsPasswordAccount() {
+		return ErrPasswordAuthUnavailable
+	}
+	return nil
+}
+
+func (u *User) CanLoginWithPassword() error {
+	if err := u.RequireActive(); err != nil {
+		return err
+	}
+	if err := u.RequireVerified(); err != nil {
+		return err
+	}
+	if err := u.RequirePasswordAccount(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (u *User) CanChangePassword() error {
+	if err := u.RequireActive(); err != nil {
+		return err
+	}
+	if err := u.RequirePasswordAccount(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (u *User) CanRequestPasswordReset() bool {
+	return u.IsActive && u.IsVerified
+}
+
+func (u *User) MarkVerified() {
+	u.IsVerified = true
+}

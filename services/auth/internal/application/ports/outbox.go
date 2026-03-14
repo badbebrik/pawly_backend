@@ -1,4 +1,4 @@
-package repository
+package ports
 
 import (
 	"context"
@@ -8,13 +8,13 @@ import (
 )
 
 type OutboxEvent struct {
-	ID         uuid.UUID
-	EventType  string
-	Payload    []byte
-	Status     string
-	Attempts   int
-	LastError  *string
-	CreatedAt  time.Time
+	ID          uuid.UUID
+	EventType   string
+	Payload     []byte
+	Status      string
+	Attempts    int
+	LastError   *string
+	CreatedAt   time.Time
 	PublishedAt *time.Time
 }
 

@@ -1,9 +1,9 @@
 package oauth
 
 import (
+	"auth/internal/application/ports"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,24 +11,6 @@ import (
 	"strings"
 	"time"
 )
-
-var (
-	ErrInvalidToken        = errors.New("invalid_token")
-	ErrProviderUnavailable = errors.New("provider_unavailable")
-)
-
-type Claims struct {
-	Provider      string
-	Subject       string
-	Email         string
-	EmailVerified bool
-	FirstName     string
-	LastName      string
-}
-
-type Verifier interface {
-	VerifyGoogleIDToken(ctx context.Context, idToken string) (*Claims, error)
-}
 
 type GoogleVerifier struct {
 	client   *http.Client
@@ -52,9 +34,9 @@ func NewGoogleVerifier(timeout time.Duration, clientID string) *GoogleVerifier {
 	}
 }
 
-func (v *GoogleVerifier) VerifyGoogleIDToken(ctx context.Context, idToken string) (*Claims, error) {
+func (v *GoogleVerifier) VerifyGoogleIDToken(ctx context.Context, idToken string) (*ports.OAuthClaims, error) {
 	if strings.TrimSpace(idToken) == "" {
-		return nil, ErrInvalidToken
+		return nil, ports.ErrOAuthInvalidToken
 	}
 
 	reqURL := "https://oauth2.googleapis.com/tokeninfo?id_token=" + url.QueryEscape(idToken)
@@ -65,15 +47,15 @@ func (v *GoogleVerifier) VerifyGoogleIDToken(ctx context.Context, idToken string
 
 	resp, err := v.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("google tokeninfo request: %w", ErrProviderUnavailable)
+		return nil, fmt.Errorf("google tokeninfo request: %w", ports.ErrOAuthProviderUnavailable)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode >= 500 {
-			return nil, ErrProviderUnavailable
+			return nil, ports.ErrOAuthProviderUnavailable
 		}
-		return nil, ErrInvalidToken
+		return nil, ports.ErrOAuthInvalidToken
 	}
 
 	var out tokenInfoResponse
@@ -82,19 +64,19 @@ func (v *GoogleVerifier) VerifyGoogleIDToken(ctx context.Context, idToken string
 	}
 
 	if out.Sub == "" {
-		return nil, ErrInvalidToken
+		return nil, ports.ErrOAuthInvalidToken
 	}
 	if v.clientID != "" && out.Aud != v.clientID {
-		return nil, ErrInvalidToken
+		return nil, ports.ErrOAuthInvalidToken
 	}
 	if out.Exp != "" {
 		exp, err := strconv.ParseInt(out.Exp, 10, 64)
 		if err != nil || exp < time.Now().Unix() {
-			return nil, ErrInvalidToken
+			return nil, ports.ErrOAuthInvalidToken
 		}
 	}
 
-	return &Claims{
+	return &ports.OAuthClaims{
 		Provider:      "google",
 		Subject:       out.Sub,
 		Email:         strings.TrimSpace(strings.ToLower(out.Email)),

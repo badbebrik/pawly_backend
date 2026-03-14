@@ -1,7 +1,7 @@
 package pgrepo
 
 import (
-	"auth/internal/repository"
+	"auth/internal/application/ports"
 	"context"
 
 	"github.com/google/uuid"
@@ -16,7 +16,7 @@ func NewOutboxRepo(db *pgxpool.Pool) *OutboxRepo {
 	return &OutboxRepo{db: db}
 }
 
-func (r *OutboxRepo) Create(ctx context.Context, event repository.OutboxEvent) error {
+func (r *OutboxRepo) Create(ctx context.Context, event ports.OutboxEvent) error {
 	const query = `
         INSERT INTO outbox_events (
             id, event_type, payload, status, attempts, last_error, created_at, published_at
@@ -34,7 +34,7 @@ func (r *OutboxRepo) Create(ctx context.Context, event repository.OutboxEvent) e
 	return err
 }
 
-func (r *OutboxRepo) ListPending(ctx context.Context, limit int) ([]repository.OutboxEvent, error) {
+func (r *OutboxRepo) ListPending(ctx context.Context, limit int) ([]ports.OutboxEvent, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -53,9 +53,9 @@ func (r *OutboxRepo) ListPending(ctx context.Context, limit int) ([]repository.O
 	}
 	defer rows.Close()
 
-	items := make([]repository.OutboxEvent, 0, limit)
+	items := make([]ports.OutboxEvent, 0, limit)
 	for rows.Next() {
-		var item repository.OutboxEvent
+		var item ports.OutboxEvent
 		if err := rows.Scan(
 			&item.ID,
 			&item.EventType,

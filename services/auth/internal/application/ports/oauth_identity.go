@@ -1,8 +1,9 @@
-package repository
+package ports
 
 import (
 	"auth/internal/domain/model"
 	"context"
+
 	"github.com/google/uuid"
 )
 

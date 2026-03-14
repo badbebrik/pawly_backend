@@ -1,6 +1,7 @@
 package profileclient
 
 import (
+	"auth/internal/application/ports"
 	"context"
 	"fmt"
 
@@ -10,12 +11,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
-
-type Client interface {
-	CreateProfile(ctx context.Context, userID uuid.UUID, locale string, firstName string, lastName string) error
-	DeleteProfile(ctx context.Context, userID uuid.UUID) error
-	Close()
-}
 
 type GRPCClient struct {
 	conn   *grpc.ClientConn
@@ -60,3 +55,5 @@ func (c *GRPCClient) DeleteProfile(ctx context.Context, userID uuid.UUID) error 
 	})
 	return err
 }
+
+var _ ports.ProfileProvisioner = (*GRPCClient)(nil)

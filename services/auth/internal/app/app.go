@@ -1,20 +1,14 @@
 package app
 
 import (
+	"auth/internal/application/usecase"
 	"auth/internal/config"
 	"auth/internal/infrastructure/db"
-	pgrepo "auth/internal/infrastructure/db/repository"
-	"auth/internal/infrastructure/oauth"
 	"auth/internal/infrastructure/outbox"
 	"auth/internal/infrastructure/profileclient"
-	"auth/internal/infrastructure/rabbit"
 	"auth/internal/infrastructure/redis"
-	"auth/internal/infrastructure/redis/redisstore"
-	"auth/internal/infrastructure/tokens"
-	authsvc "auth/internal/service"
 	"context"
 	"errors"
-	"fmt"
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -26,105 +20,31 @@ import (
 
 type App struct {
 	Config  *config.Config
-	AuthSvc *authsvc.Service
+	AuthSvc *usecase.Set
 
 	pg         *db.Postgres
 	redis      *redisdb.Redis
 	rabbitConn *amqp091.Connection
 	rabbitCh   *amqp091.Channel
-	profile    profileclient.Client
+	profile    *profileclient.GRPCClient
 	outboxWkr  *outbox.Worker
 }
 
 func New(cfg *config.Config) (*App, error) {
-	pg, err := db.NewPostgres(cfg)
+	runtime, err := buildRuntime(cfg)
 	if err != nil {
 		return nil, err
 	}
-
-	redis, err := redisdb.NewRedis(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := amqp091.Dial(fmt.Sprintf(
-		"amqp://%s:%s@%s:%s/",
-		cfg.RabbitUser,
-		cfg.RabbitPassword,
-		cfg.RabbitHost,
-		cfg.RabbitPort,
-	))
-	if err != nil {
-		return nil, fmt.Errorf("rabbit connect: %w", err)
-	}
-
-	ch, err := conn.Channel()
-	if err != nil {
-		return nil, fmt.Errorf("rabbit channel: %w", err)
-	}
-
-	_, err = ch.QueueDeclare(
-		cfg.RabbitNotificationsQueue,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("rabbit queue declare: %w", err)
-	}
-
-	rabbitPublisher := rabbit.NewRabbitPublisher(ch, cfg.RabbitNotificationsQueue)
-
-	userRepo := pgrepo.NewUserRepo(pg.Pool)
-	sessionRepo := pgrepo.NewSessionRepo(pg.Pool)
-	oauthRepo := pgrepo.NewOAuthIdentityRepo(pg.Pool)
-	outboxRepo := pgrepo.NewOutboxRepo(pg.Pool)
-	resetTokenRepo := redisdb.NewResetTokenStore(redis.Client())
-	verificationRepo := redisstore.NewRedisStore(redis.Client())
-	outboxPublisher := outbox.NewPublisher(outboxRepo)
-	outboxWorker := outbox.NewWorker(
-		outboxRepo,
-		rabbitPublisher,
-		time.Duration(cfg.OutboxWorkerIntervalMS)*time.Millisecond,
-		cfg.OutboxWorkerBatchSize,
-	)
-
-	jwtSvc := tokens.NewJWTService(*cfg)
-	profileSvc, err := profileclient.New(cfg.ProfileServiceGRPCAddr)
-	if err != nil {
-		_ = ch.Close()
-		_ = conn.Close()
-		_ = redis.Close()
-		pg.Close()
-		return nil, err
-	}
-	oauthVerifier := oauth.NewGoogleVerifier(time.Duration(cfg.OAuthHTTPTimeoutSeconds)*time.Second, cfg.GoogleOAuthClientID)
-
-	authSvc := authsvc.NewService(
-		userRepo,
-		sessionRepo,
-		oauthRepo,
-		resetTokenRepo,
-		verificationRepo,
-		outboxPublisher,
-		jwtSvc,
-		profileSvc,
-		oauthVerifier,
-		cfg.AccessTokenTTLMin*60,
-		cfg.RefreshTokenTTLDays,
-	)
 
 	return &App{
 		Config:     cfg,
-		pg:         pg,
-		redis:      redis,
-		AuthSvc:    authSvc,
-		rabbitConn: conn,
-		rabbitCh:   ch,
-		profile:    profileSvc,
-		outboxWkr:  outboxWorker,
+		pg:         runtime.pg,
+		redis:      runtime.redis,
+		AuthSvc:    runtime.authSvc,
+		rabbitConn: runtime.rabbitConn,
+		rabbitCh:   runtime.rabbitCh,
+		profile:    runtime.profile,
+		outboxWkr:  runtime.outboxWkr,
 	}, nil
 }
 

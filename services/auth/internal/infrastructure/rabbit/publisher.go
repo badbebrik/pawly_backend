@@ -2,14 +2,9 @@ package rabbit
 
 import (
 	"context"
+
 	"github.com/google/uuid"
 )
-
-type Publisher interface {
-	SendEmailVerification(ctx context.Context, p EmailVerificationPayload) error
-	SendPasswordReset(ctx context.Context, p PasswordResetPayload) error
-	SendWelcomeEmail(ctx context.Context, p WelcomeEmailPayload) error
-}
 
 type NotificationEvent struct {
 	Event    string                 `json:"event"`

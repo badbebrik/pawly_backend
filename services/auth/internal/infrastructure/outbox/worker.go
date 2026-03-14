@@ -1,8 +1,8 @@
 package outbox
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/infrastructure/rabbit"
-	"auth/internal/repository"
 	"context"
 	"encoding/json"
 	"time"
@@ -15,13 +15,13 @@ type EventPublisher interface {
 }
 
 type Worker struct {
-	repo      repository.OutboxRepository
+	repo      ports.OutboxRepository
 	publisher EventPublisher
 	interval  time.Duration
 	batchSize int
 }
 
-func NewWorker(repo repository.OutboxRepository, publisher EventPublisher, interval time.Duration, batchSize int) *Worker {
+func NewWorker(repo ports.OutboxRepository, publisher EventPublisher, interval time.Duration, batchSize int) *Worker {
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}

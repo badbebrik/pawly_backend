@@ -1,8 +1,8 @@
 package pgrepo
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/domain/model"
-	"auth/internal/repository"
 	"context"
 	"errors"
 	"github.com/google/uuid"
@@ -57,7 +57,7 @@ func (r *SessionRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Session
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (r *SessionRepo) UpdateRefreshToken(ctx context.Context, id uuid.UUID, oldH
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 
 	return nil
@@ -95,7 +95,7 @@ func (r *SessionRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 
 	return nil

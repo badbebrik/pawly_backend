@@ -1,8 +1,8 @@
 package pgrepo
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/domain/model"
-	"auth/internal/repository"
 	"context"
 	"errors"
 	"github.com/google/uuid"
@@ -35,7 +35,7 @@ func (ur *UserRepo) Create(ctx context.Context, user *model.User) error {
 
 	if err != nil {
 		if isUniqueViolation(err) {
-			return repository.ErrConflict
+			return ports.ErrConflict
 		}
 		return err
 	}
@@ -64,7 +64,7 @@ func (ur *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.User, err
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, repository.ErrNotFound
+		return nil, ports.ErrNotFound
 	}
 
 	return &u, nil
@@ -93,7 +93,7 @@ func (ur *UserRepo) GetByEmail(ctx context.Context, email string) (*model.User, 
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, repository.ErrNotFound
+		return nil, ports.ErrNotFound
 	}
 
 	return &u, err
@@ -111,7 +111,7 @@ func (ur *UserRepo) SetVerified(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -128,7 +128,7 @@ func (ur *UserRepo) UpdatePasswordHash(ctx context.Context, id uuid.UUID, newHas
 	}
 
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 
 	return nil
@@ -143,7 +143,7 @@ func (ur *UserRepo) UpdateEmail(ctx context.Context, id uuid.UUID, newEmail stri
 	_, err := ur.db.Exec(ctx, query, id, newEmail)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return repository.ErrConflict
+			return ports.ErrConflict
 		}
 		return err
 	}
@@ -161,7 +161,7 @@ func (ur *UserRepo) SetActive(ctx context.Context, id uuid.UUID, isActive bool) 
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -177,7 +177,7 @@ func (ur *UserRepo) UpdateLastLoginAt(ctx context.Context, id uuid.UUID, ts time
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -193,7 +193,7 @@ func (ur *UserRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -205,7 +205,7 @@ func (ur *UserRepo) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }

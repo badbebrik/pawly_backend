@@ -1,10 +1,11 @@
-package repository
+package ports
 
 import (
 	"auth/internal/domain/model"
 	"context"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type SessionRepository interface {

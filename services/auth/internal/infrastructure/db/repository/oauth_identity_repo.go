@@ -1,8 +1,8 @@
 package pgrepo
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/domain/model"
-	"auth/internal/repository"
 	"context"
 	"errors"
 	"github.com/google/uuid"
@@ -57,7 +57,7 @@ func (r *OAuthIdentityRepo) GetByProviderAndExternalID(ctx context.Context, prov
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, repository.ErrNotFound
+		return nil, ports.ErrNotFound
 	}
 
 	return &oi, err
@@ -121,7 +121,7 @@ func (r *OAuthIdentityRepo) GetByEmail(ctx context.Context, provider, email stri
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, repository.ErrNotFound
+		return nil, ports.ErrNotFound
 	}
 
 	return &oi, err

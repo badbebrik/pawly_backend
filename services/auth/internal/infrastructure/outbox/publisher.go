@@ -1,8 +1,8 @@
 package outbox
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/infrastructure/rabbit"
-	"auth/internal/repository"
 	"context"
 	"encoding/json"
 
@@ -10,14 +10,14 @@ import (
 )
 
 type Publisher struct {
-	repo repository.OutboxRepository
+	repo ports.OutboxRepository
 }
 
-func NewPublisher(repo repository.OutboxRepository) *Publisher {
+func NewPublisher(repo ports.OutboxRepository) *Publisher {
 	return &Publisher{repo: repo}
 }
 
-func (p *Publisher) SendEmailVerification(ctx context.Context, a rabbit.EmailVerificationPayload) error {
+func (p *Publisher) SendEmailVerification(ctx context.Context, a ports.EmailVerificationMessage) error {
 	ev := rabbit.NewEvent(
 		"EMAIL_VERIFICATION_REQUESTED",
 		a.UserID,
@@ -35,7 +35,7 @@ func (p *Publisher) SendEmailVerification(ctx context.Context, a rabbit.EmailVer
 	return p.enqueue(ctx, ev)
 }
 
-func (p *Publisher) SendPasswordReset(ctx context.Context, a rabbit.PasswordResetPayload) error {
+func (p *Publisher) SendPasswordReset(ctx context.Context, a ports.PasswordResetMessage) error {
 	ev := rabbit.NewEvent(
 		"PASSWORD_RESET_REQUESTED",
 		a.UserID,
@@ -52,7 +52,7 @@ func (p *Publisher) SendPasswordReset(ctx context.Context, a rabbit.PasswordRese
 	return p.enqueue(ctx, ev)
 }
 
-func (p *Publisher) SendWelcomeEmail(ctx context.Context, a rabbit.WelcomeEmailPayload) error {
+func (p *Publisher) SendWelcomeEmail(ctx context.Context, a ports.WelcomeEmailMessage) error {
 	ev := rabbit.NewEvent(
 		"WELCOME_EMAIL",
 		a.UserID,
@@ -73,7 +73,7 @@ func (p *Publisher) enqueue(ctx context.Context, ev rabbit.NotificationEvent) er
 		return err
 	}
 
-	return p.repo.Create(ctx, repository.OutboxEvent{
+	return p.repo.Create(ctx, ports.OutboxEvent{
 		ID:        uuid.New(),
 		EventType: ev.Event,
 		Payload:   body,

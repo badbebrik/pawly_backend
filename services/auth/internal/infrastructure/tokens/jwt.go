@@ -1,6 +1,7 @@
 package tokens
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/config"
 	"time"
 
@@ -14,14 +15,6 @@ type JWTService struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	resetTTL   time.Duration
-}
-
-type TokenManager interface {
-	GenerateAccessToken(userID, sessionID string) (string, error)
-	GenerateRefreshToken(userID, sessionID string) (string, error)
-	GeneratePasswordResetToken(userID, email string) (string, error)
-	ValidateToken(tokenStr string) (*Payload, error)
-	EnsureTokenType(p *Payload, tType string) error
 }
 
 func NewJWTService(cnf config.Config) *JWTService {
@@ -89,7 +82,7 @@ func parsePayload(claims jwt.MapClaims) (*Payload, error) {
 	}, nil
 }
 
-func (s *JWTService) ValidateToken(tokenStr string) (*Payload, error) {
+func (s *JWTService) ValidateToken(tokenStr string) (*ports.TokenClaims, error) {
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
@@ -116,7 +109,13 @@ func (s *JWTService) ValidateToken(tokenStr string) (*Payload, error) {
 		return nil, ErrExpiredToken
 	}
 
-	return payload, nil
+	return &ports.TokenClaims{
+		Subject:   payload.Sub,
+		SessionID: payload.SessionID,
+		Type:      payload.Type,
+		ExpiresAt: time.Unix(payload.Exp, 0),
+		Email:     payload.Email,
+	}, nil
 }
 
 func (s *JWTService) GenerateRefreshToken(userID, sessionID string) (string, error) {
@@ -151,9 +150,11 @@ func (s *JWTService) GeneratePasswordResetToken(userID, email string) (string, e
 	return s.Sign(payload)
 }
 
-func (s *JWTService) EnsureTokenType(p *Payload, tType string) error {
-	if p.Type != tType {
+func (s *JWTService) EnsureTokenType(claims *ports.TokenClaims, tokenType string) error {
+	if claims.Type != tokenType {
 		return ErrInvalidTokenType
 	}
 	return nil
 }
+
+var _ ports.TokenManager = (*JWTService)(nil)

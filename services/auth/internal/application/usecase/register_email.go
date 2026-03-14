@@ -1,20 +1,25 @@
-package service
+package usecase
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/domain/model"
-	"auth/internal/repository"
 	"auth/internal/security"
-	"auth/internal/transport/http/middleware"
 	"context"
 	"errors"
+
 	"github.com/google/uuid"
 )
+
+type RegisterEmailUseCase struct {
+	deps *dependencies
+}
 
 type RegisterEmailInput struct {
 	Email     string
 	Password  string
 	FirstName string
 	LastName  string
+	Locale    string
 }
 
 type RegisterEmailOutput struct {
@@ -26,7 +31,7 @@ type RegisterEmailOutput struct {
 	}
 }
 
-func (s *Service) RegisterEmail(ctx context.Context, in RegisterEmailInput) (*RegisterEmailOutput, error) {
+func (uc *RegisterEmailUseCase) Execute(ctx context.Context, in RegisterEmailInput) (*RegisterEmailOutput, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) {
 		return nil, ErrIncorrectFormat
@@ -35,18 +40,18 @@ func (s *Service) RegisterEmail(ctx context.Context, in RegisterEmailInput) (*Re
 		return nil, ErrWeakPassword
 	}
 
-	existing, err := s.users.GetByEmail(ctx, email)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+	existing, err := uc.deps.users.GetByEmail(ctx, email)
+	if err != nil && !errors.Is(err, ports.ErrNotFound) {
 		return nil, err
 	}
 
-	loc := middleware.LocaleFromCtx(ctx, "ru")
+	locale := normalizeLocale(in.Locale)
 
 	if existing != nil {
 		if existing.IsVerified {
 			return nil, ErrEmailAlreadyTaken
 		}
-		if !existing.IsActive {
+		if err := existing.RequireActive(); err != nil {
 			return nil, ErrUserBlocked
 		}
 
@@ -54,22 +59,20 @@ func (s *Service) RegisterEmail(ctx context.Context, in RegisterEmailInput) (*Re
 		if err != nil {
 			return nil, err
 		}
-		if err := s.users.UpdatePasswordHash(ctx, existing.ID, hash); err != nil {
+		if err := uc.deps.users.UpdatePasswordHash(ctx, existing.ID, hash); err != nil {
 			return nil, err
 		}
-		if err := s.profile.CreateProfile(ctx, existing.ID, loc, in.FirstName, in.LastName); err != nil {
+		if err := uc.deps.profiles.CreateProfile(ctx, existing.ID, locale, in.FirstName, in.LastName); err != nil {
 			return nil, ErrProfileCreationFailed
 		}
 
-		meta, verr := s.sendRegistrationVerification(ctx, existing.ID, email, in.FirstName, in.LastName)
-		out := &RegisterEmailOutput{
-			UserID: existing.ID,
-		}
+		meta, sendErr := sendRegistrationVerification(ctx, uc.deps, existing.ID, email, in.FirstName, in.LastName, locale)
+		out := &RegisterEmailOutput{UserID: existing.ID}
 		out.Verification.Channel = meta.Channel
 		out.Verification.CodeTTLSeconds = meta.CodeTTLSeconds
 		out.Verification.CanResendInSeconds = meta.CanResendInSeconds
-		if verr != nil {
-			return out, verr
+		if sendErr != nil {
+			return out, sendErr
 		}
 		return out, nil
 	}
@@ -87,23 +90,21 @@ func (s *Service) RegisterEmail(ctx context.Context, in RegisterEmailInput) (*Re
 		IsActive:     true,
 	}
 
-	if err := s.createUserWithProfile(ctx, user, loc, in.FirstName, in.LastName); err != nil {
-		if errors.Is(err, repository.ErrConflict) {
+	if err := uc.deps.createUserWithProfile(ctx, user, locale, in.FirstName, in.LastName); err != nil {
+		if errors.Is(err, ports.ErrConflict) {
 			return nil, ErrEmailAlreadyTaken
 		}
 		return nil, err
 	}
 
-	meta, verr := s.sendRegistrationVerification(ctx, user.ID, email, in.FirstName, in.LastName)
-	out := &RegisterEmailOutput{
-		UserID: user.ID,
-	}
+	meta, sendErr := sendRegistrationVerification(ctx, uc.deps, user.ID, email, in.FirstName, in.LastName, locale)
+	out := &RegisterEmailOutput{UserID: user.ID}
 	out.Verification.Channel = meta.Channel
 	out.Verification.CodeTTLSeconds = meta.CodeTTLSeconds
 	out.Verification.CanResendInSeconds = meta.CanResendInSeconds
 
-	if verr != nil {
-		return out, verr
+	if sendErr != nil {
+		return out, sendErr
 	}
 
 	return out, nil

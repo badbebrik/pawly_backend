@@ -1,6 +1,7 @@
 package redisstore
 
 import (
+	"auth/internal/application/ports"
 	"auth/internal/verification"
 	"context"
 	"crypto/rand"
@@ -35,7 +36,7 @@ func (s *Store) RequestCode(ctx context.Context, email, purpose string) (string,
 		var rec verification.CodeRecord
 		if err := json.Unmarshal(data, &rec); err == nil {
 			if now.Before(rec.ResendAvailableAt) {
-				return "", int(verification.CodeTTL.Seconds()), int(rec.ResendAvailableAt.Sub(now).Seconds()), verification.ErrResendTooSoon
+				return "", int(verification.CodeTTL.Seconds()), int(rec.ResendAvailableAt.Sub(now).Seconds()), ports.ErrResendTooSoon
 			}
 		}
 	} else if !errors.Is(err, redis.Nil) {
@@ -75,7 +76,7 @@ func (s *Store) VerifyCode(ctx context.Context, email, purpose, inputCode string
 	data, err := s.rdb.Get(ctx, k).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return verification.ErrCodeNotFound
+			return ports.ErrCodeNotFound
 		}
 		return err
 	}
@@ -87,12 +88,12 @@ func (s *Store) VerifyCode(ctx context.Context, email, purpose, inputCode string
 
 	if now.After(rec.ExpiresAt) {
 		s.rdb.Del(ctx, k)
-		return verification.ErrCodeExpired
+		return ports.ErrCodeExpired
 	}
 
 	if rec.Attempts >= verification.MaxAttempts {
 		s.rdb.Del(ctx, k)
-		return verification.ErrTooManyAttempts
+		return ports.ErrTooManyAttempts
 	}
 
 	if subtle.ConstantTimeCompare([]byte(inputCode), []byte(rec.Code)) != 1 {
@@ -101,7 +102,7 @@ func (s *Store) VerifyCode(ctx context.Context, email, purpose, inputCode string
 		jsonData, _ := json.Marshal(rec)
 		s.rdb.Set(ctx, k, jsonData, rec.ExpiresAt.Sub(now))
 
-		return verification.ErrCodeInvalid
+		return ports.ErrCodeInvalid
 	}
 
 	s.rdb.Del(ctx, k)

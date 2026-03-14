@@ -1,10 +1,6 @@
 package config
 
-import (
-	"github.com/rs/zerolog/log"
-	"os"
-	"strconv"
-)
+import "pawly/pkg/configenv"
 
 type Config struct {
 	AppPort string
@@ -39,73 +35,84 @@ type Config struct {
 	OAuthHTTPTimeoutSeconds int
 }
 
-func Load() *Config {
-	cfg := &Config{
-		AppPort:                  getEnv("APP_PORT", "8000"),
-		PostgresUser:             getEnv("POSTGRES_USER", "postgres"),
-		PostgresPassword:         getEnv("POSTGRES_PASSWORD", "password"),
-		PostgresDB:               getEnv("POSTGRES_DB", "auth_db"),
-		PostgresHost:             getEnv("POSTGRES_HOST", "localhost"),
-		PostgresPort:             getEnv("POSTGRES_PORT", "5432"),
-		RedisHost:                getEnv("REDIS_HOST", ""),
-		RedisPort:                getEnv("REDIS_PORT", ""),
-		RedisPassword:            getEnv("REDIS_PASSWORD", ""),
-		RedisDB:                  getEnvInt("REDIS_DB", 0),
-		JWTSecret:                getEnv("JWT_SECRET", "DEFAULT"),
-		JWTIssuer:                getEnv("JWT_ISSUER", "pawly"),
-		AccessTokenTTLMin:        getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 15),
-		RefreshTokenTTLDays:      getEnvInt("REFRESH_TOKEN_TTL_DAYS", 30),
-		PasswordResetTokenTTLMin: getEnvInt("PASSWORD_RESET_TOKEN_TTL_MINUTES", 15),
-		OutboxWorkerIntervalMS:   getEnvInt("OUTBOX_WORKER_INTERVAL_MS", 2000),
-		OutboxWorkerBatchSize:    getEnvInt("OUTBOX_WORKER_BATCH_SIZE", 100),
-		RabbitHost:               getEnv("RABBITMQ_HOST", "localhost"),
-		RabbitPort:               getEnv("RABBITMQ_PORT", "5672"),
-		RabbitUser:               getEnv("RABBITMQ_USER", ""),
-		RabbitPassword:           getEnv("RABBITMQ_PASSWORD", ""),
-		RabbitNotificationsQueue: getEnv("RABBITMQ_NOTIFICATIONS_QUEUE", ""),
-		ProfileServiceGRPCAddr:   getEnv("PROFILE_SERVICE_GRPC_ADDR", "localhost:50058"),
-		GoogleOAuthClientID:      getRequiredEnv("GOOGLE_OAUTH_CLIENT_ID"),
-		OAuthHTTPTimeoutSeconds:  getEnvInt("OAUTH_HTTP_TIMEOUT_SECONDS", 5),
-	}
-
-	return cfg
-}
-
-func getEnv(key, fallback string) string {
-	val, ok := os.LookupEnv(key)
-
-	if !ok || val == "" {
-		return fallback
-	}
-
-	return val
-}
-
-func getEnvInt(key string, fallback int) int {
-	valStr, ok := os.LookupEnv(key)
-
-	if !ok || valStr == "" {
-		return fallback
-	}
-
-	val, err := strconv.Atoi(valStr)
+func Load() (*Config, error) {
+	appPort := configenv.String("APP_PORT", "8000")
+	postgresUser := configenv.String("POSTGRES_USER", "postgres")
+	postgresPassword := configenv.String("POSTGRES_PASSWORD", "password")
+	postgresDB := configenv.String("POSTGRES_DB", "auth_db")
+	postgresHost := configenv.String("POSTGRES_HOST", "localhost")
+	postgresPort := configenv.String("POSTGRES_PORT", "5432")
+	redisHost := configenv.String("REDIS_HOST", "")
+	redisPort := configenv.String("REDIS_PORT", "")
+	redisPassword := configenv.String("REDIS_PASSWORD", "")
+	redisDB, err := configenv.Int("REDIS_DB", 0)
 	if err != nil {
-		log.Fatal().
-			Str("env_key", key).
-			Str("given_value", valStr).
-			Err(err).
-			Msg("Invalid integer value in environment variable")
+		return nil, err
+	}
+	jwtSecret := configenv.String("JWT_SECRET", "DEFAULT")
+	jwtIssuer := configenv.String("JWT_ISSUER", "pawly")
+	accessTokenTTLMin, err := configenv.Int("ACCESS_TOKEN_TTL_MINUTES", 15)
+	if err != nil {
+		return nil, err
+	}
+	refreshTokenTTLDays, err := configenv.Int("REFRESH_TOKEN_TTL_DAYS", 30)
+	if err != nil {
+		return nil, err
+	}
+	passwordResetTokenTTLMin, err := configenv.Int("PASSWORD_RESET_TOKEN_TTL_MINUTES", 15)
+	if err != nil {
+		return nil, err
+	}
+	outboxWorkerIntervalMS, err := configenv.Int("OUTBOX_WORKER_INTERVAL_MS", 2000)
+	if err != nil {
+		return nil, err
+	}
+	outboxWorkerBatchSize, err := configenv.Int("OUTBOX_WORKER_BATCH_SIZE", 100)
+	if err != nil {
+		return nil, err
+	}
+	rabbitHost := configenv.String("RABBITMQ_HOST", "localhost")
+	rabbitPort := configenv.String("RABBITMQ_PORT", "5672")
+	rabbitUser := configenv.String("RABBITMQ_USER", "")
+	rabbitPassword := configenv.String("RABBITMQ_PASSWORD", "")
+	rabbitNotificationsQueue := configenv.String("RABBITMQ_NOTIFICATIONS_QUEUE", "")
+	profileServiceGRPCAddr := configenv.String("PROFILE_SERVICE_GRPC_ADDR", "localhost:50058")
+	googleOAuthClientID, err := configenv.RequiredString("GOOGLE_OAUTH_CLIENT_ID")
+	if err != nil {
+		return nil, err
+	}
+	oauthHTTPTimeoutSeconds, err := configenv.Int("OAUTH_HTTP_TIMEOUT_SECONDS", 5)
+	if err != nil {
+		return nil, err
 	}
 
-	return val
-}
-
-func getRequiredEnv(key string) string {
-	val, ok := os.LookupEnv(key)
-	if !ok || val == "" {
-		log.Fatal().
-			Str("env_key", key).
-			Msg("Missing required environment variable")
+	cfg := &Config{
+		AppPort:                  appPort,
+		PostgresUser:             postgresUser,
+		PostgresPassword:         postgresPassword,
+		PostgresDB:               postgresDB,
+		PostgresHost:             postgresHost,
+		PostgresPort:             postgresPort,
+		RedisHost:                redisHost,
+		RedisPort:                redisPort,
+		RedisPassword:            redisPassword,
+		RedisDB:                  redisDB,
+		JWTSecret:                jwtSecret,
+		JWTIssuer:                jwtIssuer,
+		AccessTokenTTLMin:        accessTokenTTLMin,
+		RefreshTokenTTLDays:      refreshTokenTTLDays,
+		PasswordResetTokenTTLMin: passwordResetTokenTTLMin,
+		OutboxWorkerIntervalMS:   outboxWorkerIntervalMS,
+		OutboxWorkerBatchSize:    outboxWorkerBatchSize,
+		RabbitHost:               rabbitHost,
+		RabbitPort:               rabbitPort,
+		RabbitUser:               rabbitUser,
+		RabbitPassword:           rabbitPassword,
+		RabbitNotificationsQueue: rabbitNotificationsQueue,
+		ProfileServiceGRPCAddr:   profileServiceGRPCAddr,
+		GoogleOAuthClientID:      googleOAuthClientID,
+		OAuthHTTPTimeoutSeconds:  oauthHTTPTimeoutSeconds,
 	}
-	return val
+
+	return cfg, nil
 }

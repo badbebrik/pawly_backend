@@ -24,4 +24,6 @@ type TokenManager interface {
 	GeneratePasswordResetToken(userID, email string) (string, error)
 	ValidateToken(tokenStr string) (*TokenClaims, error)
 	EnsureTokenType(claims *TokenClaims, tokenType string) error
+	AccessTTL() time.Duration
+	RefreshTTL() time.Duration
 }

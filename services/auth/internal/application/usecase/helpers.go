@@ -48,7 +48,7 @@ func (d *dependencies) issueTokenPair(userID, sessionID uuid.UUID) (*tokenPair, 
 		AccessToken:      accessToken,
 		RefreshToken:     refreshToken,
 		RefreshTokenHash: security.HashTokenSHA256(refreshToken),
-		RefreshExpiresAt: d.now().Add(time.Duration(d.refreshTTLDays) * 24 * time.Hour),
+		RefreshExpiresAt: d.now().Add(d.tokens.RefreshTTL()),
 	}, nil
 }
 

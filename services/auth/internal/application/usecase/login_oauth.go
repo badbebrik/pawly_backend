@@ -129,6 +129,6 @@ func (uc *LoginOAuthUseCase) Execute(ctx context.Context, in LoginOAuthInput) (*
 		UserID:       user.ID,
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,
-		ExpiresIn:    uc.deps.accessTTLSeconds,
+		ExpiresIn:    int(uc.deps.tokens.AccessTTL().Seconds()),
 	}, nil
 }

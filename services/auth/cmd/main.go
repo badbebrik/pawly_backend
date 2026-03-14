@@ -17,7 +17,10 @@ func main() {
 		log.Fatal().Msg("Error loading .env file")
 	}
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load config")
+	}
 
 	a, err := app.New(cfg)
 	if err != nil {

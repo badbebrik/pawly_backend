@@ -1,10 +1,14 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /src
 
-COPY go.mod go.sum ./
+COPY auth/go.mod auth/go.sum /src/auth/
+COPY pkg/go.mod /src/pkg/go.mod
+
+WORKDIR /src/auth
 RUN go mod download
 
-COPY . .
+COPY auth /src/auth
+COPY pkg /src/pkg
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/service ./cmd/main.go
 
 FROM alpine:3.20

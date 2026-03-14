@@ -87,17 +87,15 @@ func buildAuthModule(cfg *config.Config, pg *db.Postgres, redis *redisdb.Redis, 
 	)
 
 	authSvc := usecase.NewSet(usecase.Dependencies{
-		Users:            userRepo,
-		Sessions:         sessionRepo,
-		OAuth:            oauthRepo,
-		ResetTokens:      resetTokenRepo,
-		Verification:     verificationRepo,
-		Notifier:         outboxPublisher,
-		Tokens:           tokens.NewJWTService(*cfg),
-		Profiles:         profile,
-		OAuthVerify:      oauth.NewGoogleVerifier(time.Duration(cfg.OAuthHTTPTimeoutSeconds)*time.Second, cfg.GoogleOAuthClientID),
-		AccessTTLSeconds: cfg.AccessTokenTTLMin * 60,
-		RefreshTTLDays:   cfg.RefreshTokenTTLDays,
+		Users:        userRepo,
+		Sessions:     sessionRepo,
+		OAuth:        oauthRepo,
+		ResetTokens:  resetTokenRepo,
+		Verification: verificationRepo,
+		Notifier:     outboxPublisher,
+		Tokens:       tokens.NewJWTService(*cfg),
+		Profiles:     profile,
+		OAuthVerify:  oauth.NewGoogleVerifier(time.Duration(cfg.OAuthHTTPTimeoutSeconds)*time.Second, cfg.GoogleOAuthClientID),
 	})
 
 	return authSvc, outboxWorker

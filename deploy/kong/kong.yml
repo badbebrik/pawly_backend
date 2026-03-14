@@ -7,6 +7,7 @@ services:
       - name: auth-public-routes
         paths:
           - ~/auth/register/email$
+          - ~/auth/verification/email/resend$
           - ~/auth/verify/email$
           - ~/auth/login/email$
           - ~/auth/login/oauth$
@@ -19,6 +20,7 @@ services:
         paths:
           - ~/auth/logout$
           - ~/auth/logout-all$
+          - ~/auth/password/change$
         strip_path: false
 
   - name: profile-service

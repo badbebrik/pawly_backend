@@ -157,4 +157,12 @@ func (s *JWTService) EnsureTokenType(claims *ports.TokenClaims, tokenType string
 	return nil
 }
 
+func (s *JWTService) AccessTTL() time.Duration {
+	return s.accessTTL
+}
+
+func (s *JWTService) RefreshTTL() time.Duration {
+	return s.refreshTTL
+}
+
 var _ ports.TokenManager = (*JWTService)(nil)

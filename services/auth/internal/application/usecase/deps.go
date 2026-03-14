@@ -22,9 +22,6 @@ type Dependencies struct {
 	Profiles     ports.ProfileProvisioner
 	OAuthVerify  ports.OAuthVerifier
 	Clock        ports.Clock
-
-	AccessTTLSeconds int
-	RefreshTTLDays   int
 }
 
 type dependencies struct {
@@ -38,9 +35,6 @@ type dependencies struct {
 	profiles     ports.ProfileProvisioner
 	oauthVerify  ports.OAuthVerifier
 	clock        ports.Clock
-
-	accessTTLSeconds int
-	refreshTTLDays   int
 }
 
 func newDependencies(in Dependencies) *dependencies {
@@ -50,17 +44,15 @@ func newDependencies(in Dependencies) *dependencies {
 	}
 
 	return &dependencies{
-		users:            in.Users,
-		sessions:         in.Sessions,
-		oauth:            in.OAuth,
-		resetTokens:      in.ResetTokens,
-		verification:     in.Verification,
-		notifier:         in.Notifier,
-		tokens:           in.Tokens,
-		profiles:         in.Profiles,
-		oauthVerify:      in.OAuthVerify,
-		clock:            clk,
-		accessTTLSeconds: in.AccessTTLSeconds,
-		refreshTTLDays:   in.RefreshTTLDays,
+		users:        in.Users,
+		sessions:     in.Sessions,
+		oauth:        in.OAuth,
+		resetTokens:  in.ResetTokens,
+		verification: in.Verification,
+		notifier:     in.Notifier,
+		tokens:       in.Tokens,
+		profiles:     in.Profiles,
+		oauthVerify:  in.OAuthVerify,
+		clock:        clk,
 	}
 }

@@ -83,6 +83,6 @@ func (uc *RefreshUseCase) Execute(ctx context.Context, in RefreshInput) (*Refres
 		UserID:       userID,
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,
-		ExpiresIn:    uc.deps.accessTTLSeconds,
+		ExpiresIn:    int(uc.deps.tokens.AccessTTL().Seconds()),
 	}, nil
 }

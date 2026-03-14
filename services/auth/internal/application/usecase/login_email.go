@@ -66,6 +66,6 @@ func (uc *LoginEmailUseCase) Execute(ctx context.Context, in LoginEmailInput) (*
 		UserID:       user.ID,
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,
-		ExpiresIn:    uc.deps.accessTTLSeconds,
+		ExpiresIn:    int(uc.deps.tokens.AccessTTL().Seconds()),
 	}, nil
 }

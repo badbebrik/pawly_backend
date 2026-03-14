@@ -221,6 +221,8 @@ type stubTokenManager struct {
 	generateAccessTokenFn  func(string, string) (string, error)
 	generateRefreshTokenFn func(string, string) (string, error)
 	generateResetTokenFn   func(string, string) (string, error)
+	accessTTL              time.Duration
+	refreshTTL             time.Duration
 }
 
 func (s *stubTokenManager) GenerateAccessToken(userID, sessionID string) (string, error) {
@@ -256,6 +258,20 @@ func (s *stubTokenManager) EnsureTokenType(claims *ports.TokenClaims, tokenType 
 		return s.ensureTokenTypeFn(claims, tokenType)
 	}
 	return nil
+}
+
+func (s *stubTokenManager) AccessTTL() time.Duration {
+	if s.accessTTL != 0 {
+		return s.accessTTL
+	}
+	return 15 * time.Minute
+}
+
+func (s *stubTokenManager) RefreshTTL() time.Duration {
+	if s.refreshTTL != 0 {
+		return s.refreshTTL
+	}
+	return 30 * 24 * time.Hour
 }
 
 type stubProfileProvisioner struct {
@@ -329,9 +345,7 @@ func TestRegisterEmail_UsesExplicitLocaleForProfileAndVerification(t *testing.T)
 				return nil
 			},
 		},
-		OAuthVerify:      &stubOAuthVerifier{},
-		AccessTTLSeconds: 900,
-		RefreshTTLDays:   30,
+		OAuthVerify: &stubOAuthVerifier{},
 	})
 
 	out, err := set.RegisterEmail.Execute(context.Background(), RegisterEmailInput{
@@ -410,12 +424,12 @@ func TestLoginEmail_CreatesSessionAndTouchesLastLogin(t *testing.T) {
 			generateRefreshTokenFn: func(_, sessionID string) (string, error) {
 				return "refresh-" + sessionID, nil
 			},
+			accessTTL:  15 * time.Minute,
+			refreshTTL: 30 * 24 * time.Hour,
 		},
-		Profiles:         &stubProfileProvisioner{},
-		OAuthVerify:      &stubOAuthVerifier{},
-		Clock:            fixedClock{now: now},
-		AccessTTLSeconds: 900,
-		RefreshTTLDays:   30,
+		Profiles:    &stubProfileProvisioner{},
+		OAuthVerify: &stubOAuthVerifier{},
+		Clock:       fixedClock{now: now},
 	})
 
 	out, err := set.LoginEmail.Execute(context.Background(), LoginEmailInput{
@@ -515,12 +529,12 @@ func TestRefresh_RotatesSessionUsingClock(t *testing.T) {
 			generateRefreshTokenFn: func(_, sid string) (string, error) {
 				return "refresh-" + sid, nil
 			},
+			accessTTL:  15 * time.Minute,
+			refreshTTL: 10 * 24 * time.Hour,
 		},
-		Profiles:         &stubProfileProvisioner{},
-		OAuthVerify:      &stubOAuthVerifier{},
-		Clock:            fixedClock{now: now},
-		AccessTTLSeconds: 900,
-		RefreshTTLDays:   10,
+		Profiles:    &stubProfileProvisioner{},
+		OAuthVerify: &stubOAuthVerifier{},
+		Clock:       fixedClock{now: now},
 	})
 
 	out, err := set.Refresh.Execute(context.Background(), RefreshInput{RefreshToken: oldRefresh})
@@ -574,11 +588,9 @@ func TestRequestPasswordReset_UsesExplicitLocale(t *testing.T) {
 				return nil
 			},
 		},
-		Tokens:           &stubTokenManager{},
-		Profiles:         &stubProfileProvisioner{},
-		OAuthVerify:      &stubOAuthVerifier{},
-		AccessTTLSeconds: 900,
-		RefreshTTLDays:   30,
+		Tokens:      &stubTokenManager{},
+		Profiles:    &stubProfileProvisioner{},
+		OAuthVerify: &stubOAuthVerifier{},
 	})
 
 	err := set.PasswordResetRequest.Execute(context.Background(), PasswordResetRequestInput{

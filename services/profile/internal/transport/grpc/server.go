@@ -3,8 +3,8 @@ package grpc
 import (
 	"context"
 	"errors"
+	profileuc "profile/internal/application/usecase"
 	"profile/internal/repository"
-	"profile/internal/service"
 	profilepb "profile/proto"
 	"strings"
 
@@ -18,11 +18,11 @@ import (
 
 type Server struct {
 	profilepb.UnimplementedProfileServiceServer
-	svc *service.ProfileService
+	uc *profileuc.Set
 }
 
-func NewServer(svc *service.ProfileService) *Server {
-	return &Server{svc: svc}
+func NewServer(uc *profileuc.Set) *Server {
+	return &Server{uc: uc}
 }
 
 func Register(srv *grpc.Server, s *Server) {
@@ -38,7 +38,7 @@ func (s *Server) CreateProfile(ctx context.Context, req *profilepb.CreateProfile
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
 
-	profile, err := s.svc.CreateProfile(ctx, service.CreateProfileInput{
+	profile, err := s.uc.CreateProfile.Execute(ctx, profileuc.CreateProfileInput{
 		UserID:    userID,
 		Locale:    optionalString(req.GetLocale()),
 		Timezone:  optionalString(req.GetTimezone()),
@@ -60,8 +60,8 @@ func (s *Server) DeleteProfile(ctx context.Context, req *profilepb.DeleteProfile
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
 
-	if err := s.svc.DeleteProfile(ctx, userID); err != nil {
-		if errors.Is(err, service.ErrInvalidInput) {
+	if err := s.uc.DeleteProfile.Execute(ctx, userID); err != nil {
+		if errors.Is(err, profileuc.ErrInvalidInput) {
 			return nil, status.Error(codes.InvalidArgument, "invalid input")
 		}
 		if errors.Is(err, repository.ErrNotFound) {
@@ -81,7 +81,7 @@ func (s *Server) GetPreferences(ctx context.Context, req *profilepb.GetPreferenc
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
 
-	prefs, err := s.svc.GetPreferences(ctx, userID)
+	prefs, err := s.uc.GetPreferences.Execute(ctx, userID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "profile not found")
@@ -113,7 +113,7 @@ func (s *Server) BatchGetPreferences(ctx context.Context, req *profilepb.BatchGe
 		userIDs = append(userIDs, userID)
 	}
 
-	items, notFound, err := s.svc.BatchGetPreferences(ctx, userIDs)
+	items, notFound, err := s.uc.BatchGetPreferences.Execute(ctx, userIDs)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -155,7 +155,7 @@ func (s *Server) BatchProfilesBrief(ctx context.Context, req *profilepb.BatchPro
 		userIDs = append(userIDs, userID)
 	}
 
-	items, notFound, err := s.svc.BatchGetProfilesBrief(ctx, userIDs)
+	items, notFound, err := s.uc.BatchProfilesBrief.Execute(ctx, userIDs)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -185,12 +185,14 @@ func (s *Server) BatchProfilesBrief(ctx context.Context, req *profilepb.BatchPro
 
 func mapSvcErr(err error) error {
 	switch {
-	case errors.Is(err, service.ErrInvalidInput):
+	case errors.Is(err, profileuc.ErrInvalidInput):
 		return status.Error(codes.InvalidArgument, "invalid input")
-	case errors.Is(err, service.ErrInvalidLocale):
+	case errors.Is(err, profileuc.ErrInvalidLocale):
 		return status.Error(codes.InvalidArgument, "invalid locale")
-	case errors.Is(err, service.ErrInvalidTimezone):
+	case errors.Is(err, profileuc.ErrInvalidTimezone):
 		return status.Error(codes.InvalidArgument, "invalid timezone")
+	case errors.Is(err, profileuc.ErrAvatarUpload):
+		return status.Error(codes.FailedPrecondition, "avatar_upload_failed")
 	case errors.Is(err, repository.ErrConflict):
 		return status.Error(codes.AlreadyExists, "profile already exists")
 	default:

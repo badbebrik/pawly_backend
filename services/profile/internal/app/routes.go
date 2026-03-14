@@ -4,12 +4,12 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"profile/internal/service"
+	"profile/internal/application/usecase"
 	"profile/internal/transport/http/handlers"
 	"profile/internal/transport/http/middleware"
 )
 
-func (a *App) setupRoutes(svc *service.ProfileService) http.Handler {
+func (a *App) setupRoutes(uc *usecase.Set) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +18,7 @@ func (a *App) setupRoutes(svc *service.ProfileService) http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	hs := handlers.NewHandlers(svc)
+	hs := handlers.NewHandlers(uc)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.WithUserID)

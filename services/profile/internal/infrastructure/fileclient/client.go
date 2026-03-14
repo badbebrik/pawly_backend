@@ -4,7 +4,7 @@ import (
 	"context"
 	filepb "file/proto"
 	"fmt"
-	"profile/internal/service"
+	"profile/internal/application/ports"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,21 +39,21 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, _ uuid.UUID) (uuid.UUID, service.UploadInfo, error) {
+func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, _ uuid.UUID) (uuid.UUID, ports.UploadInfo, error) {
 	resp, err := c.client.InitUpload(ctx, &filepb.InitUploadRequest{
 		MimeType:          mimeType,
 		ExpectedSizeBytes: expectedSize,
 	})
 	if err != nil {
-		return uuid.Nil, service.UploadInfo{}, err
+		return uuid.Nil, ports.UploadInfo{}, err
 	}
 
 	fileID, err := uuid.Parse(resp.GetFile().GetId())
 	if err != nil {
-		return uuid.Nil, service.UploadInfo{}, err
+		return uuid.Nil, ports.UploadInfo{}, err
 	}
 
-	upload := service.UploadInfo{
+	upload := ports.UploadInfo{
 		Method:    resp.GetUpload().GetMethod(),
 		URL:       resp.GetUpload().GetUrl(),
 		Headers:   resp.GetUpload().GetHeaders(),
@@ -122,4 +122,4 @@ func (c *Client) LinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.U
 	return err
 }
 
-var _ service.FileClient = (*Client)(nil)
+var _ ports.FileGateway = (*Client)(nil)

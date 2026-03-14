@@ -2,27 +2,23 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 
+	profileuc "profile/internal/application/usecase"
 	"profile/internal/model"
-	"profile/internal/repository"
-	"profile/internal/service"
 	"profile/internal/transport/http/middleware"
 )
 
 type Handlers struct {
-	svc *service.ProfileService
+	uc *profileuc.Set
 }
 
-func NewHandlers(svc *service.ProfileService) *Handlers {
-	return &Handlers{svc: svc}
+func NewHandlers(uc *profileuc.Set) *Handlers {
+	return &Handlers{uc: uc}
 }
 
 type ProfileResponse struct {
@@ -39,7 +35,7 @@ type ProfileResponse struct {
 func (h *Handlers) fromModel(ctx context.Context, p *model.Profile) ProfileResponse {
 	var avatarURL *string
 	if p.AvatarFileID != nil {
-		if url, _, err := h.svc.GetAvatarDownloadURL(ctx, *p.AvatarFileID); err == nil {
+		if url, err := h.uc.GetAvatarDownloadURL.Execute(ctx, *p.AvatarFileID); err == nil {
 			avatarURL = &url
 		}
 	}
@@ -58,18 +54,13 @@ func (h *Handlers) fromModel(ctx context.Context, p *model.Profile) ProfileRespo
 func (h *Handlers) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
-	p, err := h.svc.GetProfile(r.Context(), userID)
+	p, err := h.uc.GetProfile.Execute(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			http.Error(w, "profile not found", http.StatusNotFound)
-			return
-		}
-		log.Error().Err(err).Msg("GetProfile failed")
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeProfileQueryError(w, err)
 		return
 	}
 
@@ -84,29 +75,24 @@ type UpdateProfileRequest struct {
 func (h *Handlers) PatchMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	var req UpdateProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
-	in := service.UpdateProfileInfoInput{
+	in := profileuc.UpdateProfileInfoInput{
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 	}
 
-	p, err := h.svc.UpdateProfileInfo(r.Context(), userID, in)
+	p, err := h.uc.UpdateProfileInfo.Execute(r.Context(), userID, in)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			http.Error(w, "profile not found", http.StatusNotFound)
-			return
-		}
-		log.Error().Err(err).Msg("UpdateProfile failed")
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeUpdateProfileInfoError(w, err)
 		return
 	}
 
@@ -121,32 +107,22 @@ type UpdatePreferencesRequest struct {
 func (h *Handlers) PatchPreferences(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	var req UpdatePreferencesRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
-	p, err := h.svc.UpdatePreferences(r.Context(), userID, service.UpdatePreferencesInput{
+	p, err := h.uc.UpdatePreferences.Execute(r.Context(), userID, profileuc.UpdatePreferencesInput{
 		Locale:   req.Locale,
 		Timezone: req.Timezone,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, repository.ErrNotFound):
-			http.Error(w, "profile not found", http.StatusNotFound)
-		case errors.Is(err, service.ErrInvalidLocale), errors.Is(err, service.ErrInvalidTimezone):
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		default:
-			log.Error().Err(err).Msg("UpdatePreferences failed")
-			http.Error(w, "internal error", http.StatusInternalServerError)
-		}
+		writeUpdatePreferencesError(w, err)
 		return
 	}
 
@@ -173,19 +149,19 @@ type UploadInfoDTO struct {
 func (h *Handlers) InitAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	var req InitAvatarUploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
-	fileID, upload, err := h.svc.InitAvatarUpload(r.Context(), req.MimeType, req.ExpectedSizeBytes, userID)
+	fileID, upload, err := h.uc.InitAvatarUpload.Execute(r.Context(), userID, req.MimeType, req.ExpectedSizeBytes)
 	if err != nil {
-		http.Error(w, "init upload failed", http.StatusBadRequest)
+		writeAvatarError(w, err)
 		return
 	}
 
@@ -212,19 +188,19 @@ type ConfirmAvatarUploadResponse struct {
 func (h *Handlers) ConfirmAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
 	var req ConfirmAvatarUploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 
-	p, err := h.svc.ConfirmAvatarUpload(r.Context(), userID, req.FileID, req.SizeBytes)
+	p, err := h.uc.ConfirmAvatarUpload.Execute(r.Context(), userID, req.FileID, req.SizeBytes)
 	if err != nil {
-		http.Error(w, "confirm failed", http.StatusBadRequest)
+		writeAvatarError(w, err)
 		return
 	}
 
@@ -250,10 +226,8 @@ type BatchProfilesBriefResponse struct {
 
 func (h *Handlers) BatchProfilesBrief(w http.ResponseWriter, r *http.Request) {
 	var req BatchProfilesBriefRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", nil)
 		return
 	}
 	if len(req.UserIDs) == 0 {
@@ -268,15 +242,15 @@ func (h *Handlers) BatchProfilesBrief(w http.ResponseWriter, r *http.Request) {
 	for i := range req.UserIDs {
 		userID, err := uuid.Parse(req.UserIDs[i])
 		if err != nil {
-			http.Error(w, "invalid user_ids", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "invalid_user_ids", nil)
 			return
 		}
 		userIDs = append(userIDs, userID)
 	}
 
-	items, notFound, err := h.svc.BatchGetProfilesBrief(r.Context(), userIDs)
+	items, notFound, err := h.uc.BatchProfilesBrief.Execute(r.Context(), userIDs)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeBatchProfilesBriefError(w, err)
 		return
 	}
 
@@ -311,10 +285,4 @@ func buildDisplayName(firstName, lastName *string) *string {
 		return nil
 	}
 	return &displayName
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
 }

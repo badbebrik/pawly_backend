@@ -7,11 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"profile/internal/application/ports"
+	"profile/internal/application/usecase"
 	"profile/internal/config"
 	"profile/internal/infrastructure/db"
 	pgrepo "profile/internal/infrastructure/db/repository"
 	"profile/internal/infrastructure/fileclient"
-	"profile/internal/service"
 	grpcserver "profile/internal/transport/grpc"
 	"syscall"
 	"time"
@@ -43,8 +44,7 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	profileRepo := pgrepo.NewProfileRepository(pg.Pool)
-	profileSvc := service.NewService(profileRepo, cfg, fileClient)
+	profileUC := buildProfileModule(cfg, pgrepo.NewProfileRepository(pg.Pool), fileClient)
 
 	app := &App{
 		cfg:        cfg,
@@ -52,7 +52,7 @@ func New(cfg *config.Config) (*App, error) {
 		fileClient: fileClient,
 	}
 
-	r := app.setupRoutes(profileSvc)
+	r := app.setupRoutes(profileUC)
 	app.httpSrv = &http.Server{
 		Addr:    ":" + cfg.AppPort,
 		Handler: r,
@@ -67,10 +67,18 @@ func New(cfg *config.Config) (*App, error) {
 	app.grpcListener = grpcListener
 
 	grpcSrv := grpc.NewServer()
-	grpcserver.Register(grpcSrv, grpcserver.NewServer(profileSvc))
+	grpcserver.Register(grpcSrv, grpcserver.NewServer(profileUC))
 	app.grpcSrv = grpcSrv
 
 	return app, nil
+}
+
+func buildProfileModule(cfg *config.Config, repo ports.ProfileRepository, files ports.FileGateway) *usecase.Set {
+	return usecase.NewSet(usecase.Dependencies{
+		Profiles: repo,
+		Files:    files,
+		Config:   cfg,
+	})
 }
 
 func (a *App) Close() {

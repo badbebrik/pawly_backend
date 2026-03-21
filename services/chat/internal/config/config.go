@@ -9,6 +9,9 @@ type Config struct {
 	PostgresDB       string
 	PostgresHost     string
 	PostgresPort     string
+	ACLGRPCAddr      string
+	ProfileGRPCAddr  string
+	PetGRPCAddr      string
 }
 
 func Load() *Config {
@@ -19,5 +22,8 @@ func Load() *Config {
 		PostgresDB:       configenv.String("POSTGRES_DB", ""),
 		PostgresHost:     configenv.String("POSTGRES_HOST", "localhost"),
 		PostgresPort:     configenv.String("POSTGRES_PORT", "5432"),
+		ACLGRPCAddr:      configenv.String("ACL_GRPC_ADDR", ""),
+		ProfileGRPCAddr:  configenv.String("PROFILE_GRPC_ADDR", ""),
+		PetGRPCAddr:      configenv.String("PET_GRPC_ADDR", ""),
 	}
 }

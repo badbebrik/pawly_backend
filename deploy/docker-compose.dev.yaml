@@ -384,6 +384,7 @@ services:
     restart: unless-stopped
     environment:
       APP_PORT: "8085"
+      APP_GRPC_PORT: "50059"
       POSTGRES_USER: pet_user
       POSTGRES_PASSWORD: supersecret
       POSTGRES_DB: pet_db

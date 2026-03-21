@@ -147,6 +147,12 @@ type PetListItem struct {
 	ProfilePhotoDownloadURL *string
 }
 
+type PetBrief struct {
+	PetID     uuid.UUID
+	Name      string
+	AvatarURL *string
+}
+
 func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.Pet, error) {
 	if p.UserID == uuid.Nil || p.SpeciesID == uuid.Nil || strings.TrimSpace(p.Name) == "" {
 		return nil, ErrInvalidInput
@@ -256,6 +262,57 @@ func (s *PetService) ListPets(ctx context.Context, p ListPetsParams) ([]PetListI
 	}
 
 	return out, total, nil
+}
+
+func (s *PetService) BatchGetBrief(ctx context.Context, petIDs []uuid.UUID) (map[uuid.UUID]PetBrief, []uuid.UUID, error) {
+	if len(petIDs) == 0 {
+		return map[uuid.UUID]PetBrief{}, []uuid.UUID{}, nil
+	}
+
+	items, _, err := s.repo.ListByIDs(ctx, petIDs, true, 0, len(petIDs))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	photoIDs := make([]uuid.UUID, 0, len(items))
+	for i := range items {
+		if items[i].ProfilePhotoFileID != nil {
+			photoIDs = append(photoIDs, *items[i].ProfilePhotoFileID)
+		}
+	}
+
+	photoURLs := make(map[uuid.UUID]string, len(photoIDs))
+	if len(photoIDs) > 0 {
+		if urls, err := s.file.BatchGetDownloadURLs(ctx, photoIDs); err == nil {
+			photoURLs = urls
+		}
+	}
+
+	result := make(map[uuid.UUID]PetBrief, len(items))
+	for i := range items {
+		var avatarURL *string
+		if items[i].ProfilePhotoFileID != nil {
+			if url, ok := photoURLs[*items[i].ProfilePhotoFileID]; ok && strings.TrimSpace(url) != "" {
+				value := url
+				avatarURL = &value
+			}
+		}
+
+		result[items[i].ID] = PetBrief{
+			PetID:     items[i].ID,
+			Name:      items[i].Name,
+			AvatarURL: avatarURL,
+		}
+	}
+
+	notFound := make([]uuid.UUID, 0)
+	for i := range petIDs {
+		if _, ok := result[petIDs[i]]; !ok {
+			notFound = append(notFound, petIDs[i])
+		}
+	}
+
+	return result, notFound, nil
 }
 
 func (s *PetService) ResolveProfilePhotoDownloadURL(ctx context.Context, fileID *uuid.UUID) *string {

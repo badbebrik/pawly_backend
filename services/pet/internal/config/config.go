@@ -4,6 +4,7 @@ import "os"
 
 type Config struct {
 	AppPort string
+	AppGRPCPort string
 
 	PostgresUser     string
 	PostgresPassword string
@@ -18,6 +19,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		AppPort:          getEnv("APP_PORT", "8085"),
+		AppGRPCPort:      getEnv("APP_GRPC_PORT", "50059"),
 		PostgresUser:     getEnv("POSTGRES_USER", "pet_user"),
 		PostgresPassword: getEnv("POSTGRES_PASSWORD", "supersecret"),
 		PostgresDB:       getEnv("POSTGRES_DB", "pet_db"),

@@ -3,7 +3,10 @@ package app
 import (
 	"chat/internal/application/usecase"
 	"chat/internal/config"
+	aclclient "chat/internal/infrastructure/aclclient"
 	chatdb "chat/internal/infrastructure/db"
+	petclient "chat/internal/infrastructure/petclient"
+	profileclient "chat/internal/infrastructure/profileclient"
 	"errors"
 	"net/http"
 	"os"
@@ -16,6 +19,9 @@ type App struct {
 	useCases *UseCases
 	httpSrv  *http.Server
 	pg       *chatdb.Postgres
+	acl      *aclclient.Client
+	profile  *profileclient.Client
+	pet      *petclient.Client
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -57,6 +63,15 @@ func (a *App) Close() {
 	}
 	if a.pg != nil {
 		a.pg.Close()
+	}
+	if a.acl != nil {
+		a.acl.Close()
+	}
+	if a.profile != nil {
+		a.profile.Close()
+	}
+	if a.pet != nil {
+		a.pet.Close()
 	}
 }
 

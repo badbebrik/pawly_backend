@@ -118,6 +118,21 @@ services:
       timeout: 3s
       retries: 20
 
+  chat_postgres:
+    image: postgres:16
+    container_name: chat_postgres
+    env_file:
+      - ../services/chat/.env.docker
+    ports:
+      - "5439:5432"
+    volumes:
+      - chat_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d chat_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:7
     container_name: auth_redis
@@ -319,6 +334,23 @@ services:
       timeout: 3s
       retries: 20
 
+  chat:
+    build:
+      context: ../services
+      dockerfile: chat/Dockerfile
+    container_name: pawly_chat
+    restart: unless-stopped
+    env_file:
+      - ../services/chat/.env.docker
+    depends_on:
+      chat_postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8089/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
   email:
     build:
       context: ../services/email
@@ -436,6 +468,7 @@ volumes:
   pet_postgres_data:
   catalog_postgres_data:
   health_postgres_data:
+  chat_postgres_data:
   redis_data:
   rabbitmq_data:
   minio_data:

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"chat/internal/application/usecase"
 	"chat/internal/config"
 	"errors"
 	"net/http"
@@ -10,8 +11,9 @@ import (
 )
 
 type App struct {
-	cfg     *config.Config
-	httpSrv *http.Server
+	cfg      *config.Config
+	useCases *UseCases
+	httpSrv  *http.Server
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -21,6 +23,10 @@ func New(cfg *config.Config) (*App, error) {
 
 	a := &App{
 		cfg: cfg,
+	}
+
+	if err := a.wire(); err != nil {
+		return nil, err
 	}
 
 	a.httpSrv = &http.Server{
@@ -47,4 +53,14 @@ func (a *App) Close() {
 	if a.httpSrv != nil {
 		_ = a.httpSrv.Close()
 	}
+}
+
+type UseCases struct {
+	OpenDirectConversation *usecase.OpenDirectConversation
+	ListConversations      *usecase.ListConversations
+	GetConversation        *usecase.GetConversation
+	GetUnreadSummary       *usecase.GetUnreadSummary
+	GetMessageHistory      *usecase.GetMessageHistory
+	SendMessage            *usecase.SendMessage
+	MarkRead               *usecase.MarkRead
 }

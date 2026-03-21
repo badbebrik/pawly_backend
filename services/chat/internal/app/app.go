@@ -3,6 +3,7 @@ package app
 import (
 	"chat/internal/application/usecase"
 	"chat/internal/config"
+	chatdb "chat/internal/infrastructure/db"
 	"errors"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ type App struct {
 	cfg      *config.Config
 	useCases *UseCases
 	httpSrv  *http.Server
+	pg       *chatdb.Postgres
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -52,6 +54,9 @@ func (a *App) Run() error {
 func (a *App) Close() {
 	if a.httpSrv != nil {
 		_ = a.httpSrv.Close()
+	}
+	if a.pg != nil {
+		a.pg.Close()
 	}
 }
 

@@ -3,11 +3,21 @@ package config
 import "pawly/pkg/configenv"
 
 type Config struct {
-	AppPort string
+	AppPort          string
+	PostgresUser     string
+	PostgresPassword string
+	PostgresDB       string
+	PostgresHost     string
+	PostgresPort     string
 }
 
 func Load() *Config {
 	return &Config{
-		AppPort: configenv.String("APP_PORT", "8090"),
+		AppPort:          configenv.String("APP_PORT", "8090"),
+		PostgresUser:     configenv.String("POSTGRES_USER", ""),
+		PostgresPassword: configenv.String("POSTGRES_PASSWORD", ""),
+		PostgresDB:       configenv.String("POSTGRES_DB", ""),
+		PostgresHost:     configenv.String("POSTGRES_HOST", "localhost"),
+		PostgresPort:     configenv.String("POSTGRES_PORT", "5432"),
 	}
 }

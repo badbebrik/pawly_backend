@@ -56,6 +56,7 @@ type GetConversationDetails struct {
 	LastMessageSenderID *uuid.UUID
 	LastReadMessageID   *uuid.UUID
 	UnreadCount         int
+	CanSend             bool
 }
 
 type GetConversationResult struct {

@@ -1,7 +1,6 @@
 package ports
 
 import (
-	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,9 +32,4 @@ type ListConversationsResult struct {
 type UnreadSummary struct {
 	UnreadConversations int
 	UnreadMessages      int
-}
-
-type ConversationReadRepository interface {
-	ListConversations(ctx context.Context, userID uuid.UUID, params ListConversationsParams) (ListConversationsResult, error)
-	GetUnreadSummary(ctx context.Context, userID uuid.UUID) (UnreadSummary, error)
 }

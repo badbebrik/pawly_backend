@@ -5,7 +5,10 @@ import (
 	"chat/internal/domain/model"
 	chatdb "chat/internal/infrastructure/db"
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -123,6 +126,144 @@ func (r *ConversationRepository) GetDirectByPetAndUsers(ctx context.Context, pet
 	return conversation, nil
 }
 
+func (r *ConversationRepository) GetUnreadSummary(ctx context.Context, userID uuid.UUID) (ports.UnreadSummary, error) {
+	const query = `
+		SELECT
+			COUNT(*) FILTER (WHERE unread_count > 0),
+			COALESCE(SUM(unread_count), 0)
+		FROM conversation_participants
+		WHERE user_id = $1
+	`
+
+	var summary ports.UnreadSummary
+	if err := r.db.QueryRow(ctx, query, userID).Scan(
+		&summary.UnreadConversations,
+		&summary.UnreadMessages,
+	); err != nil {
+		return ports.UnreadSummary{}, err
+	}
+
+	return summary, nil
+}
+
+func (r *ConversationRepository) ListConversations(
+	ctx context.Context,
+	userID uuid.UUID,
+	params ports.ListConversationsParams,
+) (ports.ListConversationsResult, error) {
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+
+	var (
+		cursorSortAt time.Time
+		cursorID     uuid.UUID
+		hasCursor    bool
+	)
+	if params.Cursor != nil && *params.Cursor != "" {
+		var err error
+		cursorSortAt, cursorID, err = decodeConversationCursor(*params.Cursor)
+		if err != nil {
+			return ports.ListConversationsResult{}, err
+		}
+		hasCursor = true
+	}
+
+	query := `
+		SELECT
+			c.conversation_id,
+			c.pet_id,
+			CASE
+				WHEN c.user_low_id = $1 THEN c.user_high_id
+				ELSE c.user_low_id
+			END AS other_user_id,
+			c.last_message_id,
+			c.last_message_at,
+			c.last_message_preview,
+			c.last_message_sender_id,
+			cp.last_read_message_id,
+			cp.unread_count,
+			COALESCE(c.last_message_at, c.created_at) AS sort_at
+		FROM conversations c
+		INNER JOIN conversation_participants cp
+			ON cp.conversation_id = c.conversation_id
+		WHERE cp.user_id = $1
+	`
+
+	args := []any{userID}
+	argPos := 2
+
+	if params.PetID != nil {
+		query += fmt.Sprintf(" AND c.pet_id = $%d", argPos)
+		args = append(args, *params.PetID)
+		argPos++
+	}
+
+	if hasCursor {
+		query += fmt.Sprintf(
+			" AND (COALESCE(c.last_message_at, c.created_at), c.conversation_id) < ($%d, $%d)",
+			argPos,
+			argPos+1,
+		)
+		args = append(args, cursorSortAt, cursorID)
+		argPos += 2
+	}
+
+	query += fmt.Sprintf(`
+		ORDER BY COALESCE(c.last_message_at, c.created_at) DESC, c.conversation_id DESC
+		LIMIT $%d
+	`, argPos)
+	args = append(args, limit+1)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return ports.ListConversationsResult{}, err
+	}
+	defer rows.Close()
+
+	items := make([]ports.ConversationListRow, 0, limit)
+	var nextCursor *string
+
+	for rows.Next() {
+		var (
+			item   ports.ConversationListRow
+			sortAt time.Time
+		)
+		if err := rows.Scan(
+			&item.ConversationID,
+			&item.PetID,
+			&item.OtherUserID,
+			&item.LastMessageID,
+			&item.LastMessageAt,
+			&item.LastMessagePreview,
+			&item.LastMessageSenderID,
+			&item.LastReadMessageID,
+			&item.UnreadCount,
+			&sortAt,
+		); err != nil {
+			return ports.ListConversationsResult{}, err
+		}
+
+		if len(items) == limit {
+			cursor := encodeConversationCursor(sortAt, item.ConversationID)
+			nextCursor = &cursor
+			break
+		}
+
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return ports.ListConversationsResult{}, err
+	}
+
+	return ports.ListConversationsResult{
+		Items:      items,
+		NextCursor: nextCursor,
+	}, nil
+}
+
 func (r *ConversationRepository) UpdateLastMessage(
 	ctx context.Context,
 	conversationID, messageID, senderUserID uuid.UUID,
@@ -149,6 +290,35 @@ func (r *ConversationRepository) UpdateLastMessage(
 	}
 
 	return nil
+}
+
+func encodeConversationCursor(sortAt time.Time, conversationID uuid.UUID) string {
+	raw := sortAt.UTC().Format(time.RFC3339Nano) + "|" + conversationID.String()
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+func decodeConversationCursor(cursor string) (time.Time, uuid.UUID, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return time.Time{}, uuid.Nil, err
+	}
+
+	parts := strings.SplitN(string(raw), "|", 2)
+	if len(parts) != 2 {
+		return time.Time{}, uuid.Nil, fmt.Errorf("invalid cursor")
+	}
+
+	sortAt, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return time.Time{}, uuid.Nil, err
+	}
+
+	conversationID, err := uuid.Parse(parts[1])
+	if err != nil {
+		return time.Time{}, uuid.Nil, err
+	}
+
+	return sortAt, conversationID, nil
 }
 
 type conversationScanner interface {

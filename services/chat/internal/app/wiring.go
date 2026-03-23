@@ -46,9 +46,9 @@ func (a *App) wire() error {
 
 	a.useCases = &UseCases{
 		OpenDirectConversation: usecase.NewOpenDirectConversation(conversations, participants, txManager, acl, profile, pet),
-		ListConversations:      usecase.NewListConversations(nil, nil, nil),
+		ListConversations:      usecase.NewListConversations(conversations, profile, pet),
 		GetConversation:        usecase.NewGetConversation(conversations, participants, acl, profile, pet),
-		GetUnreadSummary:       usecase.NewGetUnreadSummary(nil),
+		GetUnreadSummary:       usecase.NewGetUnreadSummary(conversations),
 		GetMessageHistory:      usecase.NewGetMessageHistory(nil, nil, nil),
 		SendMessage:            usecase.NewSendMessage(conversations, participants, nil, txManager, acl, nil),
 		MarkRead:               usecase.NewMarkRead(participants, txManager, nil),

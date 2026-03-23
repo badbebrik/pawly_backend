@@ -8,11 +8,11 @@ import (
 )
 
 type GetUnreadSummary struct {
-	read ports.ConversationReadRepository
+	conversations ports.ConversationRepository
 }
 
-func NewGetUnreadSummary(read ports.ConversationReadRepository) *GetUnreadSummary {
-	return &GetUnreadSummary{read: read}
+func NewGetUnreadSummary(conversations ports.ConversationRepository) *GetUnreadSummary {
+	return &GetUnreadSummary{conversations: conversations}
 }
 
 type GetUnreadSummaryParams struct {
@@ -28,6 +28,20 @@ type GetUnreadSummaryResult struct {
 	Summary GetUnreadSummarySummary
 }
 
-func (uc *GetUnreadSummary) Execute(_ context.Context, _ GetUnreadSummaryParams) (GetUnreadSummaryResult, error) {
-	return GetUnreadSummaryResult{}, ErrNotImplemented
+func (uc *GetUnreadSummary) Execute(ctx context.Context, params GetUnreadSummaryParams) (GetUnreadSummaryResult, error) {
+	if params.CurrentUserID == uuid.Nil {
+		return GetUnreadSummaryResult{}, ErrInvalidInput
+	}
+
+	summary, err := uc.conversations.GetUnreadSummary(ctx, params.CurrentUserID)
+	if err != nil {
+		return GetUnreadSummaryResult{}, err
+	}
+
+	return GetUnreadSummaryResult{
+		Summary: GetUnreadSummarySummary{
+			UnreadConversations: summary.UnreadConversations,
+			UnreadMessages:      summary.UnreadMessages,
+		},
+	}, nil
 }

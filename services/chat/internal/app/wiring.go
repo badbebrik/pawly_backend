@@ -52,7 +52,7 @@ func (a *App) wire() error {
 		GetUnreadSummary:       usecase.NewGetUnreadSummary(conversations),
 		GetMessageHistory:      usecase.NewGetMessageHistory(conversations, participants, messages),
 		SendMessage:            usecase.NewSendMessage(conversations, participants, messages, txManager, acl, nil),
-		MarkRead:               usecase.NewMarkRead(participants, txManager, nil),
+		MarkRead:               usecase.NewMarkRead(conversations, participants, messages, txManager, nil),
 	}
 
 	return nil

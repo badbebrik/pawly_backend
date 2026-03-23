@@ -41,6 +41,7 @@ func (a *App) wire() error {
 	a.pet = pet
 
 	conversations := repository.NewConversationRepository(pg.Pool)
+	messages := repository.NewMessageRepository(pg.Pool)
 	participants := repository.NewParticipantRepository(pg.Pool)
 	txManager := chatdb.NewTxManager(pg.Pool)
 
@@ -49,8 +50,8 @@ func (a *App) wire() error {
 		ListConversations:      usecase.NewListConversations(conversations, profile, pet),
 		GetConversation:        usecase.NewGetConversation(conversations, participants, acl, profile, pet),
 		GetUnreadSummary:       usecase.NewGetUnreadSummary(conversations),
-		GetMessageHistory:      usecase.NewGetMessageHistory(nil, nil, nil),
-		SendMessage:            usecase.NewSendMessage(conversations, participants, nil, txManager, acl, nil),
+		GetMessageHistory:      usecase.NewGetMessageHistory(conversations, participants, messages),
+		SendMessage:            usecase.NewSendMessage(conversations, participants, messages, txManager, acl, nil),
 		MarkRead:               usecase.NewMarkRead(participants, txManager, nil),
 	}
 

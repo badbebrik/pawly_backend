@@ -17,7 +17,6 @@ type Handlers struct {
 	getConversation        *chatuc.GetConversation
 	getUnreadSummary       *chatuc.GetUnreadSummary
 	getMessageHistory      *chatuc.GetMessageHistory
-	sendMessage            *chatuc.SendMessage
 	markRead               *chatuc.MarkRead
 }
 
@@ -27,7 +26,6 @@ func New(
 	getConversation *chatuc.GetConversation,
 	getUnreadSummary *chatuc.GetUnreadSummary,
 	getMessageHistory *chatuc.GetMessageHistory,
-	sendMessage *chatuc.SendMessage,
 	markRead *chatuc.MarkRead,
 ) *Handlers {
 	return &Handlers{
@@ -36,7 +34,6 @@ func New(
 		getConversation:        getConversation,
 		getUnreadSummary:       getUnreadSummary,
 		getMessageHistory:      getMessageHistory,
-		sendMessage:            sendMessage,
 		markRead:               markRead,
 	}
 }

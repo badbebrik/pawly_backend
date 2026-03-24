@@ -27,7 +27,6 @@ func (a *App) setupRoutes() http.Handler {
 		a.useCases.GetConversation,
 		a.useCases.GetUnreadSummary,
 		a.useCases.GetMessageHistory,
-		a.useCases.SendMessage,
 		a.useCases.MarkRead,
 	)
 
@@ -40,7 +39,6 @@ func (a *App) setupRoutes() http.Handler {
 		r.Get("/v1/chat/unread-summary", h.GetUnreadSummary)
 		r.Get("/v1/chat/conversations/{conversation_id}", h.GetConversation)
 		r.Get("/v1/chat/conversations/{conversation_id}/messages", h.GetMessageHistory)
-		r.Post("/v1/chat/conversations/{conversation_id}/messages", h.SendMessage)
 		r.Post("/v1/chat/conversations/{conversation_id}/read", h.MarkRead)
 	})
 

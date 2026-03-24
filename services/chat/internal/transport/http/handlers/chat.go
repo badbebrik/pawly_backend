@@ -66,11 +66,6 @@ type messageHistoryResponse struct {
 	HasMore        bool              `json:"has_more"`
 }
 
-type sendMessageRequest struct {
-	ClientMsgID uuid.UUID `json:"client_msg_id"`
-	Text        *string   `json:"text"`
-}
-
 type markReadRequest struct {
 	LastReadMessageID uuid.UUID `json:"last_read_message_id"`
 }
@@ -266,46 +261,6 @@ func (h *Handlers) GetMessageHistory(w http.ResponseWriter, r *http.Request) {
 		ConversationID: result.ConversationID,
 		Messages:       items,
 		HasMore:        result.HasMore,
-	})
-}
-
-func (h *Handlers) SendMessage(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
-		return
-	}
-
-	conversationID, err := parseUUID(chi.URLParam(r, "conversation_id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_conversation_id", "invalid conversation_id")
-		return
-	}
-
-	var req sendMessageRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
-		return
-	}
-
-	result, err := h.sendMessage.Execute(r.Context(), chatuc.SendMessageParams{
-		CurrentUserID:  userID,
-		ConversationID: conversationID,
-		ClientMsgID:    req.ClientMsgID,
-		Text:           req.Text,
-	})
-	if err != nil {
-		writeUseCaseError(w, err)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, messageResponse{
-		MessageID:      result.Message.MessageID,
-		ConversationID: result.Message.ConversationID,
-		SenderUserID:   result.Message.SenderUserID,
-		ClientMsgID:    result.Message.ClientMsgID,
-		Text:           result.Message.Text,
-		CreatedAt:      result.Message.CreatedAt.UTC().Format(time.RFC3339),
 	})
 }
 

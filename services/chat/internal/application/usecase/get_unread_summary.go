@@ -19,13 +19,9 @@ type GetUnreadSummaryParams struct {
 	CurrentUserID uuid.UUID
 }
 
-type GetUnreadSummarySummary struct {
+type GetUnreadSummaryResult struct {
 	UnreadConversations int
 	UnreadMessages      int
-}
-
-type GetUnreadSummaryResult struct {
-	Summary GetUnreadSummarySummary
 }
 
 func (uc *GetUnreadSummary) Execute(ctx context.Context, params GetUnreadSummaryParams) (GetUnreadSummaryResult, error) {
@@ -39,9 +35,7 @@ func (uc *GetUnreadSummary) Execute(ctx context.Context, params GetUnreadSummary
 	}
 
 	return GetUnreadSummaryResult{
-		Summary: GetUnreadSummarySummary{
-			UnreadConversations: summary.UnreadConversations,
-			UnreadMessages:      summary.UnreadMessages,
-		},
+		UnreadConversations: summary.UnreadConversations,
+		UnreadMessages:      summary.UnreadMessages,
 	}, nil
 }

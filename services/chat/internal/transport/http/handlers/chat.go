@@ -29,16 +29,16 @@ type conversationOtherUserResponse struct {
 }
 
 type conversationResponse struct {
-	ConversationID      uuid.UUID                       `json:"conversation_id"`
-	Pet                 conversationPetResponse         `json:"pet"`
-	OtherUser           conversationOtherUserResponse   `json:"other_user"`
-	LastMessageID       *uuid.UUID                      `json:"last_message_id,omitempty"`
-	LastMessageAt       *string                         `json:"last_message_at,omitempty"`
-	LastMessagePreview  *string                         `json:"last_message_preview,omitempty"`
-	LastMessageSenderID *uuid.UUID                      `json:"last_message_sender_id,omitempty"`
-	LastReadMessageID   *uuid.UUID                      `json:"last_read_message_id,omitempty"`
-	UnreadCount         int                             `json:"unread_count"`
-	CanSend             bool                            `json:"can_send"`
+	ConversationID      uuid.UUID                     `json:"conversation_id"`
+	Pet                 conversationPetResponse       `json:"pet"`
+	OtherUser           conversationOtherUserResponse `json:"other_user"`
+	LastMessageID       *uuid.UUID                    `json:"last_message_id,omitempty"`
+	LastMessageAt       *string                       `json:"last_message_at,omitempty"`
+	LastMessagePreview  *string                       `json:"last_message_preview,omitempty"`
+	LastMessageSenderID *uuid.UUID                    `json:"last_message_sender_id,omitempty"`
+	LastReadMessageID   *uuid.UUID                    `json:"last_read_message_id,omitempty"`
+	UnreadCount         int                           `json:"unread_count"`
+	CanSend             bool                          `json:"can_send"`
 }
 
 type listConversationsResponse struct {
@@ -61,9 +61,9 @@ type messageResponse struct {
 }
 
 type messageHistoryResponse struct {
-	ConversationID uuid.UUID          `json:"conversation_id"`
-	Messages       []messageResponse  `json:"messages"`
-	HasMore        bool               `json:"has_more"`
+	ConversationID uuid.UUID         `json:"conversation_id"`
+	Messages       []messageResponse `json:"messages"`
+	HasMore        bool              `json:"has_more"`
 }
 
 type sendMessageRequest struct {
@@ -201,8 +201,8 @@ func (h *Handlers) GetUnreadSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, unreadSummaryResponse{
-		UnreadConversations: result.Summary.UnreadConversations,
-		UnreadMessages:      result.Summary.UnreadMessages,
+		UnreadConversations: result.UnreadConversations,
+		UnreadMessages:      result.UnreadMessages,
 	})
 }
 
@@ -258,7 +258,7 @@ func (h *Handlers) GetMessageHistory(w http.ResponseWriter, r *http.Request) {
 			SenderUserID:   item.SenderUserID,
 			ClientMsgID:    item.ClientMsgID,
 			Text:           item.Text,
-			CreatedAt:      item.CreatedAt.UTC().Format(http.TimeFormat),
+			CreatedAt:      item.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 
@@ -305,7 +305,7 @@ func (h *Handlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 		SenderUserID:   result.Message.SenderUserID,
 		ClientMsgID:    result.Message.ClientMsgID,
 		Text:           result.Message.Text,
-		CreatedAt:      result.Message.CreatedAt.UTC().Format(http.TimeFormat),
+		CreatedAt:      result.Message.CreatedAt.UTC().Format(time.RFC3339),
 	})
 }
 

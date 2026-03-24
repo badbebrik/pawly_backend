@@ -8,12 +8,12 @@ import (
 )
 
 type Message struct {
-	ID             uuid.UUID `json:"message_id"`
-	ConversationID uuid.UUID `json:"conversation_id"`
-	SenderUserID   uuid.UUID `json:"sender_user_id"`
-	ClientMsgID    uuid.UUID `json:"client_msg_id"`
-	Text           *string   `json:"text"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             uuid.UUID
+	ConversationID uuid.UUID
+	SenderUserID   uuid.UUID
+	ClientMsgID    uuid.UUID
+	Text           *string
+	CreatedAt      time.Time
 }
 
 func (m *Message) Normalize() {

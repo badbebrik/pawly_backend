@@ -7,26 +7,26 @@ import (
 )
 
 type Conversation struct {
-	ID                  uuid.UUID  `json:"conversation_id"`
-	PetID               uuid.UUID  `json:"pet_id"`
-	UserLowID           uuid.UUID  `json:"user_low_id"`
-	UserHighID          uuid.UUID  `json:"user_high_id"`
-	LastMessageID       *uuid.UUID `json:"last_message_id"`
-	LastMessageAt       *time.Time `json:"last_message_at"`
-	LastMessagePreview  *string    `json:"last_message_preview"`
-	LastMessageSenderID *uuid.UUID `json:"last_message_sender_id"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	ID                  uuid.UUID
+	PetID               uuid.UUID
+	UserLowID           uuid.UUID
+	UserHighID          uuid.UUID
+	LastMessageID       *uuid.UUID
+	LastMessageAt       *time.Time
+	LastMessagePreview  *string
+	LastMessageSenderID *uuid.UUID
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 type ConversationParticipant struct {
-	ConversationID    uuid.UUID  `json:"conversation_id"`
-	UserID            uuid.UUID  `json:"user_id"`
-	LastReadMessageID *uuid.UUID `json:"last_read_message_id"`
-	LastReadAt        *time.Time `json:"last_read_at"`
-	UnreadCount       int        `json:"unread_count"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ConversationID    uuid.UUID
+	UserID            uuid.UUID
+	LastReadMessageID *uuid.UUID
+	LastReadAt        *time.Time
+	UnreadCount       int
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 func NormalizeDirectUserPair(a, b uuid.UUID) (uuid.UUID, uuid.UUID, error) {

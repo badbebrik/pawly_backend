@@ -27,3 +27,124 @@ type Client struct {
 
 	send chan []byte
 }
+
+func NewClient(userID uuid.UUID, send chan []byte) *Client {
+	return &Client{
+		UserID: userID,
+		send:   send,
+	}
+}
+
+func (h *Hub) AddClient(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.clientsByUser[client.UserID] == nil {
+		h.clientsByUser[client.UserID] = make(map[*Client]struct{})
+	}
+	h.clientsByUser[client.UserID][client] = struct{}{}
+}
+
+func (h *Hub) RemoveClient(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if clients := h.clientsByUser[client.UserID]; clients != nil {
+		delete(clients, client)
+		if len(clients) == 0 {
+			delete(h.clientsByUser, client.UserID)
+		}
+	}
+
+	delete(h.inboxSubs, client)
+
+	for conversationID, clients := range h.convSubs {
+		delete(clients, client)
+		if len(clients) == 0 {
+			delete(h.convSubs, conversationID)
+		}
+	}
+}
+
+func (h *Hub) SubscribeInbox(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.inboxSubs[client] = struct{}{}
+}
+
+func (h *Hub) SubscribeConversation(conversationID uuid.UUID, client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.convSubs[conversationID] == nil {
+		h.convSubs[conversationID] = make(map[*Client]struct{})
+	}
+	h.convSubs[conversationID][client] = struct{}{}
+}
+
+func (h *Hub) UnsubscribeConversation(conversationID uuid.UUID, client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	clients := h.convSubs[conversationID]
+	if clients == nil {
+		return
+	}
+
+	delete(clients, client)
+	if len(clients) == 0 {
+		delete(h.convSubs, conversationID)
+	}
+}
+
+func (h *Hub) PublishToUser(userID uuid.UUID, message []byte) {
+	h.mu.RLock()
+	clients := h.clientsByUser[userID]
+	targets := make([]*Client, 0, len(clients))
+	for client := range clients {
+		targets = append(targets, client)
+	}
+	h.mu.RUnlock()
+
+	for _, client := range targets {
+		client.publish(message)
+	}
+}
+
+func (h *Hub) PublishToUserInbox(userID uuid.UUID, message []byte) {
+	h.mu.RLock()
+	clients := h.clientsByUser[userID]
+	targets := make([]*Client, 0, len(clients))
+	for client := range clients {
+		if _, ok := h.inboxSubs[client]; ok {
+			targets = append(targets, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, client := range targets {
+		client.publish(message)
+	}
+}
+
+func (h *Hub) PublishToConversation(conversationID uuid.UUID, message []byte) {
+	h.mu.RLock()
+	clients := h.convSubs[conversationID]
+	targets := make([]*Client, 0, len(clients))
+	for client := range clients {
+		targets = append(targets, client)
+	}
+	h.mu.RUnlock()
+
+	for _, client := range targets {
+		client.publish(message)
+	}
+}
+
+func (c *Client) publish(message []byte) {
+	select {
+	case c.send <- message:
+	default:
+	}
+}

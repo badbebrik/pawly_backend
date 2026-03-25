@@ -3,6 +3,7 @@ package app
 import (
 	"chat/internal/transport/http/handlers"
 	appmw "chat/internal/transport/http/middleware"
+	"chat/internal/transport/ws"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -29,11 +30,13 @@ func (a *App) setupRoutes() http.Handler {
 		a.useCases.GetMessageHistory,
 		a.useCases.MarkRead,
 	)
+	wsHandler := ws.NewHandler(a.hub)
 
 	withUser := appmw.WithUserID
 
 	r.Group(func(r chi.Router) {
 		r.Use(withUser)
+		r.Get("/v1/chat/ws", wsHandler.ServeHTTP)
 		r.Post("/v1/chat/conversations:open", h.OpenConversation)
 		r.Get("/v1/chat/conversations", h.ListConversations)
 		r.Get("/v1/chat/unread-summary", h.GetUnreadSummary)

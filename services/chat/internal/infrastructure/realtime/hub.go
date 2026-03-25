@@ -26,12 +26,15 @@ type Client struct {
 	UserID uuid.UUID
 
 	send chan []byte
+	done chan struct{}
+	once sync.Once
 }
 
 func NewClient(userID uuid.UUID, send chan []byte) *Client {
 	return &Client{
 		UserID: userID,
 		send:   send,
+		done:   make(chan struct{}),
 	}
 }
 
@@ -64,6 +67,8 @@ func (h *Hub) RemoveClient(client *Client) {
 			delete(h.convSubs, conversationID)
 		}
 	}
+
+	client.close()
 }
 
 func (h *Hub) SubscribeInbox(client *Client) {
@@ -144,7 +149,19 @@ func (h *Hub) PublishToConversation(conversationID uuid.UUID, message []byte) {
 
 func (c *Client) publish(message []byte) {
 	select {
+	case <-c.done:
+		return
 	case c.send <- message:
 	default:
 	}
+}
+
+func (c *Client) Done() <-chan struct{} {
+	return c.done
+}
+
+func (c *Client) close() {
+	c.once.Do(func() {
+		close(c.done)
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"chat/internal/config"
 	aclclient "chat/internal/infrastructure/aclclient"
 	chatdb "chat/internal/infrastructure/db"
+	"chat/internal/infrastructure/realtime"
 	petclient "chat/internal/infrastructure/petclient"
 	profileclient "chat/internal/infrastructure/profileclient"
 	"errors"
@@ -18,6 +19,7 @@ type App struct {
 	cfg      *config.Config
 	useCases *UseCases
 	httpSrv  *http.Server
+	hub      *realtime.Hub
 	pg       *chatdb.Postgres
 	acl      *aclclient.Client
 	profile  *profileclient.Client
@@ -31,6 +33,7 @@ func New(cfg *config.Config) (*App, error) {
 
 	a := &App{
 		cfg: cfg,
+		hub: realtime.NewHub(),
 	}
 
 	if err := a.wire(); err != nil {

@@ -30,7 +30,13 @@ func (a *App) setupRoutes() http.Handler {
 		a.useCases.GetMessageHistory,
 		a.useCases.MarkRead,
 	)
-	wsHandler := ws.NewHandler(a.hub, a.useCases.SendMessage)
+	wsHandler := ws.NewHandler(
+		a.hub,
+		a.useCases.SendMessage,
+		a.useCases.MarkRead,
+		a.useCases.GetConversation,
+		a.useCases.GetUnreadSummary,
+	)
 
 	withUser := appmw.WithUserID
 

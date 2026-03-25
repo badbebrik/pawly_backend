@@ -146,11 +146,23 @@ func (r *ParticipantRepository) MarkRead(
 	readAt time.Time,
 ) (*model.ConversationParticipant, error) {
 	const query = `
+		WITH target_message AS (
+			SELECT created_at, message_id
+			FROM messages
+			WHERE message_id = $3
+			  AND conversation_id = $1
+		)
 		UPDATE conversation_participants
 		SET
 			last_read_message_id = $3,
 			last_read_at = $4,
-			unread_count = 0,
+			unread_count = COALESCE((
+				SELECT COUNT(*)::INT
+				FROM messages m, target_message tm
+				WHERE m.conversation_id = $1
+				  AND m.sender_user_id <> $2
+				  AND (m.created_at, m.message_id) > (tm.created_at, tm.message_id)
+			), 0),
 			updated_at = $4
 		WHERE conversation_id = $1
 		  AND user_id = $2

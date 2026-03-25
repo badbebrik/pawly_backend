@@ -117,6 +117,10 @@ func (h *Hub) PublishToUser(userID uuid.UUID, message []byte) {
 	}
 }
 
+func (h *Hub) PublishToClient(client *Client, message []byte) {
+	client.publish(message)
+}
+
 func (h *Hub) PublishToUserInbox(userID uuid.UUID, message []byte) {
 	h.mu.RLock()
 	clients := h.clientsByUser[userID]
@@ -138,6 +142,23 @@ func (h *Hub) PublishToConversation(conversationID uuid.UUID, message []byte) {
 	clients := h.convSubs[conversationID]
 	targets := make([]*Client, 0, len(clients))
 	for client := range clients {
+		targets = append(targets, client)
+	}
+	h.mu.RUnlock()
+
+	for _, client := range targets {
+		client.publish(message)
+	}
+}
+
+func (h *Hub) PublishToConversationExcept(conversationID uuid.UUID, excluded *Client, message []byte) {
+	h.mu.RLock()
+	clients := h.convSubs[conversationID]
+	targets := make([]*Client, 0, len(clients))
+	for client := range clients {
+		if client == excluded {
+			continue
+		}
 		targets = append(targets, client)
 	}
 	h.mu.RUnlock()

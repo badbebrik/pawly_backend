@@ -14,8 +14,11 @@ import (
 )
 
 type Handler struct {
-	hub      *realtime.Hub
-	useCases *usecase.SendMessage
+	hub              *realtime.Hub
+	sendMessage      *usecase.SendMessage
+	markRead         *usecase.MarkRead
+	getConversation  *usecase.GetConversation
+	getUnreadSummary *usecase.GetUnreadSummary
 }
 
 type inboundEnvelope struct {
@@ -33,9 +36,19 @@ type sendMessagePayload struct {
 	Text           *string   `json:"text"`
 }
 
+type markReadPayload struct {
+	ConversationID    uuid.UUID `json:"conversation_id"`
+	LastReadMessageID uuid.UUID `json:"last_read_message_id"`
+}
+
 type outboundEnvelope struct {
 	Type    string `json:"type"`
 	Payload any    `json:"payload"`
+}
+
+type errorPayload struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type messageAckPayload struct {
@@ -47,16 +60,70 @@ type messageAckPayload struct {
 	CreatedAt      string    `json:"created_at"`
 }
 
+type messageNewPayload struct {
+	MessageID      uuid.UUID `json:"message_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	SenderUserID   uuid.UUID `json:"sender_user_id"`
+	ClientMsgID    uuid.UUID `json:"client_msg_id"`
+	Text           *string   `json:"text,omitempty"`
+	CreatedAt      string    `json:"created_at"`
+}
+
+type readUpdatedPayload struct {
+	ConversationID    uuid.UUID `json:"conversation_id"`
+	UserID            uuid.UUID `json:"user_id"`
+	LastReadMessageID uuid.UUID `json:"last_read_message_id"`
+}
+
+type conversationPetPayload struct {
+	PetID     uuid.UUID `json:"pet_id"`
+	Name      string    `json:"name"`
+	AvatarURL *string   `json:"avatar_url,omitempty"`
+}
+
+type conversationOtherUserPayload struct {
+	UserID      uuid.UUID `json:"user_id"`
+	DisplayName *string   `json:"display_name,omitempty"`
+	AvatarURL   *string   `json:"avatar_url,omitempty"`
+}
+
+type conversationUpdatedPayload struct {
+	ConversationID      uuid.UUID                    `json:"conversation_id"`
+	Pet                 conversationPetPayload       `json:"pet"`
+	OtherUser           conversationOtherUserPayload `json:"other_user"`
+	LastMessageID       *uuid.UUID                   `json:"last_message_id,omitempty"`
+	LastMessageAt       *string                      `json:"last_message_at,omitempty"`
+	LastMessagePreview  *string                      `json:"last_message_preview,omitempty"`
+	LastMessageSenderID *uuid.UUID                   `json:"last_message_sender_id,omitempty"`
+	LastReadMessageID   *uuid.UUID                   `json:"last_read_message_id,omitempty"`
+	UnreadCount         int                          `json:"unread_count"`
+	CanSend             bool                         `json:"can_send"`
+}
+
+type globalUnreadUpdatedPayload struct {
+	UnreadConversations int `json:"unread_conversations"`
+	UnreadMessages      int `json:"unread_messages"`
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
-func NewHandler(hub *realtime.Hub, sendMessage *usecase.SendMessage) *Handler {
+func NewHandler(
+	hub *realtime.Hub,
+	sendMessage *usecase.SendMessage,
+	markRead *usecase.MarkRead,
+	getConversation *usecase.GetConversation,
+	getUnreadSummary *usecase.GetUnreadSummary,
+) *Handler {
 	return &Handler{
-		hub:      hub,
-		useCases: sendMessage,
+		hub:              hub,
+		sendMessage:      sendMessage,
+		markRead:         markRead,
+		getConversation:  getConversation,
+		getUnreadSummary: getUnreadSummary,
 	}
 }
 
@@ -93,6 +160,7 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 
 		var envelope inboundEnvelope
 		if err := json.Unmarshal(payload, &envelope); err != nil {
+			h.publishError(client, "invalid_json", "invalid json")
 			continue
 		}
 
@@ -102,37 +170,53 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 		case "subscribe_conversation":
 			var msg subscribeConversationPayload
 			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
+				h.publishError(client, "invalid_payload", "invalid subscribe_conversation payload")
 				continue
 			}
 			if msg.ConversationID == uuid.Nil {
+				h.publishError(client, "invalid_payload", "conversation_id is required")
 				continue
 			}
+
+			if _, err := h.getConversation.Execute(ctx, usecase.GetConversationParams{
+				CurrentUserID:  client.UserID,
+				ConversationID: msg.ConversationID,
+			}); err != nil {
+				h.publishError(client, "forbidden", "conversation access denied")
+				continue
+			}
+
 			h.hub.SubscribeConversation(msg.ConversationID, client)
 		case "unsubscribe_conversation":
 			var msg subscribeConversationPayload
 			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
+				h.publishError(client, "invalid_payload", "invalid unsubscribe_conversation payload")
 				continue
 			}
 			if msg.ConversationID == uuid.Nil {
+				h.publishError(client, "invalid_payload", "conversation_id is required")
 				continue
 			}
 			h.hub.UnsubscribeConversation(msg.ConversationID, client)
 		case "send_message":
 			var msg sendMessagePayload
 			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
+				h.publishError(client, "invalid_payload", "invalid send_message payload")
 				continue
 			}
 			if msg.ConversationID == uuid.Nil || msg.ClientMsgID == uuid.Nil {
+				h.publishError(client, "invalid_payload", "conversation_id and client_msg_id are required")
 				continue
 			}
 
-			result, err := h.useCases.Execute(ctx, usecase.SendMessageParams{
+			result, err := h.sendMessage.Execute(ctx, usecase.SendMessageParams{
 				CurrentUserID:  client.UserID,
 				ConversationID: msg.ConversationID,
 				ClientMsgID:    msg.ClientMsgID,
 				Text:           msg.Text,
 			})
 			if err != nil {
+				h.publishError(client, "send_message_failed", "unable to send message")
 				continue
 			}
 
@@ -151,7 +235,76 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 				continue
 			}
 
-			h.hub.PublishToUser(client.UserID, payload)
+			h.hub.PublishToClient(client, payload)
+
+			messageNew, err := json.Marshal(outboundEnvelope{
+				Type: "message_new",
+				Payload: messageNewPayload{
+					MessageID:      result.Message.MessageID,
+					ConversationID: result.Message.ConversationID,
+					SenderUserID:   result.Message.SenderUserID,
+					ClientMsgID:    result.Message.ClientMsgID,
+					Text:           result.Message.Text,
+					CreatedAt:      result.Message.CreatedAt.UTC().Format(time.RFC3339),
+				},
+			})
+			if err != nil {
+				continue
+			}
+
+			h.hub.PublishToConversationExcept(msg.ConversationID, client, messageNew)
+			h.publishConversationUpdated(ctx, client.UserID, msg.ConversationID)
+			h.publishGlobalUnreadUpdated(ctx, client.UserID)
+
+			conversation, err := h.getConversation.Execute(ctx, usecase.GetConversationParams{
+				CurrentUserID:  client.UserID,
+				ConversationID: msg.ConversationID,
+			})
+			if err != nil {
+				h.publishError(client, "conversation_lookup_failed", "unable to refresh conversation")
+				continue
+			}
+
+			h.publishConversationUpdated(ctx, conversation.Conversation.OtherUser.UserID, msg.ConversationID)
+			h.publishGlobalUnreadUpdated(ctx, conversation.Conversation.OtherUser.UserID)
+		case "mark_read":
+			var msg markReadPayload
+			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
+				h.publishError(client, "invalid_payload", "invalid mark_read payload")
+				continue
+			}
+			if msg.ConversationID == uuid.Nil || msg.LastReadMessageID == uuid.Nil {
+				h.publishError(client, "invalid_payload", "conversation_id and last_read_message_id are required")
+				continue
+			}
+
+			result, err := h.markRead.Execute(ctx, usecase.MarkReadParams{
+				CurrentUserID:     client.UserID,
+				ConversationID:    msg.ConversationID,
+				LastReadMessageID: msg.LastReadMessageID,
+			})
+			if err != nil {
+				h.publishError(client, "mark_read_failed", "unable to mark read")
+				continue
+			}
+
+			readUpdated, err := json.Marshal(outboundEnvelope{
+				Type: "read_updated",
+				Payload: readUpdatedPayload{
+					ConversationID:    result.ConversationID,
+					UserID:            client.UserID,
+					LastReadMessageID: result.LastReadMessageID,
+				},
+			})
+			if err != nil {
+				continue
+			}
+
+			h.hub.PublishToConversation(msg.ConversationID, readUpdated)
+			h.publishConversationUpdated(ctx, client.UserID, msg.ConversationID)
+			h.publishGlobalUnreadUpdated(ctx, client.UserID)
+		default:
+			h.publishError(client, "unsupported_event", "unsupported event type")
 		}
 	}
 }
@@ -175,4 +328,89 @@ func (h *Handler) writeLoop(conn *websocket.Conn, client *realtime.Client, send 
 			}
 		}
 	}
+}
+
+func (h *Handler) publishConversationUpdated(ctx context.Context, userID, conversationID uuid.UUID) {
+	result, err := h.getConversation.Execute(ctx, usecase.GetConversationParams{
+		CurrentUserID:  userID,
+		ConversationID: conversationID,
+	})
+	if err != nil {
+		return
+	}
+
+	payload, err := json.Marshal(outboundEnvelope{
+		Type: "conversation_updated",
+		Payload: conversationUpdatedPayload{
+			ConversationID: result.Conversation.ConversationID,
+			Pet: conversationPetPayload{
+				PetID:     result.Conversation.Pet.PetID,
+				Name:      result.Conversation.Pet.Name,
+				AvatarURL: result.Conversation.Pet.AvatarURL,
+			},
+			OtherUser: conversationOtherUserPayload{
+				UserID:      result.Conversation.OtherUser.UserID,
+				DisplayName: result.Conversation.OtherUser.DisplayName,
+				AvatarURL:   result.Conversation.OtherUser.AvatarURL,
+			},
+			LastMessageID:       result.Conversation.LastMessageID,
+			LastMessageAt:       formatTimePtr(result.Conversation.LastMessageAt),
+			LastMessagePreview:  result.Conversation.LastMessagePreview,
+			LastMessageSenderID: result.Conversation.LastMessageSenderID,
+			LastReadMessageID:   result.Conversation.LastReadMessageID,
+			UnreadCount:         result.Conversation.UnreadCount,
+			CanSend:             result.Conversation.CanSend,
+		},
+	})
+	if err != nil {
+		return
+	}
+
+	h.hub.PublishToUserInbox(userID, payload)
+}
+
+func (h *Handler) publishGlobalUnreadUpdated(ctx context.Context, userID uuid.UUID) {
+	result, err := h.getUnreadSummary.Execute(ctx, usecase.GetUnreadSummaryParams{
+		CurrentUserID: userID,
+	})
+	if err != nil {
+		return
+	}
+
+	payload, err := json.Marshal(outboundEnvelope{
+		Type: "global_unread_updated",
+		Payload: globalUnreadUpdatedPayload{
+			UnreadConversations: result.UnreadConversations,
+			UnreadMessages:      result.UnreadMessages,
+		},
+	})
+	if err != nil {
+		return
+	}
+
+	h.hub.PublishToUserInbox(userID, payload)
+}
+
+func formatTimePtr(value *time.Time) *string {
+	if value == nil {
+		return nil
+	}
+
+	formatted := value.UTC().Format(time.RFC3339)
+	return &formatted
+}
+
+func (h *Handler) publishError(client *realtime.Client, code, message string) {
+	payload, err := json.Marshal(outboundEnvelope{
+		Type: "server_error",
+		Payload: errorPayload{
+			Code:    code,
+			Message: message,
+		},
+	})
+	if err != nil {
+		return
+	}
+
+	h.hub.PublishToClient(client, payload)
 }

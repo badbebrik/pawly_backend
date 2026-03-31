@@ -85,6 +85,14 @@ services:
         regex_priority: 200
         strip_path: false
 
+  - name: chat-service
+    url: http://chat:8089
+    routes:
+      - name: chat-routes
+        paths:
+          - /v1/chat
+        strip_path: false
+
   - name: notification-service
     url: http://notification:8083
     routes:
@@ -138,6 +146,13 @@ plugins:
         - exp
       secret_is_base64: false
   - name: jwt
+    route: chat-routes
+    config:
+      key_claim_name: iss
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+  - name: jwt
     route: notification-routes
     config:
       key_claim_name: iss
@@ -182,6 +197,15 @@ plugins:
           end
   - name: pre-function
     route: health-routes
+    config:
+      access:
+        - |
+          local jwt = ngx.ctx.authenticated_jwt_token
+          if jwt and jwt.sub then
+            ngx.req.set_header("X-User-ID", jwt.sub)
+          end
+  - name: pre-function
+    route: chat-routes
     config:
       access:
         - |

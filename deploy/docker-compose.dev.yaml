@@ -336,8 +336,8 @@ services:
 
   chat:
     build:
-      context: ../services
-      dockerfile: chat/Dockerfile
+      context: ..
+      dockerfile: services/chat/Dockerfile
     container_name: pawly_chat
     restart: unless-stopped
     env_file:

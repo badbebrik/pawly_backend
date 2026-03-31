@@ -6,15 +6,19 @@ import (
 	appmw "chat/internal/transport/http/middleware"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
 )
 
 type Handler struct {
 	hub              *realtime.Hub
+	jwtSecret        string
 	sendMessage      *usecase.SendMessage
 	markRead         *usecase.MarkRead
 	getConversation  *usecase.GetConversation
@@ -113,6 +117,7 @@ var upgrader = websocket.Upgrader{
 
 func NewHandler(
 	hub *realtime.Hub,
+	jwtSecret string,
 	sendMessage *usecase.SendMessage,
 	markRead *usecase.MarkRead,
 	getConversation *usecase.GetConversation,
@@ -120,6 +125,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		hub:              hub,
+		jwtSecret:        jwtSecret,
 		sendMessage:      sendMessage,
 		markRead:         markRead,
 		getConversation:  getConversation,
@@ -130,6 +136,14 @@ func NewHandler(
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	userID, ok := appmw.UserIDFromContext(r.Context())
 	if !ok {
+		var err error
+		userID, err = h.userIDFromAuthorization(r.Header.Get("Authorization"))
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
+	if userID == uuid.Nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -413,4 +427,36 @@ func (h *Handler) publishError(client *realtime.Client, code, message string) {
 	}
 
 	h.hub.PublishToClient(client, payload)
+}
+
+func (h *Handler) userIDFromAuthorization(authorization string) (uuid.UUID, error) {
+	if h.jwtSecret == "" {
+		return uuid.Nil, errors.New("jwt secret is empty")
+	}
+	if !strings.HasPrefix(authorization, "Bearer ") {
+		return uuid.Nil, errors.New("authorization header missing")
+	}
+
+	tokenString := strings.TrimPrefix(authorization, "Bearer ")
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(h.jwtSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return uuid.Nil, errors.New("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return uuid.Nil, errors.New("invalid claims")
+	}
+
+	sub, ok := claims["sub"].(string)
+	if !ok || sub == "" {
+		return uuid.Nil, errors.New("sub claim missing")
+	}
+
+	return uuid.Parse(sub)
 }

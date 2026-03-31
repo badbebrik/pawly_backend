@@ -4,6 +4,7 @@ import "pawly/pkg/configenv"
 
 type Config struct {
 	AppPort          string
+	JWTSecret        string
 	PostgresUser     string
 	PostgresPassword string
 	PostgresDB       string
@@ -17,6 +18,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		AppPort:          configenv.String("APP_PORT", "8090"),
+		JWTSecret:        configenv.String("JWT_SECRET", ""),
 		PostgresUser:     configenv.String("POSTGRES_USER", ""),
 		PostgresPassword: configenv.String("POSTGRES_PASSWORD", ""),
 		PostgresDB:       configenv.String("POSTGRES_DB", ""),

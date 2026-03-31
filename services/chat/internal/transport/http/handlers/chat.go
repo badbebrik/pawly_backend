@@ -342,6 +342,7 @@ func mapListConversationItem(item chatuc.ListConversationsItem) conversationResp
 		LastMessageSenderID: item.LastMessageSenderID,
 		LastReadMessageID:   item.LastReadMessageID,
 		UnreadCount:         item.UnreadCount,
+		CanSend:             item.CanSend,
 	}
 }
 

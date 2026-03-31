@@ -10,19 +10,22 @@ import (
 
 type ListConversations struct {
 	conversations ports.ConversationRepository
-	profiles ports.ProfileClient
-	pets     ports.PetClient
+	acl           ports.ACLClient
+	profiles      ports.ProfileClient
+	pets          ports.PetClient
 }
 
 func NewListConversations(
 	conversations ports.ConversationRepository,
+	acl ports.ACLClient,
 	profiles ports.ProfileClient,
 	pets ports.PetClient,
 ) *ListConversations {
 	return &ListConversations{
 		conversations: conversations,
-		profiles: profiles,
-		pets:     pets,
+		acl:           acl,
+		profiles:      profiles,
+		pets:          pets,
 	}
 }
 
@@ -55,6 +58,7 @@ type ListConversationsItem struct {
 	LastMessageSenderID *uuid.UUID
 	LastReadMessageID   *uuid.UUID
 	UnreadCount         int
+	CanSend             bool
 }
 
 type ListConversationsResult struct {
@@ -101,6 +105,16 @@ func (uc *ListConversations) Execute(ctx context.Context, params ListConversatio
 			return ListConversationsResult{}, ports.ErrNotFound
 		}
 
+		currentUserActive, err := uc.acl.IsActiveMember(ctx, row.PetID, params.CurrentUserID)
+		if err != nil {
+			return ListConversationsResult{}, err
+		}
+
+		otherUserActive, err := uc.acl.IsActiveMember(ctx, row.PetID, row.OtherUserID)
+		if err != nil {
+			return ListConversationsResult{}, err
+		}
+
 		items = append(items, ListConversationsItem{
 			ConversationID: row.ConversationID,
 			Pet: ListConversationsPet{
@@ -119,6 +133,7 @@ func (uc *ListConversations) Execute(ctx context.Context, params ListConversatio
 			LastMessageSenderID: row.LastMessageSenderID,
 			LastReadMessageID:   row.LastReadMessageID,
 			UnreadCount:         row.UnreadCount,
+			CanSend:             currentUserActive && otherUserActive,
 		})
 	}
 

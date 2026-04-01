@@ -87,6 +87,11 @@ type changeStatusRequest struct {
 	MissingSince *string `json:"missing_since"`
 }
 
+type transferOwnershipRequest struct {
+	RowVersion     int    `json:"row_version"`
+	TargetMemberID string `json:"target_member_id"`
+}
+
 type initPetPhotoUploadRequest struct {
 	MimeType          string `json:"mime_type"`
 	OriginalFilename  string `json:"original_filename"`
@@ -352,6 +357,47 @@ func (h *Handlers) ChangePetStatus(w http.ResponseWriter, r *http.Request) {
 		RowVersion:   req.RowVersion,
 		Status:       req.Status,
 		MissingSince: missingSince,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
+}
+
+func (h *Handlers) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	userID, ok := appmw.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
+		return
+	}
+
+	petID, err := uuid.Parse(chi.URLParam(r, "pet_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pet_id")
+		return
+	}
+
+	var req transferOwnershipRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	targetMemberID, err := uuid.Parse(req.TargetMemberID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid target_member_id")
+		return
+	}
+
+	pet, err := h.svc.TransferOwnership(r.Context(), service.TransferPetOwnershipParams{
+		UserID:         userID,
+		PetID:          petID,
+		RowVersion:     req.RowVersion,
+		TargetMemberID: targetMemberID,
 	})
 	if err != nil {
 		writeServiceError(w, err)

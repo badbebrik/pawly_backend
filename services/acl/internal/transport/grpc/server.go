@@ -120,6 +120,33 @@ func (s *Server) CreateOwnerMembership(ctx context.Context, req *aclpb.CreateOwn
 	return &aclpb.CreateOwnerMembershipResponse{MemberId: member.ID.String()}, nil
 }
 
+func (s *Server) TransferOwnership(ctx context.Context, req *aclpb.TransferOwnershipRequest) (*aclpb.TransferOwnershipResponse, error) {
+	petID, requesterUserID, err := parsePetAndUser(req.GetPetId(), req.GetRequesterUserId())
+	if err != nil {
+		return nil, err
+	}
+	targetMemberID, err := uuid.Parse(req.GetTargetMemberId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid target_member_id")
+	}
+
+	res, err := s.svc.TransferOwnership(ctx, service.TransferOwnershipParams{
+		PetID:          petID,
+		RequesterID:    requesterUserID,
+		TargetMemberID: targetMemberID,
+	})
+	if err != nil {
+		return nil, mapSvcErr(err)
+	}
+
+	return &aclpb.TransferOwnershipResponse{
+		PreviousOwnerMemberId: res.PreviousOwner.ID.String(),
+		PreviousOwnerUserId:   res.PreviousOwner.UserID.String(),
+		CurrentOwnerMemberId:  res.CurrentOwner.ID.String(),
+		CurrentOwnerUserId:    res.CurrentOwner.UserID.String(),
+	}, nil
+}
+
 func parsePetAndUser(petRaw, userRaw string) (uuid.UUID, uuid.UUID, error) {
 	petID, err := uuid.Parse(petRaw)
 	if err != nil {

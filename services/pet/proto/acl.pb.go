@@ -772,6 +772,134 @@ func (x *CreateOwnerMembershipResponse) GetMemberId() string {
 	return ""
 }
 
+type TransferOwnershipRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PetId           string                 `protobuf:"bytes,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	RequesterUserId string                 `protobuf:"bytes,2,opt,name=requester_user_id,json=requesterUserId,proto3" json:"requester_user_id,omitempty"`
+	TargetMemberId  string                 `protobuf:"bytes,3,opt,name=target_member_id,json=targetMemberId,proto3" json:"target_member_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TransferOwnershipRequest) Reset() {
+	*x = TransferOwnershipRequest{}
+	mi := &file_acl_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferOwnershipRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferOwnershipRequest) ProtoMessage() {}
+
+func (x *TransferOwnershipRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_acl_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferOwnershipRequest.ProtoReflect.Descriptor instead.
+func (*TransferOwnershipRequest) Descriptor() ([]byte, []int) {
+	return file_acl_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TransferOwnershipRequest) GetPetId() string {
+	if x != nil {
+		return x.PetId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipRequest) GetRequesterUserId() string {
+	if x != nil {
+		return x.RequesterUserId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipRequest) GetTargetMemberId() string {
+	if x != nil {
+		return x.TargetMemberId
+	}
+	return ""
+}
+
+type TransferOwnershipResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	PreviousOwnerMemberId string                 `protobuf:"bytes,1,opt,name=previous_owner_member_id,json=previousOwnerMemberId,proto3" json:"previous_owner_member_id,omitempty"`
+	PreviousOwnerUserId   string                 `protobuf:"bytes,2,opt,name=previous_owner_user_id,json=previousOwnerUserId,proto3" json:"previous_owner_user_id,omitempty"`
+	CurrentOwnerMemberId  string                 `protobuf:"bytes,3,opt,name=current_owner_member_id,json=currentOwnerMemberId,proto3" json:"current_owner_member_id,omitempty"`
+	CurrentOwnerUserId    string                 `protobuf:"bytes,4,opt,name=current_owner_user_id,json=currentOwnerUserId,proto3" json:"current_owner_user_id,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *TransferOwnershipResponse) Reset() {
+	*x = TransferOwnershipResponse{}
+	mi := &file_acl_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferOwnershipResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferOwnershipResponse) ProtoMessage() {}
+
+func (x *TransferOwnershipResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_acl_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferOwnershipResponse.ProtoReflect.Descriptor instead.
+func (*TransferOwnershipResponse) Descriptor() ([]byte, []int) {
+	return file_acl_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TransferOwnershipResponse) GetPreviousOwnerMemberId() string {
+	if x != nil {
+		return x.PreviousOwnerMemberId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipResponse) GetPreviousOwnerUserId() string {
+	if x != nil {
+		return x.PreviousOwnerUserId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipResponse) GetCurrentOwnerMemberId() string {
+	if x != nil {
+		return x.CurrentOwnerMemberId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipResponse) GetCurrentOwnerUserId() string {
+	if x != nil {
+		return x.CurrentOwnerUserId
+	}
+	return ""
+}
+
 var File_acl_proto protoreflect.FileDescriptor
 
 const file_acl_proto_rawDesc = "" +
@@ -820,7 +948,16 @@ const file_acl_proto_rawDesc = "" +
 	"\x06pet_id\x18\x01 \x01(\tR\x05petId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"<\n" +
 	"\x1dCreateOwnerMembershipResponse\x12\x1b\n" +
-	"\tmember_id\x18\x01 \x01(\tR\bmemberId*\x87\x02\n" +
+	"\tmember_id\x18\x01 \x01(\tR\bmemberId\"\x87\x01\n" +
+	"\x18TransferOwnershipRequest\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\tR\x05petId\x12*\n" +
+	"\x11requester_user_id\x18\x02 \x01(\tR\x0frequesterUserId\x12(\n" +
+	"\x10target_member_id\x18\x03 \x01(\tR\x0etargetMemberId\"\xf3\x01\n" +
+	"\x19TransferOwnershipResponse\x127\n" +
+	"\x18previous_owner_member_id\x18\x01 \x01(\tR\x15previousOwnerMemberId\x123\n" +
+	"\x16previous_owner_user_id\x18\x02 \x01(\tR\x13previousOwnerUserId\x125\n" +
+	"\x17current_owner_member_id\x18\x03 \x01(\tR\x14currentOwnerMemberId\x121\n" +
+	"\x15current_owner_user_id\x18\x04 \x01(\tR\x12currentOwnerUserId*\x87\x02\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fACTION_PET_READ\x10\x01\x12\x14\n" +
@@ -841,12 +978,13 @@ const file_acl_proto_rawDesc = "" +
 	"\bRoleKind\x12\x19\n" +
 	"\x15ROLE_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ROLE_KIND_SYSTEM\x10\x01\x12\x14\n" +
-	"\x10ROLE_KIND_CUSTOM\x10\x022\xea\x01\n" +
+	"\x10ROLE_KIND_CUSTOM\x10\x022\xbe\x02\n" +
 	"\n" +
 	"ACLService\x12.\n" +
 	"\x05Check\x12\x11.acl.CheckRequest\x1a\x12.acl.CheckResponse\x12L\n" +
 	"\x0fListPetsForUser\x12\x1b.acl.ListPetsForUserRequest\x1a\x1c.acl.ListPetsForUserResponse\x12^\n" +
-	"\x15CreateOwnerMembership\x12!.acl.CreateOwnerMembershipRequest\x1a\".acl.CreateOwnerMembershipResponseB\x11Z\x0fpet/proto;aclpbb\x06proto3"
+	"\x15CreateOwnerMembership\x12!.acl.CreateOwnerMembershipRequest\x1a\".acl.CreateOwnerMembershipResponse\x12R\n" +
+	"\x11TransferOwnership\x12\x1d.acl.TransferOwnershipRequest\x1a\x1e.acl.TransferOwnershipResponseB\x11Z\x0fpet/proto;aclpbb\x06proto3"
 
 var (
 	file_acl_proto_rawDescOnce sync.Once
@@ -861,7 +999,7 @@ func file_acl_proto_rawDescGZIP() []byte {
 }
 
 var file_acl_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_acl_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_acl_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_acl_proto_goTypes = []any{
 	(Action)(0),                           // 0: acl.Action
 	(MembershipStatus)(0),                 // 1: acl.MembershipStatus
@@ -875,6 +1013,8 @@ var file_acl_proto_goTypes = []any{
 	(*ListPetsForUserResponse)(nil),       // 9: acl.ListPetsForUserResponse
 	(*CreateOwnerMembershipRequest)(nil),  // 10: acl.CreateOwnerMembershipRequest
 	(*CreateOwnerMembershipResponse)(nil), // 11: acl.CreateOwnerMembershipResponse
+	(*TransferOwnershipRequest)(nil),      // 12: acl.TransferOwnershipRequest
+	(*TransferOwnershipResponse)(nil),     // 13: acl.TransferOwnershipResponse
 }
 var file_acl_proto_depIdxs = []int32{
 	2,  // 0: acl.Role.kind:type_name -> acl.RoleKind
@@ -886,11 +1026,13 @@ var file_acl_proto_depIdxs = []int32{
 	6,  // 6: acl.ACLService.Check:input_type -> acl.CheckRequest
 	8,  // 7: acl.ACLService.ListPetsForUser:input_type -> acl.ListPetsForUserRequest
 	10, // 8: acl.ACLService.CreateOwnerMembership:input_type -> acl.CreateOwnerMembershipRequest
-	7,  // 9: acl.ACLService.Check:output_type -> acl.CheckResponse
-	9,  // 10: acl.ACLService.ListPetsForUser:output_type -> acl.ListPetsForUserResponse
-	11, // 11: acl.ACLService.CreateOwnerMembership:output_type -> acl.CreateOwnerMembershipResponse
-	9,  // [9:12] is the sub-list for method output_type
-	6,  // [6:9] is the sub-list for method input_type
+	12, // 9: acl.ACLService.TransferOwnership:input_type -> acl.TransferOwnershipRequest
+	7,  // 10: acl.ACLService.Check:output_type -> acl.CheckResponse
+	9,  // 11: acl.ACLService.ListPetsForUser:output_type -> acl.ListPetsForUserResponse
+	11, // 12: acl.ACLService.CreateOwnerMembership:output_type -> acl.CreateOwnerMembershipResponse
+	13, // 13: acl.ACLService.TransferOwnership:output_type -> acl.TransferOwnershipResponse
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -907,7 +1049,7 @@ func file_acl_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_acl_proto_rawDesc), len(file_acl_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

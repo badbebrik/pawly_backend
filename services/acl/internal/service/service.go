@@ -126,6 +126,17 @@ type RemoveMemberParams struct {
 	MemberID    uuid.UUID
 }
 
+type TransferOwnershipParams struct {
+	PetID          uuid.UUID
+	RequesterID    uuid.UUID
+	TargetMemberID uuid.UUID
+}
+
+type TransferOwnershipResult struct {
+	PreviousOwner *repository.MemberView
+	CurrentOwner  *repository.MemberView
+}
+
 type BootstrapResult struct {
 	Me              *repository.MemberView
 	Members         []repository.MemberView
@@ -210,6 +221,31 @@ func (s *ACLService) CreateOwnerMembership(ctx context.Context, petID, ownerUser
 	return member, nil
 }
 
+func (s *ACLService) TransferOwnership(ctx context.Context, p TransferOwnershipParams) (*TransferOwnershipResult, error) {
+	if p.PetID == uuid.Nil || p.RequesterID == uuid.Nil || p.TargetMemberID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	res, err := s.memberships.TransferOwnership(ctx, p.PetID, p.RequesterID, p.TargetMemberID)
+	if err != nil {
+		switch err {
+		case repository.ErrForbidden:
+			return nil, ErrForbidden
+		case repository.ErrNotFound:
+			return nil, ErrNotFound
+		case repository.ErrConflict:
+			return nil, ErrConflict
+		default:
+			return nil, err
+		}
+	}
+
+	return &TransferOwnershipResult{
+		PreviousOwner: &res.PreviousOwner,
+		CurrentOwner:  &res.CurrentOwner,
+	}, nil
+}
+
 func (s *ACLService) GetMyAccess(ctx context.Context, petID, userID uuid.UUID) (*repository.MemberView, error) {
 	member, err := s.memberships.GetActiveViewByPetAndUser(ctx, petID, userID)
 	if err != nil {
@@ -219,6 +255,36 @@ func (s *ACLService) GetMyAccess(ctx context.Context, petID, userID uuid.UUID) (
 		return nil, err
 	}
 	return member, nil
+}
+
+func (s *ACLService) LeavePet(ctx context.Context, petID, userID uuid.UUID) (*repository.MemberView, error) {
+	if petID == uuid.Nil || userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	member, err := s.memberships.GetActiveViewByPetAndUser(ctx, petID, userID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	if member.IsPrimaryOwner {
+		return nil, ErrConflict
+	}
+
+	removed, err := s.memberships.RemoveMember(ctx, petID, member.ID, userID)
+	if err != nil {
+		switch err {
+		case repository.ErrNotFound:
+			return nil, ErrNotFound
+		case repository.ErrConflict:
+			return nil, ErrConflict
+		default:
+			return nil, err
+		}
+	}
+	return removed, nil
 }
 
 func (s *ACLService) GetBootstrap(ctx context.Context, petID, userID uuid.UUID) (*BootstrapResult, error) {
@@ -584,6 +650,9 @@ func (s *ACLService) UpdateMemberPermissions(ctx context.Context, p UpdateMember
 	}
 	if current.Status != membershipStatusActive {
 		return nil, ErrConflict
+	}
+	if current.UserID == p.RequesterID {
+		return nil, ErrForbidden
 	}
 	if current.IsPrimaryOwner && !criticalOwnerPolicy(p.Policy) {
 		return nil, ErrConflict

@@ -127,6 +127,34 @@ func (c *Client) CreateOwnerMembership(ctx context.Context, petID, userID uuid.U
 	return memberID, nil
 }
 
+func (c *Client) TransferOwnership(ctx context.Context, petID, requesterUserID, targetMemberID uuid.UUID) (service.ACLTransferOwnershipResult, error) {
+	resp, err := c.client.TransferOwnership(ctx, &aclpb.TransferOwnershipRequest{
+		PetId:           petID.String(),
+		RequesterUserId: requesterUserID.String(),
+		TargetMemberId:  targetMemberID.String(),
+	})
+	if err != nil {
+		return service.ACLTransferOwnershipResult{}, mapErr(err)
+	}
+
+	result := service.ACLTransferOwnershipResult{}
+
+	if result.PreviousOwnerMemberID, err = uuid.Parse(resp.GetPreviousOwnerMemberId()); err != nil {
+		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+	}
+	if result.PreviousOwnerUserID, err = uuid.Parse(resp.GetPreviousOwnerUserId()); err != nil {
+		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+	}
+	if result.CurrentOwnerMemberID, err = uuid.Parse(resp.GetCurrentOwnerMemberId()); err != nil {
+		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+	}
+	if result.CurrentOwnerUserID, err = uuid.Parse(resp.GetCurrentOwnerUserId()); err != nil {
+		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+	}
+
+	return result, nil
+}
+
 func mapAction(action string) aclpb.Action {
 	switch action {
 	case "pet_read":

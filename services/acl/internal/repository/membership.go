@@ -36,6 +36,11 @@ type MemberView struct {
 	UpdatedAt      time.Time
 }
 
+type TransferOwnershipView struct {
+	PreviousOwner MemberView
+	CurrentOwner  MemberView
+}
+
 type MembershipRepository interface {
 	GetByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*MembershipAccess, error)
 	GetActiveByPetAndUser(ctx context.Context, petID, userID uuid.UUID) (*MembershipAccess, error)
@@ -44,6 +49,7 @@ type MembershipRepository interface {
 	GetByIDAndPet(ctx context.Context, petID, memberID uuid.UUID) (*MemberView, error)
 	ListActiveViewsByPet(ctx context.Context, petID uuid.UUID) ([]MemberView, error)
 	ListActiveViewsByUser(ctx context.Context, userID uuid.UUID) ([]MemberView, error)
+	TransferOwnership(ctx context.Context, petID, requesterUserID, targetMemberID uuid.UUID) (*TransferOwnershipView, error)
 	UpdatePermissions(ctx context.Context, petID, memberID uuid.UUID, roleID uuid.UUID, policy model.Policy, basePresetID *uuid.UUID) (*MemberView, error)
 	RemoveMember(ctx context.Context, petID, memberID, removedByUserID uuid.UUID) (*MemberView, error)
 }

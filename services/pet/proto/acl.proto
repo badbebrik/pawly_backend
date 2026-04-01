@@ -69,6 +69,7 @@ service ACLService {
   rpc Check(CheckRequest) returns (CheckResponse);
   rpc ListPetsForUser(ListPetsForUserRequest) returns (ListPetsForUserResponse);
   rpc CreateOwnerMembership(CreateOwnerMembershipRequest) returns (CreateOwnerMembershipResponse);
+  rpc TransferOwnership(TransferOwnershipRequest) returns (TransferOwnershipResponse);
 }
 
 message CheckRequest {
@@ -97,4 +98,17 @@ message CreateOwnerMembershipRequest {
 
 message CreateOwnerMembershipResponse {
   string member_id = 1;
+}
+
+message TransferOwnershipRequest {
+  string pet_id = 1;
+  string requester_user_id = 2;
+  string target_member_id = 3;
+}
+
+message TransferOwnershipResponse {
+  string previous_owner_member_id = 1;
+  string previous_owner_user_id = 2;
+  string current_owner_member_id = 3;
+  string current_owner_user_id = 4;
 }

@@ -22,6 +22,7 @@ const (
 	ACLService_Check_FullMethodName                 = "/acl.ACLService/Check"
 	ACLService_ListPetsForUser_FullMethodName       = "/acl.ACLService/ListPetsForUser"
 	ACLService_CreateOwnerMembership_FullMethodName = "/acl.ACLService/CreateOwnerMembership"
+	ACLService_TransferOwnership_FullMethodName     = "/acl.ACLService/TransferOwnership"
 )
 
 // ACLServiceClient is the client API for ACLService service.
@@ -31,6 +32,7 @@ type ACLServiceClient interface {
 	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error)
 	ListPetsForUser(ctx context.Context, in *ListPetsForUserRequest, opts ...grpc.CallOption) (*ListPetsForUserResponse, error)
 	CreateOwnerMembership(ctx context.Context, in *CreateOwnerMembershipRequest, opts ...grpc.CallOption) (*CreateOwnerMembershipResponse, error)
+	TransferOwnership(ctx context.Context, in *TransferOwnershipRequest, opts ...grpc.CallOption) (*TransferOwnershipResponse, error)
 }
 
 type aCLServiceClient struct {
@@ -71,6 +73,16 @@ func (c *aCLServiceClient) CreateOwnerMembership(ctx context.Context, in *Create
 	return out, nil
 }
 
+func (c *aCLServiceClient) TransferOwnership(ctx context.Context, in *TransferOwnershipRequest, opts ...grpc.CallOption) (*TransferOwnershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransferOwnershipResponse)
+	err := c.cc.Invoke(ctx, ACLService_TransferOwnership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ACLServiceServer is the server API for ACLService service.
 // All implementations must embed UnimplementedACLServiceServer
 // for forward compatibility.
@@ -78,6 +90,7 @@ type ACLServiceServer interface {
 	Check(context.Context, *CheckRequest) (*CheckResponse, error)
 	ListPetsForUser(context.Context, *ListPetsForUserRequest) (*ListPetsForUserResponse, error)
 	CreateOwnerMembership(context.Context, *CreateOwnerMembershipRequest) (*CreateOwnerMembershipResponse, error)
+	TransferOwnership(context.Context, *TransferOwnershipRequest) (*TransferOwnershipResponse, error)
 	mustEmbedUnimplementedACLServiceServer()
 }
 
@@ -96,6 +109,9 @@ func (UnimplementedACLServiceServer) ListPetsForUser(context.Context, *ListPetsF
 }
 func (UnimplementedACLServiceServer) CreateOwnerMembership(context.Context, *CreateOwnerMembershipRequest) (*CreateOwnerMembershipResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateOwnerMembership not implemented")
+}
+func (UnimplementedACLServiceServer) TransferOwnership(context.Context, *TransferOwnershipRequest) (*TransferOwnershipResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TransferOwnership not implemented")
 }
 func (UnimplementedACLServiceServer) mustEmbedUnimplementedACLServiceServer() {}
 func (UnimplementedACLServiceServer) testEmbeddedByValue()                    {}
@@ -172,6 +188,24 @@ func _ACLService_CreateOwnerMembership_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ACLService_TransferOwnership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferOwnershipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ACLServiceServer).TransferOwnership(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ACLService_TransferOwnership_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ACLServiceServer).TransferOwnership(ctx, req.(*TransferOwnershipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ACLService_ServiceDesc is the grpc.ServiceDesc for ACLService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +224,10 @@ var ACLService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateOwnerMembership",
 			Handler:    _ACLService_CreateOwnerMembership_Handler,
+		},
+		{
+			MethodName: "TransferOwnership",
+			Handler:    _ACLService_TransferOwnership_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

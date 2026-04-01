@@ -18,6 +18,7 @@ type ACLClient interface {
 	Check(ctx context.Context, petID, userID uuid.UUID, action string) (bool, error)
 	ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]ACLMembership, error)
 	CreateOwnerMembership(ctx context.Context, petID, userID uuid.UUID) (uuid.UUID, error)
+	TransferOwnership(ctx context.Context, petID, requesterUserID, targetMemberID uuid.UUID) (ACLTransferOwnershipResult, error)
 }
 
 type FileClient interface {
@@ -87,6 +88,13 @@ type ChangePetStatusParams struct {
 	MissingSince *time.Time
 }
 
+type TransferPetOwnershipParams struct {
+	UserID         uuid.UUID
+	PetID          uuid.UUID
+	RowVersion     int
+	TargetMemberID uuid.UUID
+}
+
 type UploadInfo struct {
 	Method    string
 	URL       string
@@ -139,6 +147,13 @@ type ACLMembership struct {
 	IsPrimaryOwner bool
 	Role           ACLRole
 	Policy         ACLPolicy
+}
+
+type ACLTransferOwnershipResult struct {
+	PreviousOwnerMemberID uuid.UUID
+	PreviousOwnerUserID   uuid.UUID
+	CurrentOwnerMemberID  uuid.UUID
+	CurrentOwnerUserID    uuid.UUID
 }
 
 type PetListItem struct {
@@ -453,6 +468,59 @@ func (s *PetService) ChangePetStatus(ctx context.Context, p ChangePetStatusParam
 		}
 	}
 	return pet, nil
+}
+
+func (s *PetService) TransferOwnership(ctx context.Context, p TransferPetOwnershipParams) (*model.Pet, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.RowVersion <= 0 || p.TargetMemberID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+
+	current, err := s.repo.GetByID(ctx, p.PetID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if current.OwnerUserID != p.UserID {
+		return nil, ErrForbidden
+	}
+
+	transferRes, err := s.acl.TransferOwnership(ctx, p.PetID, p.UserID, p.TargetMemberID)
+	if err != nil {
+		switch err {
+		case ErrForbidden:
+			return nil, ErrForbidden
+		case ErrNotFound:
+			return nil, ErrNotFound
+		case ErrConflict:
+			return nil, ErrConflict
+		default:
+			return nil, err
+		}
+	}
+
+	updated, err := s.repo.UpdateOwner(ctx, p.PetID, p.RowVersion, transferRes.CurrentOwnerUserID)
+	if err == nil {
+		return updated, nil
+	}
+
+	rollbackRes, rollbackErr := s.acl.TransferOwnership(ctx, p.PetID, transferRes.CurrentOwnerUserID, transferRes.PreviousOwnerMemberID)
+	if rollbackErr != nil {
+		return nil, rollbackErr
+	}
+	if rollbackRes.CurrentOwnerUserID != p.UserID {
+		return nil, ErrConflict
+	}
+
+	switch err {
+	case repository.ErrNotFound:
+		return nil, ErrNotFound
+	case repository.ErrConflict:
+		return nil, ErrConflict
+	default:
+		return nil, err
+	}
 }
 
 func (s *PetService) InitPetPhotoUpload(ctx context.Context, p InitPetPhotoUploadParams) (uuid.UUID, UploadInfo, error) {

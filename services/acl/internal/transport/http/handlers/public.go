@@ -86,6 +86,25 @@ func (h *PublicHandlers) GetMyAccess(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *PublicHandlers) LeavePet(w http.ResponseWriter, r *http.Request) {
+	petID, userID, ok := parsePetAndUser(w, r)
+	if !ok {
+		return
+	}
+
+	member, err := h.svc.LeavePet(r.Context(), petID, userID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	profilesByUser := h.loadProfilesByUserID(r.Context(), []repository.MemberView{*member})
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"member": memberToDTO(member, profilesByUser[member.UserID]),
+	})
+}
+
 func (h *PublicHandlers) GetBootstrap(w http.ResponseWriter, r *http.Request) {
 	petID, userID, ok := parsePetAndUser(w, r)
 	if !ok {

@@ -17,8 +17,10 @@ type fakeMembershipRepo struct {
 	activeViews     []repository.MemberView
 	ownerResult     *repository.MemberView
 	ownerErr        error
+	transferResult  *repository.TransferOwnershipView
 	updateResult    *repository.MemberView
 	removeResult    *repository.MemberView
+	transferErr     error
 	updateErr       error
 	removeErr       error
 	err             error
@@ -86,6 +88,16 @@ func (f *fakeMembershipRepo) ListActiveViewsByUser(_ context.Context, _ uuid.UUI
 		return nil, f.err
 	}
 	return f.activeViews, nil
+}
+
+func (f *fakeMembershipRepo) TransferOwnership(_ context.Context, _, _, _ uuid.UUID) (*repository.TransferOwnershipView, error) {
+	if f.transferErr != nil {
+		return nil, f.transferErr
+	}
+	if f.transferResult == nil {
+		return nil, repository.ErrNotFound
+	}
+	return f.transferResult, nil
 }
 
 func (f *fakeMembershipRepo) UpdatePermissions(_ context.Context, _, _ uuid.UUID, _ uuid.UUID, _ model.Policy, _ *uuid.UUID) (*repository.MemberView, error) {

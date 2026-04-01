@@ -32,6 +32,12 @@ type listPetsForUserRequest struct {
 	UserID string `json:"user_id"`
 }
 
+type transferOwnershipRequest struct {
+	PetID           string `json:"pet_id"`
+	RequesterUserID string `json:"requester_user_id"`
+	TargetMemberID  string `json:"target_member_id"`
+}
+
 func NewInternalHandlers(svc *service.ACLService) *InternalHandlers {
 	return &InternalHandlers{svc: svc}
 }
@@ -133,6 +139,40 @@ func (h *InternalHandlers) ListPetsForUser(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_ids":     petIDs,
 		"memberships": membershipItems,
+	})
+}
+
+func (h *InternalHandlers) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	var req transferOwnershipRequest
+	if !decodeInternalBody(w, r, &req) {
+		return
+	}
+
+	petID, requesterUserID, ok := parsePetAndUserRaw(w, req.PetID, req.RequesterUserID)
+	if !ok {
+		return
+	}
+	targetMemberID, err := uuid.Parse(req.TargetMemberID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid target_member_id")
+		return
+	}
+
+	res, err := h.svc.TransferOwnership(r.Context(), service.TransferOwnershipParams{
+		PetID:          petID,
+		RequesterID:    requesterUserID,
+		TargetMemberID: targetMemberID,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"previous_owner_member_id": res.PreviousOwner.ID.String(),
+		"previous_owner_user_id":   res.PreviousOwner.UserID.String(),
+		"current_owner_member_id":  res.CurrentOwner.ID.String(),
+		"current_owner_user_id":    res.CurrentOwner.UserID.String(),
 	})
 }
 

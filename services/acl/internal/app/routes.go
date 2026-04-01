@@ -36,6 +36,7 @@ func (a *App) setupRoutes() http.Handler {
 
 		r.Get("/v1/pets/{pet_id}/acl/members", pub.ListMembers)
 		r.Get("/v1/pets/{pet_id}/acl/me", pub.GetMyAccess)
+		r.Delete("/v1/pets/{pet_id}/acl/me", pub.LeavePet)
 		r.Get("/v1/pets/{pet_id}/acl/bootstrap", pub.GetBootstrap)
 		r.Patch("/v1/pets/{pet_id}/acl/members/{member_id}", pub.UpdateMemberPermissions)
 		r.Delete("/v1/pets/{pet_id}/acl/members/{member_id}", pub.RemoveMember)
@@ -56,6 +57,7 @@ func (a *App) setupRoutes() http.Handler {
 		r.Post("/internal/v1/acl/get-policy", internal.GetPolicy)
 		r.Post("/internal/v1/acl/check", internal.Check)
 		r.Post("/internal/v1/acl/list-pets-for-user", internal.ListPetsForUser)
+		r.Post("/internal/v1/acl/transfer-ownership", internal.TransferOwnership)
 	})
 
 	return r

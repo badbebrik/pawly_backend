@@ -107,6 +107,152 @@ func (r *PetRepository) GetByID(ctx context.Context, petID uuid.UUID) (*model.Pe
 	return pet, nil
 }
 
+func (r *PetRepository) ListSpecies(ctx context.Context) ([]model.Species, error) {
+	const query = `
+		SELECT id, code, name_ru, name_en, icon_key, sort_order, is_active, created_at, updated_at
+		FROM species
+		WHERE is_active = TRUE
+		ORDER BY sort_order ASC, id ASC
+	`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.Species, 0)
+	for rows.Next() {
+		var item model.Species
+		if err := rows.Scan(
+			&item.ID,
+			&item.Code,
+			&item.NameRu,
+			&item.NameEn,
+			&item.IconKey,
+			&item.SortOrder,
+			&item.IsActive,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *PetRepository) ListBreeds(ctx context.Context) ([]model.Breed, error) {
+	const query = `
+		SELECT id, species_id, name_ru, name_en, sort_order, is_active, created_at, updated_at
+		FROM breeds
+		WHERE is_active = TRUE
+		ORDER BY species_id ASC, sort_order ASC, id ASC
+	`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.Breed, 0)
+	for rows.Next() {
+		var item model.Breed
+		if err := rows.Scan(
+			&item.ID,
+			&item.SpeciesID,
+			&item.NameRu,
+			&item.NameEn,
+			&item.SortOrder,
+			&item.IsActive,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *PetRepository) ListPatterns(ctx context.Context) ([]model.Pattern, error) {
+	const query = `
+		SELECT id, species_id, name_ru, name_en, icon_key, sort_order, is_active, created_at, updated_at
+		FROM patterns
+		WHERE is_active = TRUE
+		ORDER BY species_id ASC NULLS FIRST, sort_order ASC, id ASC
+	`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.Pattern, 0)
+	for rows.Next() {
+		var item model.Pattern
+		if err := rows.Scan(
+			&item.ID,
+			&item.SpeciesID,
+			&item.NameRu,
+			&item.NameEn,
+			&item.IconKey,
+			&item.SortOrder,
+			&item.IsActive,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *PetRepository) ListColorPresets(ctx context.Context) ([]model.ColorPreset, error) {
+	const query = `
+		SELECT id, name_ru, name_en, hex, sort_order, is_active, created_at, updated_at
+		FROM color_presets
+		WHERE is_active = TRUE
+		ORDER BY sort_order ASC, id ASC
+	`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.ColorPreset, 0)
+	for rows.Next() {
+		var item model.ColorPreset
+		if err := rows.Scan(
+			&item.ID,
+			&item.NameRu,
+			&item.NameEn,
+			&item.Hex,
+			&item.SortOrder,
+			&item.IsActive,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *PetRepository) ListByIDs(ctx context.Context, ids []uuid.UUID, includeArchived bool, offset, limit int) ([]model.Pet, int, error) {
 	if len(ids) == 0 {
 		return []model.Pet{}, 0, nil

@@ -385,6 +385,32 @@ func (s *PetService) GetPet(ctx context.Context, userID, petID uuid.UUID) (*mode
 	return pet, nil
 }
 
+func (s *PetService) GetDictionaries(ctx context.Context) (*model.Dictionaries, error) {
+	species, err := s.repo.ListSpecies(ctx)
+	if err != nil {
+		return nil, err
+	}
+	breeds, err := s.repo.ListBreeds(ctx)
+	if err != nil {
+		return nil, err
+	}
+	patterns, err := s.repo.ListPatterns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	colorPresets, err := s.repo.ListColorPresets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.Dictionaries{
+		Species:      species,
+		Breeds:       breeds,
+		Patterns:     patterns,
+		ColorPresets: colorPresets,
+	}, nil
+}
+
 func (s *PetService) UpdatePet(ctx context.Context, p UpdatePetParams) (*model.Pet, error) {
 	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.RowVersion <= 0 || p.SpeciesID == uuid.Nil || strings.TrimSpace(p.Name) == "" {
 		return nil, ErrInvalidInput

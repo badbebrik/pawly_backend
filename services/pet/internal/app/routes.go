@@ -26,6 +26,7 @@ func (a *App) setupRoutes() http.Handler {
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID)
+		r.Get("/v1/pet-dictionaries", h.GetDictionaries)
 		r.Post("/v1/pets", h.CreatePet)
 		r.Get("/v1/pets", h.ListPets)
 		r.Get("/v1/pets/{pet_id}", h.GetPet)

@@ -282,6 +282,71 @@ func (h *Handlers) GetPet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
 }
 
+func (h *Handlers) GetDictionaries(w http.ResponseWriter, r *http.Request) {
+	data, err := h.svc.GetDictionaries(r.Context())
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	species := make([]map[string]any, 0, len(data.Species))
+	for i := range data.Species {
+		species = append(species, map[string]any{
+			"id":         data.Species[i].ID.String(),
+			"code":       data.Species[i].Code,
+			"name_ru":    data.Species[i].NameRu,
+			"name_en":    data.Species[i].NameEn,
+			"icon_key":   data.Species[i].IconKey,
+			"sort_order": data.Species[i].SortOrder,
+			"is_active":  data.Species[i].IsActive,
+		})
+	}
+
+	breeds := make([]map[string]any, 0, len(data.Breeds))
+	for i := range data.Breeds {
+		breeds = append(breeds, map[string]any{
+			"id":         data.Breeds[i].ID.String(),
+			"species_id": data.Breeds[i].SpeciesID.String(),
+			"name_ru":    data.Breeds[i].NameRu,
+			"name_en":    data.Breeds[i].NameEn,
+			"sort_order": data.Breeds[i].SortOrder,
+			"is_active":  data.Breeds[i].IsActive,
+		})
+	}
+
+	patterns := make([]map[string]any, 0, len(data.Patterns))
+	for i := range data.Patterns {
+		patterns = append(patterns, map[string]any{
+			"id":         data.Patterns[i].ID.String(),
+			"species_id": uuidOrNil(data.Patterns[i].SpeciesID),
+			"name_ru":    data.Patterns[i].NameRu,
+			"name_en":    data.Patterns[i].NameEn,
+			"icon_key":   strOrNil(data.Patterns[i].IconKey),
+			"sort_order": data.Patterns[i].SortOrder,
+			"is_active":  data.Patterns[i].IsActive,
+		})
+	}
+
+	colorPresets := make([]map[string]any, 0, len(data.ColorPresets))
+	for i := range data.ColorPresets {
+		colorPresets = append(colorPresets, map[string]any{
+			"id":         data.ColorPresets[i].ID.String(),
+			"name_ru":    data.ColorPresets[i].NameRu,
+			"name_en":    data.ColorPresets[i].NameEn,
+			"hex":        data.ColorPresets[i].Hex,
+			"sort_order": data.ColorPresets[i].SortOrder,
+			"is_active":  data.ColorPresets[i].IsActive,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"species":       species,
+		"breeds":        breeds,
+		"patterns":      patterns,
+		"color_presets": colorPresets,
+	})
+}
+
 func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 	userID, ok := appmw.UserIDFromContext(r.Context())
 	if !ok {

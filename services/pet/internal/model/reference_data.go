@@ -63,7 +63,7 @@ type Color struct {
 	UpdatedAt  time.Time
 }
 
-type ReferenceData struct {
+type Dictionaries struct {
 	Species      []Species
 	Breeds       []Breed
 	Patterns     []Pattern

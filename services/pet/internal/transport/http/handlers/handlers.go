@@ -23,62 +23,89 @@ func New(svc *service.PetService) *Handlers {
 }
 
 type createPetRequest struct {
-	Name                 string             `json:"name"`
-	SpeciesID            string             `json:"species_id"`
-	Sex                  string             `json:"sex"`
-	BirthDate            *string            `json:"birth_date"`
-	Breed                breedRequest       `json:"breed"`
-	Colors               []model.Color      `json:"colors"`
-	CoatPattern          coatPatternRequest `json:"coat_pattern"`
-	IsNeutered           string             `json:"is_neutered"`
-	IsOutdoor            bool               `json:"is_outdoor"`
-	ProfilePhotoFileID   *string            `json:"profile_photo_file_id"`
-	MicrochipID          *string            `json:"microchip_id"`
-	MicrochipInstalledAt *string            `json:"microchip_installed_at"`
+	Name                 string         `json:"name"`
+	SpeciesID            string         `json:"species_id"`
+	Sex                  string         `json:"sex"`
+	BirthDate            *string        `json:"birth_date"`
+	BreedID              *string        `json:"breed_id"`
+	CustomBreedName      *string        `json:"custom_breed_name"`
+	Colors               []colorRequest `json:"colors"`
+	PatternID            *string        `json:"pattern_id"`
+	CustomPatternName    *string        `json:"custom_pattern_name"`
+	IsNeutered           string         `json:"is_neutered"`
+	IsOutdoor            bool           `json:"is_outdoor"`
+	ProfilePhotoFileID   *string        `json:"profile_photo_file_id"`
+	MicrochipID          *string        `json:"microchip_id"`
+	MicrochipInstalledAt *string        `json:"microchip_installed_at"`
 }
 
 type updatePetRequest struct {
-	RowVersion           int                `json:"row_version"`
-	Name                 string             `json:"name"`
-	SpeciesID            string             `json:"species_id"`
-	Sex                  string             `json:"sex"`
-	BirthDate            *string            `json:"birth_date"`
-	Breed                breedRequest       `json:"breed"`
-	Colors               []model.Color      `json:"colors"`
-	CoatPattern          coatPatternRequest `json:"coat_pattern"`
-	IsNeutered           string             `json:"is_neutered"`
-	IsOutdoor            bool               `json:"is_outdoor"`
-	ProfilePhotoFileID   *string            `json:"profile_photo_file_id"`
-	MicrochipID          *string            `json:"microchip_id"`
-	MicrochipInstalledAt *string            `json:"microchip_installed_at"`
+	RowVersion           int            `json:"row_version"`
+	Name                 string         `json:"name"`
+	SpeciesID            string         `json:"species_id"`
+	Sex                  string         `json:"sex"`
+	BirthDate            *string        `json:"birth_date"`
+	BreedID              *string        `json:"breed_id"`
+	CustomBreedName      *string        `json:"custom_breed_name"`
+	Colors               []colorRequest `json:"colors"`
+	PatternID            *string        `json:"pattern_id"`
+	CustomPatternName    *string        `json:"custom_pattern_name"`
+	IsNeutered           string         `json:"is_neutered"`
+	IsOutdoor            bool           `json:"is_outdoor"`
+	ProfilePhotoFileID   *string        `json:"profile_photo_file_id"`
+	MicrochipID          *string        `json:"microchip_id"`
+	MicrochipInstalledAt *string        `json:"microchip_installed_at"`
 }
 
-type breedRequest struct {
-	Source          string     `json:"source"`
-	SystemBreedID   *uuid.UUID `json:"system_breed_id"`
-	CustomBreedName *string    `json:"custom_breed_name"`
+type colorRequest struct {
+	PresetID   *string `json:"preset_id"`
+	CustomName *string `json:"custom_name"`
+	CustomHex  *string `json:"custom_hex"`
+	SortOrder  int     `json:"sort_order"`
 }
 
-func (b breedRequest) toModel() model.Breed {
-	return model.Breed{
-		Source:          b.Source,
-		SystemBreedID:   b.SystemBreedID,
-		CustomBreedName: b.CustomBreedName,
+func (c colorRequest) toModel() (model.Color, error) {
+	var presetID *uuid.UUID
+	if c.PresetID != nil && *c.PresetID != "" {
+		id, err := uuid.Parse(*c.PresetID)
+		if err != nil {
+			return model.Color{}, err
+		}
+		presetID = &id
 	}
+
+	return model.Color{
+		PresetID:   presetID,
+		CustomName: c.CustomName,
+		CustomHex:  c.CustomHex,
+		SortOrder:  c.SortOrder,
+	}, nil
 }
 
-type coatPatternRequest struct {
-	Source                string     `json:"source"`
-	SystemCoatPatternID   *uuid.UUID `json:"system_coat_pattern_id"`
-	CustomCoatPatternName *string    `json:"custom_coat_pattern_name"`
-}
-
-func (c coatPatternRequest) toModel() model.CoatPattern {
-	return model.CoatPattern{
-		Source:                c.Source,
-		SystemCoatPatternID:   c.SystemCoatPatternID,
-		CustomCoatPatternName: c.CustomCoatPatternName,
+func parseOptionalUUID(raw *string) (*uuid.UUID, error) {
+	if raw == nil || *raw == "" {
+		return nil, nil
 	}
+	id, err := uuid.Parse(*raw)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
+
+func parseColorRequests(items []colorRequest) ([]model.Color, error) {
+	if len(items) == 0 {
+		return []model.Color{}, nil
+	}
+	out := make([]model.Color, 0, len(items))
+	for i := range items {
+		color, err := items[i].toModel()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, color)
+	}
+	return out, nil
 }
 
 type changeStatusRequest struct {
@@ -124,6 +151,21 @@ func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid species_id")
 		return
 	}
+	breedID, err := parseOptionalUUID(req.BreedID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid breed_id")
+		return
+	}
+	patternID, err := parseOptionalUUID(req.PatternID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pattern_id")
+		return
+	}
+	colors, err := parseColorRequests(req.Colors)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid colors")
+		return
+	}
 
 	var (
 		birthDate            *time.Time
@@ -161,9 +203,11 @@ func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 		SpeciesID:            speciesID,
 		Sex:                  req.Sex,
 		BirthDate:            birthDate,
-		Breed:                req.Breed.toModel(),
-		Colors:               req.Colors,
-		CoatPattern:          req.CoatPattern.toModel(),
+		BreedID:              breedID,
+		CustomBreedName:      req.CustomBreedName,
+		Colors:               colors,
+		PatternID:            patternID,
+		CustomPatternName:    req.CustomPatternName,
 		IsNeutered:           req.IsNeutered,
 		IsOutdoor:            req.IsOutdoor,
 		ProfilePhotoFileID:   profilePhotoID,
@@ -264,6 +308,21 @@ func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid species_id")
 		return
 	}
+	breedID, err := parseOptionalUUID(req.BreedID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid breed_id")
+		return
+	}
+	patternID, err := parseOptionalUUID(req.PatternID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pattern_id")
+		return
+	}
+	colors, err := parseColorRequests(req.Colors)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid colors")
+		return
+	}
 
 	var (
 		birthDate            *time.Time
@@ -303,9 +362,11 @@ func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 		SpeciesID:            speciesID,
 		Sex:                  req.Sex,
 		BirthDate:            birthDate,
-		Breed:                req.Breed.toModel(),
-		Colors:               req.Colors,
-		CoatPattern:          req.CoatPattern.toModel(),
+		BreedID:              breedID,
+		CustomBreedName:      req.CustomBreedName,
+		Colors:               colors,
+		PatternID:            patternID,
+		CustomPatternName:    req.CustomPatternName,
 		IsNeutered:           req.IsNeutered,
 		IsOutdoor:            req.IsOutdoor,
 		ProfilePhotoFileID:   profilePhotoID,
@@ -536,24 +597,18 @@ func parseIntOrDefault(raw string, fallback int) int {
 
 func petToDTO(p *model.Pet, profilePhotoDownloadURL *string) map[string]any {
 	return map[string]any{
-		"id":            p.ID.String(),
-		"owner_user_id": p.OwnerUserID.String(),
-		"row_version":   p.RowVersion,
-		"name":          p.Name,
-		"species_id":    p.SpeciesID.String(),
-		"sex":           p.Sex,
-		"birth_date":    dateOrNil(p.BirthDate),
-		"breed": map[string]any{
-			"source":            p.Breed.Source,
-			"system_breed_id":   uuidOrNil(p.Breed.SystemBreedID),
-			"custom_breed_name": strOrNil(p.Breed.CustomBreedName),
-		},
-		"colors": p.Colors,
-		"coat_pattern": map[string]any{
-			"source":                   p.CoatPattern.Source,
-			"system_coat_pattern_id":   uuidOrNil(p.CoatPattern.SystemCoatPatternID),
-			"custom_coat_pattern_name": strOrNil(p.CoatPattern.CustomCoatPatternName),
-		},
+		"id":                         p.ID.String(),
+		"owner_user_id":              p.OwnerUserID.String(),
+		"row_version":                p.RowVersion,
+		"name":                       p.Name,
+		"species_id":                 p.SpeciesID.String(),
+		"sex":                        p.Sex,
+		"birth_date":                 dateOrNil(p.BirthDate),
+		"breed_id":                   uuidOrNil(p.BreedID),
+		"custom_breed_name":          strOrNil(p.CustomBreedName),
+		"colors":                     colorsToDTO(p.Colors),
+		"pattern_id":                 uuidOrNil(p.PatternID),
+		"custom_pattern_name":        strOrNil(p.CustomPatternName),
 		"is_neutered":                p.IsNeutered,
 		"is_outdoor":                 p.IsOutdoor,
 		"profile_photo_file_id":      uuidOrNil(p.ProfilePhotoFileID),
@@ -566,6 +621,23 @@ func petToDTO(p *model.Pet, profilePhotoDownloadURL *string) map[string]any {
 		"created_at":                 p.CreatedAt.UTC().Format(time.RFC3339),
 		"updated_at":                 p.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func colorsToDTO(colors []model.Color) []map[string]any {
+	if len(colors) == 0 {
+		return []map[string]any{}
+	}
+	out := make([]map[string]any, 0, len(colors))
+	for i := range colors {
+		out = append(out, map[string]any{
+			"id":          uuidOrNil(&colors[i].ID),
+			"preset_id":   uuidOrNil(colors[i].PresetID),
+			"custom_name": strOrNil(colors[i].CustomName),
+			"custom_hex":  strOrNil(colors[i].CustomHex),
+			"sort_order":  colors[i].SortOrder,
+		})
+	}
+	return out
 }
 
 func accessToDTO(access *service.ACLMembership) any {

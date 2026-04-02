@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"pet/internal/model"
 	repo "pet/internal/repository"
@@ -24,37 +23,35 @@ func NewPetRepository(db *pgxpool.Pool) *PetRepository {
 
 func (r *PetRepository) Create(ctx context.Context, in repo.CreatePetInput) (*model.Pet, error) {
 	p := in.Pet
-	colorsRaw, err := json.Marshal(p.Colors)
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	const query = `
 		INSERT INTO pets (
 			id, owner_user_id, name, species_id, sex, birth_date,
-			breed_source, system_breed_id, custom_breed_name,
-			colors,
-			coat_pattern_source, system_coat_pattern_id, custom_coat_pattern_name,
+			breed_id, custom_breed_name,
+			pattern_id, custom_pattern_name,
 			is_neutered, is_outdoor, profile_photo_file_id,
 			microchip_id, microchip_installed_at,
 			status, missing_since, archived_at,
 			created_at, updated_at, row_version
 		) VALUES (
 			$1,$2,$3,$4,$5,$6,
-			$7,$8,$9,
-			$10,
+			$7,$8,
+			$9,$10,
 			$11,$12,$13,
-			$14,$15,$16,
-			$17,$18,
-			$19,$20,$21,
+			$14,$15,
+			$16,$17,$18,
 			NOW(),NOW(),1
 		)
 	`
-	_, err = r.db.Exec(ctx, query,
+	_, err = tx.Exec(ctx, query,
 		p.ID, p.OwnerUserID, p.Name, p.SpeciesID, p.Sex, p.BirthDate,
-		p.Breed.Source, p.Breed.SystemBreedID, p.Breed.CustomBreedName,
-		colorsRaw,
-		p.CoatPattern.Source, p.CoatPattern.SystemCoatPatternID, p.CoatPattern.CustomCoatPatternName,
+		p.BreedID, p.CustomBreedName,
+		p.PatternID, p.CustomPatternName,
 		p.IsNeutered, p.IsOutdoor, p.ProfilePhotoFileID,
 		p.MicrochipID, p.MicrochipInstalledAt,
 		p.Status, p.MissingSince, p.ArchivedAt,
@@ -63,6 +60,13 @@ func (r *PetRepository) Create(ctx context.Context, in repo.CreatePetInput) (*mo
 		if isUniqueViolation(err) {
 			return nil, repo.ErrConflict
 		}
+		return nil, err
+	}
+
+	if err := syncPetColors(ctx, tx, p.ID, p.Colors); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -78,9 +82,8 @@ func (r *PetRepository) GetByID(ctx context.Context, petID uuid.UUID) (*model.Pe
 	const query = `
 		SELECT
 			id, owner_user_id, row_version, name, species_id, sex, birth_date,
-			breed_source, system_breed_id, custom_breed_name,
-			colors,
-			coat_pattern_source, system_coat_pattern_id, custom_coat_pattern_name,
+			breed_id, custom_breed_name,
+			pattern_id, custom_pattern_name,
 			is_neutered, is_outdoor, profile_photo_file_id,
 			microchip_id, microchip_installed_at,
 			status, missing_since, archived_at,
@@ -96,6 +99,11 @@ func (r *PetRepository) GetByID(ctx context.Context, petID uuid.UUID) (*model.Pe
 		}
 		return nil, err
 	}
+	colorsByPet, err := listColorsByPetIDs(ctx, r.db, []uuid.UUID{pet.ID})
+	if err != nil {
+		return nil, err
+	}
+	pet.Colors = colorsByPet[pet.ID]
 	return pet, nil
 }
 
@@ -117,9 +125,8 @@ func (r *PetRepository) ListByIDs(ctx context.Context, ids []uuid.UUID, includeA
 	listQuery := `
 		SELECT
 			id, owner_user_id, row_version, name, species_id, sex, birth_date,
-			breed_source, system_breed_id, custom_breed_name,
-			colors,
-			coat_pattern_source, system_coat_pattern_id, custom_coat_pattern_name,
+			breed_id, custom_breed_name,
+			pattern_id, custom_pattern_name,
 			is_neutered, is_outdoor, profile_photo_file_id,
 			microchip_id, microchip_installed_at,
 			status, missing_since, archived_at,
@@ -149,15 +156,23 @@ func (r *PetRepository) ListByIDs(ctx context.Context, ids []uuid.UUID, includeA
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
+	colorsByPet, err := listColorsByPetIDs(ctx, r.db, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range items {
+		items[i].Colors = colorsByPet[items[i].ID]
+	}
 
 	return items, total, nil
 }
 
 func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion int, pet model.Pet) (*model.Pet, error) {
-	colorsRaw, err := json.Marshal(pet.Colors)
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	const query = `
 		UPDATE pets
@@ -165,37 +180,31 @@ func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion 
 		    species_id = $4,
 		    sex = $5,
 		    birth_date = $6,
-		    breed_source = $7,
-		    system_breed_id = $8,
-		    custom_breed_name = $9,
-		    colors = $10,
-		    coat_pattern_source = $11,
-		    system_coat_pattern_id = $12,
-		    custom_coat_pattern_name = $13,
-		    is_neutered = $14,
-		    is_outdoor = $15,
-		    profile_photo_file_id = $16,
-		    microchip_id = $17,
-		    microchip_installed_at = $18,
+		    breed_id = $7,
+		    custom_breed_name = $8,
+		    pattern_id = $9,
+		    custom_pattern_name = $10,
+		    is_neutered = $11,
+		    is_outdoor = $12,
+		    profile_photo_file_id = $13,
+		    microchip_id = $14,
+		    microchip_installed_at = $15,
 		    updated_at = NOW(),
 		    row_version = row_version + 1
 		WHERE id = $1
 		  AND row_version = $2
 	`
 
-	cmd, err := r.db.Exec(ctx, query,
+	cmd, err := tx.Exec(ctx, query,
 		petID, rowVersion,
 		pet.Name,
 		pet.SpeciesID,
 		pet.Sex,
 		pet.BirthDate,
-		pet.Breed.Source,
-		pet.Breed.SystemBreedID,
-		pet.Breed.CustomBreedName,
-		colorsRaw,
-		pet.CoatPattern.Source,
-		pet.CoatPattern.SystemCoatPatternID,
-		pet.CoatPattern.CustomCoatPatternName,
+		pet.BreedID,
+		pet.CustomBreedName,
+		pet.PatternID,
+		pet.CustomPatternName,
 		pet.IsNeutered,
 		pet.IsOutdoor,
 		pet.ProfilePhotoFileID,
@@ -218,6 +227,13 @@ func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion 
 			return nil, repo.ErrNotFound
 		}
 		return nil, repo.ErrConflict
+	}
+
+	if err := syncPetColors(ctx, tx, petID, pet.Colors); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 
 	return r.GetByID(ctx, petID)
@@ -323,16 +339,12 @@ type scanner interface {
 }
 
 func scanPet(s scanner) (*model.Pet, error) {
-	var (
-		pet       model.Pet
-		colorsRaw []byte
-	)
+	var pet model.Pet
 
 	err := s.Scan(
 		&pet.ID, &pet.OwnerUserID, &pet.RowVersion, &pet.Name, &pet.SpeciesID, &pet.Sex, &pet.BirthDate,
-		&pet.Breed.Source, &pet.Breed.SystemBreedID, &pet.Breed.CustomBreedName,
-		&colorsRaw,
-		&pet.CoatPattern.Source, &pet.CoatPattern.SystemCoatPatternID, &pet.CoatPattern.CustomCoatPatternName,
+		&pet.BreedID, &pet.CustomBreedName,
+		&pet.PatternID, &pet.CustomPatternName,
 		&pet.IsNeutered, &pet.IsOutdoor, &pet.ProfilePhotoFileID,
 		&pet.MicrochipID, &pet.MicrochipInstalledAt,
 		&pet.Status, &pet.MissingSince, &pet.ArchivedAt,
@@ -341,12 +353,7 @@ func scanPet(s scanner) (*model.Pet, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	if len(colorsRaw) == 0 {
-		pet.Colors = []model.Color{}
-	} else if err := json.Unmarshal(colorsRaw, &pet.Colors); err != nil {
-		return nil, err
-	}
+	pet.Colors = []model.Color{}
 
 	return &pet, nil
 }
@@ -367,6 +374,95 @@ func (r *PetRepository) existsByID(ctx context.Context, petID uuid.UUID) (bool, 
 		return false, err
 	}
 	return true, nil
+}
+
+type colorQueryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func listColorsByPetIDs(ctx context.Context, q colorQueryer, petIDs []uuid.UUID) (map[uuid.UUID][]model.Color, error) {
+	result := make(map[uuid.UUID][]model.Color, len(petIDs))
+	if len(petIDs) == 0 {
+		return result, nil
+	}
+
+	const query = `
+		SELECT id, pet_id, sort_order, preset_id, custom_name, custom_hex, created_at, updated_at
+		FROM pet_colors
+		WHERE pet_id = ANY($1::uuid[])
+		ORDER BY pet_id ASC, sort_order ASC, id ASC
+	`
+	rows, err := q.Query(ctx, query, petIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var color model.Color
+		if err := rows.Scan(
+			&color.ID,
+			&color.PetID,
+			&color.SortOrder,
+			&color.PresetID,
+			&color.CustomName,
+			&color.CustomHex,
+			&color.CreatedAt,
+			&color.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result[color.PetID] = append(result[color.PetID], color)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range petIDs {
+		if _, ok := result[petIDs[i]]; !ok {
+			result[petIDs[i]] = []model.Color{}
+		}
+	}
+
+	return result, nil
+}
+
+func syncPetColors(ctx context.Context, q colorQueryer, petID uuid.UUID, colors []model.Color) error {
+	if _, err := q.Exec(ctx, `DELETE FROM pet_colors WHERE pet_id = $1`, petID); err != nil {
+		return err
+	}
+	if len(colors) == 0 {
+		return nil
+	}
+
+	const query = `
+		INSERT INTO pet_colors (
+			id, pet_id, sort_order, preset_id, custom_name, custom_hex, created_at, updated_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, NOW(), NOW()
+		)
+	`
+	for i := range colors {
+		colorID := colors[i].ID
+		if colorID == uuid.Nil {
+			colorID = uuid.New()
+		}
+		if _, err := q.Exec(ctx, query,
+			colorID,
+			petID,
+			colors[i].SortOrder,
+			colors[i].PresetID,
+			colors[i].CustomName,
+			colors[i].CustomHex,
+		); err != nil {
+			if isUniqueViolation(err) {
+				return repo.ErrConflict
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 var _ repo.PetRepository = (*PetRepository)(nil)

@@ -45,9 +45,11 @@ type CreatePetParams struct {
 	SpeciesID            uuid.UUID
 	Sex                  string
 	BirthDate            *time.Time
-	Breed                model.Breed
+	BreedID              *uuid.UUID
+	CustomBreedName      *string
 	Colors               []model.Color
-	CoatPattern          model.CoatPattern
+	PatternID            *uuid.UUID
+	CustomPatternName    *string
 	IsNeutered           string
 	IsOutdoor            bool
 	ProfilePhotoFileID   *uuid.UUID
@@ -70,9 +72,11 @@ type UpdatePetParams struct {
 	SpeciesID            uuid.UUID
 	Sex                  string
 	BirthDate            *time.Time
-	Breed                model.Breed
+	BreedID              *uuid.UUID
+	CustomBreedName      *string
 	Colors               []model.Color
-	CoatPattern          model.CoatPattern
+	PatternID            *uuid.UUID
+	CustomPatternName    *string
 	IsNeutered           string
 	IsOutdoor            bool
 	ProfilePhotoFileID   *uuid.UUID
@@ -172,6 +176,18 @@ func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.P
 	if p.UserID == uuid.Nil || p.SpeciesID == uuid.Nil || strings.TrimSpace(p.Name) == "" {
 		return nil, ErrInvalidInput
 	}
+	colors, err := normalizeColors(p.Colors)
+	if err != nil {
+		return nil, err
+	}
+	customBreedName, err := normalizeExclusiveTextChoice(p.BreedID, p.CustomBreedName)
+	if err != nil {
+		return nil, err
+	}
+	customPatternName, err := normalizeExclusiveTextChoice(p.PatternID, p.CustomPatternName)
+	if err != nil {
+		return nil, err
+	}
 
 	pet := model.Pet{
 		ID:                   uuid.New(),
@@ -180,9 +196,11 @@ func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.P
 		SpeciesID:            p.SpeciesID,
 		Sex:                  p.Sex,
 		BirthDate:            p.BirthDate,
-		Breed:                p.Breed,
-		Colors:               p.Colors,
-		CoatPattern:          p.CoatPattern,
+		BreedID:              p.BreedID,
+		CustomBreedName:      customBreedName,
+		PatternID:            p.PatternID,
+		CustomPatternName:    customPatternName,
+		Colors:               colors,
 		IsNeutered:           p.IsNeutered,
 		IsOutdoor:            p.IsOutdoor,
 		ProfilePhotoFileID:   p.ProfilePhotoFileID,
@@ -371,6 +389,18 @@ func (s *PetService) UpdatePet(ctx context.Context, p UpdatePetParams) (*model.P
 	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.RowVersion <= 0 || p.SpeciesID == uuid.Nil || strings.TrimSpace(p.Name) == "" {
 		return nil, ErrInvalidInput
 	}
+	colors, err := normalizeColors(p.Colors)
+	if err != nil {
+		return nil, err
+	}
+	customBreedName, err := normalizeExclusiveTextChoice(p.BreedID, p.CustomBreedName)
+	if err != nil {
+		return nil, err
+	}
+	customPatternName, err := normalizeExclusiveTextChoice(p.PatternID, p.CustomPatternName)
+	if err != nil {
+		return nil, err
+	}
 
 	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetWrite)
 	if err != nil {
@@ -399,9 +429,11 @@ func (s *PetService) UpdatePet(ctx context.Context, p UpdatePetParams) (*model.P
 		SpeciesID:            p.SpeciesID,
 		Sex:                  p.Sex,
 		BirthDate:            p.BirthDate,
-		Breed:                p.Breed,
-		Colors:               p.Colors,
-		CoatPattern:          p.CoatPattern,
+		BreedID:              p.BreedID,
+		CustomBreedName:      customBreedName,
+		PatternID:            p.PatternID,
+		CustomPatternName:    customPatternName,
+		Colors:               colors,
 		IsNeutered:           p.IsNeutered,
 		IsOutdoor:            p.IsOutdoor,
 		ProfilePhotoFileID:   p.ProfilePhotoFileID,
@@ -615,4 +647,73 @@ func isAllowedPetPhotoMimeType(raw string) bool {
 	default:
 		return false
 	}
+}
+
+func normalizeExclusiveTextChoice(id *uuid.UUID, raw *string) (*string, error) {
+	if id != nil && *id == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	if raw == nil {
+		return nil, nil
+	}
+
+	value := strings.TrimSpace(*raw)
+	if value == "" {
+		raw = nil
+	} else {
+		raw = &value
+	}
+
+	if id != nil && raw != nil {
+		return nil, ErrInvalidInput
+	}
+
+	return raw, nil
+}
+
+func normalizeColors(colors []model.Color) ([]model.Color, error) {
+	if len(colors) == 0 {
+		return []model.Color{}, nil
+	}
+
+	out := make([]model.Color, 0, len(colors))
+	for i := range colors {
+		item := colors[i]
+		if item.PresetID != nil && *item.PresetID == uuid.Nil {
+			return nil, ErrInvalidInput
+		}
+
+		if item.CustomName != nil {
+			value := strings.TrimSpace(*item.CustomName)
+			if value == "" {
+				item.CustomName = nil
+			} else {
+				item.CustomName = &value
+			}
+		}
+		if item.CustomHex != nil {
+			value := strings.TrimSpace(*item.CustomHex)
+			if value == "" {
+				item.CustomHex = nil
+			} else {
+				item.CustomHex = &value
+			}
+		}
+
+		switch {
+		case item.PresetID != nil && item.CustomName == nil && item.CustomHex == nil:
+		case item.PresetID == nil && item.CustomName != nil && item.CustomHex != nil:
+		default:
+			return nil, ErrInvalidInput
+		}
+
+		out = append(out, model.Color{
+			PresetID:   item.PresetID,
+			CustomName: item.CustomName,
+			CustomHex:  item.CustomHex,
+			SortOrder:  item.SortOrder,
+		})
+	}
+
+	return out, nil
 }

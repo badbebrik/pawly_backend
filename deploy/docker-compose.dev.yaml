@@ -84,23 +84,6 @@ services:
       timeout: 3s
       retries: 20
 
-  catalog_postgres:
-    image: postgres:16
-    container_name: catalog_postgres
-    environment:
-      POSTGRES_USER: catalog_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: catalog_db
-    ports:
-      - "5436:5432"
-    volumes:
-      - catalog_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U catalog_user -d catalog_db"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   health_postgres:
     image: postgres:16
     container_name: health_postgres
@@ -289,28 +272,6 @@ services:
       timeout: 3s
       retries: 20
 
-  catalog:
-    build:
-      context: ../services/catalog
-    container_name: pawly_catalog
-    restart: unless-stopped
-    environment:
-      APP_PORT: "8082"
-      POSTGRES_USER: catalog_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: catalog_db
-      POSTGRES_HOST: catalog_postgres
-      POSTGRES_PORT: "5432"
-      ADMIN_TOKEN: superadmin
-    depends_on:
-      catalog_postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:8082/health >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 20
-
   notification:
     build:
       context: ../services/notification
@@ -452,8 +413,6 @@ services:
         condition: service_healthy
       acl:
         condition: service_healthy
-      catalog:
-        condition: service_healthy
       pet:
         condition: service_healthy
       health:
@@ -467,7 +426,6 @@ volumes:
   acl_postgres_data:
   profile_postgres_data:
   pet_postgres_data:
-  catalog_postgres_data:
   health_postgres_data:
   chat_postgres_data:
   redis_data:

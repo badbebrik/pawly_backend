@@ -40,17 +40,13 @@ services:
           - ~/v1/pets/.+/acl
         strip_path: false
 
-  - name: catalog-service
-    url: http://catalog:8082
-    routes:
-      - name: catalog-routes
-        paths:
-          - /catalog
-        strip_path: false
-
   - name: pet-service
     url: http://pet:8085
     routes:
+      - name: pet-public-routes
+        paths:
+          - /v1/pet-dictionaries
+        strip_path: false
       - name: pet-routes
         paths:
           - /v1/pets

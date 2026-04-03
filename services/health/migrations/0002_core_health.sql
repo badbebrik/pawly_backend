@@ -26,16 +26,20 @@ WHERE deleted_at IS NULL;
 CREATE INDEX idx_vet_visits_pet_scheduled_active ON vet_visits (pet_id, scheduled_at DESC, id DESC)
 WHERE deleted_at IS NULL;
 
-CREATE TABLE vet_visit_log_refs (
+CREATE TABLE entity_relations (
     id UUID PRIMARY KEY,
-    vet_visit_id UUID NOT NULL REFERENCES vet_visits(id) ON DELETE CASCADE,
-    log_id UUID NOT NULL REFERENCES logs(id) ON DELETE CASCADE,
-    added_by_user_id UUID NOT NULL,
-    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (vet_visit_id, log_id)
+    pet_id UUID NOT NULL,
+    left_entity_type TEXT NOT NULL CHECK (left_entity_type IN ('LOG', 'VACCINATION', 'PROCEDURE', 'MEDICAL_RECORD')),
+    left_entity_id UUID NOT NULL,
+    right_entity_type TEXT NOT NULL CHECK (right_entity_type IN ('VET_VISIT', 'PROCEDURE', 'VACCINATION', 'MEDICAL_RECORD')),
+    right_entity_id UUID NOT NULL,
+    created_by_user_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (left_entity_type, left_entity_id, right_entity_type, right_entity_id)
 );
 
-CREATE INDEX idx_vet_visit_log_refs_log_id ON vet_visit_log_refs (log_id);
+CREATE INDEX idx_entity_relations_left ON entity_relations (pet_id, left_entity_type, left_entity_id);
+CREATE INDEX idx_entity_relations_right ON entity_relations (pet_id, right_entity_type, right_entity_id);
 
 CREATE TABLE vaccinations (
     id UUID PRIMARY KEY,
@@ -46,11 +50,9 @@ CREATE TABLE vaccinations (
     scheduled_at TIMESTAMPTZ NULL,
     administered_at TIMESTAMPTZ NULL,
     next_due_at TIMESTAMPTZ NULL,
-    vet_visit_id UUID NULL REFERENCES vet_visits(id),
     clinic_name TEXT NULL,
     vet_name TEXT NULL,
     notes TEXT NULL,
-    source_vaccination_id UUID NULL REFERENCES vaccinations(id),
     row_version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by_user_id UUID NOT NULL,
@@ -66,8 +68,6 @@ CREATE INDEX idx_vaccinations_pet_status_active ON vaccinations (pet_id, status,
 WHERE deleted_at IS NULL;
 CREATE INDEX idx_vaccinations_pet_scheduled_active ON vaccinations (pet_id, scheduled_at DESC, id DESC)
 WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX uq_vaccinations_source_planned_active ON vaccinations (source_vaccination_id)
-WHERE source_vaccination_id IS NOT NULL AND deleted_at IS NULL AND status = 'PLANNED';
 
 CREATE TABLE procedures (
     id UUID PRIMARY KEY,
@@ -81,9 +81,7 @@ CREATE TABLE procedures (
     scheduled_at TIMESTAMPTZ NULL,
     performed_at TIMESTAMPTZ NULL,
     next_due_at TIMESTAMPTZ NULL,
-    vet_visit_id UUID NULL REFERENCES vet_visits(id),
     notes TEXT NULL,
-    source_procedure_id UUID NULL REFERENCES procedures(id),
     row_version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by_user_id UUID NOT NULL,
@@ -99,8 +97,6 @@ CREATE INDEX idx_procedures_pet_status_active ON procedures (pet_id, status, id 
 WHERE deleted_at IS NULL;
 CREATE INDEX idx_procedures_pet_scheduled_active ON procedures (pet_id, scheduled_at DESC, id DESC)
 WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX uq_procedures_source_planned_active ON procedures (source_procedure_id)
-WHERE source_procedure_id IS NOT NULL AND deleted_at IS NULL AND status = 'PLANNED';
 
 CREATE TABLE medical_records (
     id UUID PRIMARY KEY,
@@ -127,26 +123,9 @@ WHERE deleted_at IS NULL;
 CREATE INDEX idx_medical_records_pet_started_active ON medical_records (pet_id, started_at DESC, id DESC)
 WHERE deleted_at IS NULL;
 
-CREATE TABLE health_attachment_refs (
-    id UUID PRIMARY KEY,
-    pet_id UUID NOT NULL,
-    entity_type TEXT NOT NULL CHECK (entity_type IN ('VET_VISIT', 'VACCINATION', 'PROCEDURE', 'MEDICAL_RECORD')),
-    entity_id UUID NOT NULL,
-    file_id UUID NOT NULL,
-    file_name TEXT NULL,
-    file_type TEXT NOT NULL CHECK (file_type IN ('image', 'pdf', 'other')),
-    added_by_user_id UUID NOT NULL,
-    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (entity_type, entity_id, file_id)
-);
-
-CREATE INDEX idx_health_attachment_refs_entity ON health_attachment_refs (entity_type, entity_id, added_at DESC);
-CREATE INDEX idx_health_attachment_refs_file ON health_attachment_refs (file_id);
-
 -- +goose Down
-DROP TABLE IF EXISTS health_attachment_refs;
 DROP TABLE IF EXISTS medical_records;
 DROP TABLE IF EXISTS procedures;
 DROP TABLE IF EXISTS vaccinations;
-DROP TABLE IF EXISTS vet_visit_log_refs;
+DROP TABLE IF EXISTS entity_relations;
 DROP TABLE IF EXISTS vet_visits;

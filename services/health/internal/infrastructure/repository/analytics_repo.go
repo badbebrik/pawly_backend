@@ -29,6 +29,14 @@ func (r *LogRepository) ListAnalyticsMetrics(ctx context.Context, in repo.ListAn
 		args = append(args, *in.DateFrom)
 		pointWhere = append(pointWhere, fmt.Sprintf("l.occurred_at >= $%d", len(args)))
 	}
+	if in.DateTo != nil {
+		args = append(args, *in.DateTo)
+		pointWhere = append(pointWhere, fmt.Sprintf("l.occurred_at <= $%d", len(args)))
+	}
+	if len(in.TypeIDs) > 0 {
+		args = append(args, in.TypeIDs)
+		pointWhere = append(pointWhere, fmt.Sprintf("l.log_type_id = ANY($%d::uuid[])", len(args)))
+	}
 
 	metricWhere := []string{"(m.scope = 'SYSTEM' OR m.pet_id = $1)", "m.deleted_at IS NULL"}
 	if strings.TrimSpace(in.Q) != "" {
@@ -71,7 +79,7 @@ func (r *LogRepository) ListAnalyticsMetrics(ctx context.Context, in repo.ListAn
 			m.name,
 			m.scope,
 			m.input_kind,
-			m.unit_code,
+			m.unit,
 			a.points_count,
 			a.first_occurred_at,
 			a.last_occurred_at,
@@ -99,7 +107,7 @@ func (r *LogRepository) ListAnalyticsMetrics(ctx context.Context, in repo.ListAn
 			&item.MetricName,
 			&item.MetricScope,
 			&item.InputKind,
-			&item.UnitCode,
+			&item.Unit,
 			&item.PointsCount,
 			&item.FirstOccurredAt,
 			&item.LastOccurredAt,
@@ -135,14 +143,14 @@ func (r *LogRepository) ListAnalyticsMetrics(ctx context.Context, in repo.ListAn
 func (r *LogRepository) loadUsedLogTypes(ctx context.Context, petID uuid.UUID, metricIDs []uuid.UUID) (map[uuid.UUID][]model.AnalyticsUsedLogType, error) {
 	const query = `
 		SELECT DISTINCT
-			(req->>'metric_id')::uuid AS metric_id,
+			ltmr.metric_id,
 			lt.id,
 			lt.name
-		FROM log_types lt
-		CROSS JOIN LATERAL jsonb_array_elements(lt.metric_requirements) req
+		FROM log_type_metric_requirements ltmr
+		JOIN log_types lt ON lt.id = ltmr.log_type_id
 		WHERE lt.deleted_at IS NULL
 		  AND (lt.scope = 'SYSTEM' OR lt.pet_id = $1)
-		  AND (req->>'metric_id')::uuid = ANY($2::uuid[])
+		  AND ltmr.metric_id = ANY($2::uuid[])
 		ORDER BY lt.name ASC
 	`
 	rows, err := r.db.Query(ctx, query, petID, metricIDs)

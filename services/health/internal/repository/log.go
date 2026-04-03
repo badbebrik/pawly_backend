@@ -44,8 +44,6 @@ type CreateLogInput struct {
 	LogTypeID         *uuid.UUID
 	Description       *string
 	Source            string
-	SourceEntityType  *string
-	SourceEntityID    *uuid.UUID
 	CreatedByUserID   uuid.UUID
 	UpdatedByUserID   uuid.UUID
 	MetricValues      []LogMetricValueInput
@@ -68,6 +66,23 @@ type DeleteLogInput struct {
 	ID              uuid.UUID
 	PetID           uuid.UUID
 	RowVersion      int
+	DeletedByUserID uuid.UUID
+}
+
+type UpsertHealthEntityLogInput struct {
+	PetID           uuid.UUID
+	EntityType      string
+	EntityID        uuid.UUID
+	OccurredAt      time.Time
+	Description     *string
+	CreatedByUserID uuid.UUID
+	UpdatedByUserID uuid.UUID
+}
+
+type DeleteHealthEntityLogInput struct {
+	PetID           uuid.UUID
+	EntityType      string
+	EntityID        uuid.UUID
 	DeletedByUserID uuid.UUID
 }
 
@@ -123,7 +138,7 @@ type CreateMetricInput struct {
 	PetID           uuid.UUID
 	Name            string
 	InputKind       string
-	UnitCode        *string
+	Unit            *string
 	MinValue        *float64
 	MaxValue        *float64
 	CreatedByUserID uuid.UUID
@@ -136,7 +151,7 @@ type UpdateMetricInput struct {
 	RowVersion      int
 	Name            string
 	InputKind       string
-	UnitCode        *string
+	Unit            *string
 	MinValue        *float64
 	MaxValue        *float64
 	UpdatedByUserID uuid.UUID
@@ -153,7 +168,9 @@ type ListAnalyticsMetricsInput struct {
 	PetID    uuid.UUID
 	Q        string
 	DateFrom *time.Time
+	DateTo   *time.Time
 	Source   *string
+	TypeIDs  []uuid.UUID
 	Limit    int
 }
 
@@ -174,6 +191,8 @@ type LogRepository interface {
 	CreateLog(ctx context.Context, in CreateLogInput) (*model.Log, error)
 	UpdateLog(ctx context.Context, in UpdateLogInput) (*model.Log, error)
 	SoftDeleteLog(ctx context.Context, in DeleteLogInput) error
+	UpsertHealthEntityLog(ctx context.Context, in UpsertHealthEntityLogInput) error
+	DeleteHealthEntityLog(ctx context.Context, in DeleteHealthEntityLogInput) error
 	GetLogTypeByID(ctx context.Context, petID uuid.UUID, logTypeID uuid.UUID) (*model.LogType, error)
 	GetMetricsByIDs(ctx context.Context, petID uuid.UUID, metricIDs []uuid.UUID) (map[uuid.UUID]model.Metric, error)
 	ListLogTypes(ctx context.Context, in ListLogTypesInput) ([]model.LogType, error)

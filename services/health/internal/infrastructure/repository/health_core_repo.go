@@ -133,10 +133,17 @@ func (r *LogRepository) ListVetVisits(ctx context.Context, in repo.ListVetVisits
 			%s AS cursor_sort_at
 		FROM vet_visits vv
 		LEFT JOIN LATERAL (
-			SELECT COUNT(1)::int AS cnt FROM vet_visit_log_refs ref WHERE ref.vet_visit_id = vv.id
+			SELECT COUNT(1)::int AS cnt
+			FROM entity_relations rel
+			WHERE rel.pet_id = vv.pet_id
+			  AND rel.left_entity_type = 'LOG'
+			  AND rel.right_entity_type = 'VET_VISIT'
+			  AND rel.right_entity_id = vv.id
 		) rl ON TRUE
 		LEFT JOIN LATERAL (
-			SELECT COUNT(1)::int AS cnt FROM health_attachment_refs har WHERE har.entity_type = 'VET_VISIT' AND har.entity_id = vv.id
+			SELECT COUNT(1)::int AS cnt
+			FROM attachment_refs ar
+			WHERE ar.entity_type = 'VET_VISIT' AND ar.entity_id = vv.id
 		) att ON TRUE
 		WHERE %s
 		ORDER BY %s %s, vv.id %s
@@ -300,10 +307,15 @@ func (r *LogRepository) DeleteVetVisit(ctx context.Context, in repo.DeleteVetVis
 		}
 		return repo.ErrConflict
 	}
-	if _, err := tx.Exec(ctx, `UPDATE vaccinations SET vet_visit_id = NULL, updated_at = NOW(), updated_by_user_id = $2, row_version = row_version + 1 WHERE pet_id = $1 AND vet_visit_id = $3 AND deleted_at IS NULL`, in.PetID, in.DeletedBy, in.ID); err != nil {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM entity_relations
+		WHERE pet_id = $1
+		  AND right_entity_type = 'VET_VISIT'
+		  AND right_entity_id = $2
+	`, in.PetID, in.ID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE procedures SET vet_visit_id = NULL, updated_at = NOW(), updated_by_user_id = $2, row_version = row_version + 1 WHERE pet_id = $1 AND vet_visit_id = $3 AND deleted_at IS NULL`, in.PetID, in.DeletedBy, in.ID); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'VET_VISIT' AND entity_id = $1`, in.ID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -325,8 +337,12 @@ func (r *LogRepository) LinkVetVisitLog(ctx context.Context, petID, visitID, log
 	} else if !exists {
 		return nil, repo.ErrNotFound
 	}
-	const query = `INSERT INTO vet_visit_log_refs (id, vet_visit_id, log_id, added_by_user_id, added_at) VALUES ($1,$2,$3,$4,NOW())`
-	if _, err := tx.Exec(ctx, query, uuid.New(), visitID, logID, addedBy); err != nil {
+	const query = `
+		INSERT INTO entity_relations (
+			id, pet_id, left_entity_type, left_entity_id, right_entity_type, right_entity_id, created_by_user_id, created_at
+		) VALUES ($1,$2,'LOG',$3,'VET_VISIT',$4,$5,NOW())
+	`
+	if _, err := tx.Exec(ctx, query, uuid.New(), petID, logID, visitID, addedBy); err != nil {
 		if isUniqueViolation(err) {
 			return nil, repo.ErrConflict
 		}
@@ -344,15 +360,14 @@ func (r *LogRepository) LinkVetVisitLog(ctx context.Context, petID, visitID, log
 
 func (r *LogRepository) UnlinkVetVisitLog(ctx context.Context, petID, visitID, logID uuid.UUID) error {
 	const query = `
-		DELETE FROM vet_visit_log_refs ref
-		USING vet_visits vv
-		WHERE ref.vet_visit_id = vv.id
-		  AND vv.id = $1
-		  AND vv.pet_id = $2
-		  AND vv.deleted_at IS NULL
-		  AND ref.log_id = $3
+		DELETE FROM entity_relations rel
+		WHERE rel.pet_id = $1
+		  AND rel.left_entity_type = 'LOG'
+		  AND rel.left_entity_id = $2
+		  AND rel.right_entity_type = 'VET_VISIT'
+		  AND rel.right_entity_id = $3
 	`
-	cmd, err := r.db.Exec(ctx, query, visitID, petID, logID)
+	cmd, err := r.db.Exec(ctx, query, petID, logID, visitID)
 	if err != nil {
 		return err
 	}
@@ -364,9 +379,19 @@ func (r *LogRepository) UnlinkVetVisitLog(ctx context.Context, petID, visitID, l
 
 func (r *LogRepository) GetVaccination(ctx context.Context, petID, vaccinationID uuid.UUID) (*model.Vaccination, error) {
 	const query = `
-		SELECT id, pet_id, status, vaccine_name, catalog_medication_id, scheduled_at, administered_at, next_due_at, vet_visit_id,
+		SELECT id, pet_id, status, vaccine_name, catalog_medication_id, scheduled_at, administered_at, next_due_at,
+		       (
+				SELECT rel.right_entity_id
+				FROM entity_relations rel
+				JOIN vet_visits vv ON vv.id = rel.right_entity_id AND vv.pet_id = rel.pet_id AND vv.deleted_at IS NULL
+				WHERE rel.pet_id = v.pet_id
+				  AND rel.left_entity_type = 'VACCINATION'
+				  AND rel.left_entity_id = v.id
+				  AND rel.right_entity_type = 'VET_VISIT'
+				LIMIT 1
+		       ) AS vet_visit_id,
 		       clinic_name, vet_name, notes, row_version, created_at, created_by_user_id, updated_at, updated_by_user_id
-		FROM vaccinations
+		FROM vaccinations v
 		WHERE id = $1 AND pet_id = $2 AND deleted_at IS NULL
 	`
 	var item model.Vaccination
@@ -428,13 +453,23 @@ func (r *LogRepository) ListVaccinations(ctx context.Context, in repo.ListVaccin
 	query := fmt.Sprintf(`
 		SELECT
 			v.id, v.pet_id, v.status, v.vaccine_name, v.catalog_medication_id, v.scheduled_at, v.administered_at, v.next_due_at,
-			v.vet_visit_id, v.clinic_name, v.vet_name, v.notes,
+			rv.vet_visit_id, v.clinic_name, v.vet_name, v.notes,
 			COALESCE(att.cnt, 0) AS attachments_count,
 			v.row_version, v.created_at, v.created_by_user_id, v.updated_at, v.updated_by_user_id,
 			%s AS cursor_sort_at
 		FROM vaccinations v
 		LEFT JOIN LATERAL (
-			SELECT COUNT(1)::int AS cnt FROM health_attachment_refs har WHERE har.entity_type = 'VACCINATION' AND har.entity_id = v.id
+			SELECT rel.right_entity_id AS vet_visit_id
+			FROM entity_relations rel
+			JOIN vet_visits vv ON vv.id = rel.right_entity_id AND vv.pet_id = rel.pet_id AND vv.deleted_at IS NULL
+			WHERE rel.pet_id = v.pet_id
+			  AND rel.left_entity_type = 'VACCINATION'
+			  AND rel.left_entity_id = v.id
+			  AND rel.right_entity_type = 'VET_VISIT'
+			LIMIT 1
+		) rv ON TRUE
+		LEFT JOIN LATERAL (
+			SELECT COUNT(1)::int AS cnt FROM attachment_refs ar WHERE ar.entity_type = 'VACCINATION' AND ar.entity_id = v.id
 		) att ON TRUE
 		WHERE %s
 		ORDER BY %s %s, v.id %s
@@ -480,14 +515,13 @@ func (r *LogRepository) CreateVaccination(ctx context.Context, in repo.CreateVac
 	defer func() { _ = tx.Rollback(ctx) }()
 	const query = `
 		INSERT INTO vaccinations (
-			id, pet_id, status, vaccine_name, catalog_medication_id, scheduled_at, administered_at, next_due_at, vet_visit_id,
-			clinic_name, vet_name, notes, source_vaccination_id,
-			row_version, created_at, created_by_user_id, updated_at, updated_by_user_id
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,1,NOW(),$14,NOW(),$15)
+			id, pet_id, status, vaccine_name, catalog_medication_id, scheduled_at, administered_at, next_due_at,
+			clinic_name, vet_name, notes, row_version, created_at, created_by_user_id, updated_at, updated_by_user_id
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,NOW(),$12,NOW(),$13)
 	`
 	_, err = tx.Exec(ctx, query,
-		in.ID, in.PetID, in.Status, in.VaccineName, in.CatalogMedicationID, in.ScheduledAt, in.AdministeredAt, in.NextDueAt, in.VetVisitID,
-		in.ClinicName, in.VetName, in.Notes, in.SourceVaccinationID, in.CreatedBy, in.UpdatedBy,
+		in.ID, in.PetID, in.Status, in.VaccineName, in.CatalogMedicationID, in.ScheduledAt, in.AdministeredAt, in.NextDueAt,
+		in.ClinicName, in.VetName, in.Notes, in.CreatedBy, in.UpdatedBy,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -497,6 +531,9 @@ func (r *LogRepository) CreateVaccination(ctx context.Context, in repo.CreateVac
 	}
 	sync, err := r.replaceHealthAttachmentsTx(ctx, tx, in.PetID, "VACCINATION", in.ID, in.CreatedBy, in.Attachments)
 	if err != nil {
+		return nil, repo.AttachmentSync{}, err
+	}
+	if err := r.replaceVisitRelationTx(ctx, tx, in.PetID, "VACCINATION", in.ID, in.VetVisitID, in.CreatedBy); err != nil {
 		return nil, repo.AttachmentSync{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -520,18 +557,17 @@ func (r *LogRepository) UpdateVaccination(ctx context.Context, in repo.UpdateVac
 		    scheduled_at = $7,
 		    administered_at = $8,
 		    next_due_at = $9,
-		    vet_visit_id = $10,
-		    clinic_name = $11,
-		    vet_name = $12,
-		    notes = $13,
+		    clinic_name = $10,
+		    vet_name = $11,
+		    notes = $12,
 		    updated_at = NOW(),
-		    updated_by_user_id = $14,
+		    updated_by_user_id = $13,
 		    row_version = row_version + 1
 		WHERE id = $1 AND pet_id = $2 AND row_version = $3 AND deleted_at IS NULL
 	`
 	cmd, err := tx.Exec(ctx, query,
 		in.ID, in.PetID, in.RowVersion, in.Status, in.VaccineName, in.CatalogMedicationID, in.ScheduledAt, in.AdministeredAt,
-		in.NextDueAt, in.VetVisitID, in.ClinicName, in.VetName, in.Notes, in.UpdatedBy,
+		in.NextDueAt, in.ClinicName, in.VetName, in.Notes, in.UpdatedBy,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -551,6 +587,9 @@ func (r *LogRepository) UpdateVaccination(ctx context.Context, in repo.UpdateVac
 	if err != nil {
 		return nil, repo.AttachmentSync{}, err
 	}
+	if err := r.replaceVisitRelationTx(ctx, tx, in.PetID, "VACCINATION", in.ID, in.VetVisitID, in.UpdatedBy); err != nil {
+		return nil, repo.AttachmentSync{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, repo.AttachmentSync{}, err
 	}
@@ -559,24 +598,25 @@ func (r *LogRepository) UpdateVaccination(ctx context.Context, in repo.UpdateVac
 }
 
 func (r *LogRepository) DeleteVaccination(ctx context.Context, in repo.DeleteVaccinationInput) error {
-	return r.softDeleteHealthEntity(ctx, "vaccinations", in.ID, in.PetID, in.RowVersion, in.DeletedBy)
-}
-
-func (r *LogRepository) HasPlannedVaccinationFromSource(ctx context.Context, petID, sourceVaccinationID uuid.UUID) (bool, error) {
-	const query = `SELECT 1 FROM vaccinations WHERE pet_id = $1 AND source_vaccination_id = $2 AND status = 'PLANNED' AND deleted_at IS NULL`
-	var marker int
-	err := r.db.QueryRow(ctx, query, petID, sourceVaccinationID).Scan(&marker)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
+	return r.softDeleteHealthEntity(ctx, "vaccinations", "VACCINATION", in.ID, in.PetID, in.RowVersion, in.DeletedBy)
 }
 
 func (r *LogRepository) GetProcedure(ctx context.Context, petID, procedureID uuid.UUID) (*model.Procedure, error) {
 	const query = `
 		SELECT id, pet_id, status, procedure_type, title, description, catalog_medication_id, product_name, scheduled_at,
-		       performed_at, next_due_at, vet_visit_id, notes, row_version, created_at, created_by_user_id, updated_at, updated_by_user_id
-		FROM procedures
+		       performed_at, next_due_at,
+		       (
+				SELECT rel.right_entity_id
+				FROM entity_relations rel
+				JOIN vet_visits vv ON vv.id = rel.right_entity_id AND vv.pet_id = rel.pet_id AND vv.deleted_at IS NULL
+				WHERE rel.pet_id = p.pet_id
+				  AND rel.left_entity_type = 'PROCEDURE'
+				  AND rel.left_entity_id = p.id
+				  AND rel.right_entity_type = 'VET_VISIT'
+				LIMIT 1
+		       ) AS vet_visit_id,
+		       notes, row_version, created_at, created_by_user_id, updated_at, updated_by_user_id
+		FROM procedures p
 		WHERE id = $1 AND pet_id = $2 AND deleted_at IS NULL
 	`
 	var item model.Procedure
@@ -642,13 +682,23 @@ func (r *LogRepository) ListProcedures(ctx context.Context, in repo.ListProcedur
 	query := fmt.Sprintf(`
 		SELECT
 			p.id, p.pet_id, p.status, p.procedure_type, p.title, p.description, p.catalog_medication_id, p.product_name,
-			p.scheduled_at, p.performed_at, p.next_due_at, p.vet_visit_id, p.notes,
+			p.scheduled_at, p.performed_at, p.next_due_at, rv.vet_visit_id, p.notes,
 			COALESCE(att.cnt, 0) AS attachments_count,
 			p.row_version, p.created_at, p.created_by_user_id, p.updated_at, p.updated_by_user_id,
 			%s AS cursor_sort_at
 		FROM procedures p
 		LEFT JOIN LATERAL (
-			SELECT COUNT(1)::int AS cnt FROM health_attachment_refs har WHERE har.entity_type = 'PROCEDURE' AND har.entity_id = p.id
+			SELECT rel.right_entity_id AS vet_visit_id
+			FROM entity_relations rel
+			JOIN vet_visits vv ON vv.id = rel.right_entity_id AND vv.pet_id = rel.pet_id AND vv.deleted_at IS NULL
+			WHERE rel.pet_id = p.pet_id
+			  AND rel.left_entity_type = 'PROCEDURE'
+			  AND rel.left_entity_id = p.id
+			  AND rel.right_entity_type = 'VET_VISIT'
+			LIMIT 1
+		) rv ON TRUE
+		LEFT JOIN LATERAL (
+			SELECT COUNT(1)::int AS cnt FROM attachment_refs ar WHERE ar.entity_type = 'PROCEDURE' AND ar.entity_id = p.id
 		) att ON TRUE
 		WHERE %s
 		ORDER BY %s %s, p.id %s
@@ -696,13 +746,13 @@ func (r *LogRepository) CreateProcedure(ctx context.Context, in repo.CreateProce
 	const query = `
 		INSERT INTO procedures (
 			id, pet_id, status, procedure_type, title, description, catalog_medication_id, product_name,
-			scheduled_at, performed_at, next_due_at, vet_visit_id, notes, source_procedure_id,
+			scheduled_at, performed_at, next_due_at, notes,
 			row_version, created_at, created_by_user_id, updated_at, updated_by_user_id
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,1,NOW(),$15,NOW(),$16)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,NOW(),$13,NOW(),$14)
 	`
 	_, err = tx.Exec(ctx, query,
 		in.ID, in.PetID, in.Status, in.ProcedureType, in.Title, in.Description, in.CatalogMedicationID, in.ProductName,
-		in.ScheduledAt, in.PerformedAt, in.NextDueAt, in.VetVisitID, in.Notes, in.SourceProcedureID, in.CreatedBy, in.UpdatedBy,
+		in.ScheduledAt, in.PerformedAt, in.NextDueAt, in.Notes, in.CreatedBy, in.UpdatedBy,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -712,6 +762,9 @@ func (r *LogRepository) CreateProcedure(ctx context.Context, in repo.CreateProce
 	}
 	sync, err := r.replaceHealthAttachmentsTx(ctx, tx, in.PetID, "PROCEDURE", in.ID, in.CreatedBy, in.Attachments)
 	if err != nil {
+		return nil, repo.AttachmentSync{}, err
+	}
+	if err := r.replaceVisitRelationTx(ctx, tx, in.PetID, "PROCEDURE", in.ID, in.VetVisitID, in.CreatedBy); err != nil {
 		return nil, repo.AttachmentSync{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -738,16 +791,15 @@ func (r *LogRepository) UpdateProcedure(ctx context.Context, in repo.UpdateProce
 		    scheduled_at = $10,
 		    performed_at = $11,
 		    next_due_at = $12,
-		    vet_visit_id = $13,
-		    notes = $14,
+		    notes = $13,
 		    updated_at = NOW(),
-		    updated_by_user_id = $15,
+		    updated_by_user_id = $14,
 		    row_version = row_version + 1
 		WHERE id = $1 AND pet_id = $2 AND row_version = $3 AND deleted_at IS NULL
 	`
 	cmd, err := tx.Exec(ctx, query,
 		in.ID, in.PetID, in.RowVersion, in.Status, in.ProcedureType, in.Title, in.Description, in.CatalogMedicationID,
-		in.ProductName, in.ScheduledAt, in.PerformedAt, in.NextDueAt, in.VetVisitID, in.Notes, in.UpdatedBy,
+		in.ProductName, in.ScheduledAt, in.PerformedAt, in.NextDueAt, in.Notes, in.UpdatedBy,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -767,6 +819,9 @@ func (r *LogRepository) UpdateProcedure(ctx context.Context, in repo.UpdateProce
 	if err != nil {
 		return nil, repo.AttachmentSync{}, err
 	}
+	if err := r.replaceVisitRelationTx(ctx, tx, in.PetID, "PROCEDURE", in.ID, in.VetVisitID, in.UpdatedBy); err != nil {
+		return nil, repo.AttachmentSync{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, repo.AttachmentSync{}, err
 	}
@@ -775,17 +830,7 @@ func (r *LogRepository) UpdateProcedure(ctx context.Context, in repo.UpdateProce
 }
 
 func (r *LogRepository) DeleteProcedure(ctx context.Context, in repo.DeleteProcedureInput) error {
-	return r.softDeleteHealthEntity(ctx, "procedures", in.ID, in.PetID, in.RowVersion, in.DeletedBy)
-}
-
-func (r *LogRepository) HasPlannedProcedureFromSource(ctx context.Context, petID, sourceProcedureID uuid.UUID) (bool, error) {
-	const query = `SELECT 1 FROM procedures WHERE pet_id = $1 AND source_procedure_id = $2 AND status = 'PLANNED' AND deleted_at IS NULL`
-	var marker int
-	err := r.db.QueryRow(ctx, query, petID, sourceProcedureID).Scan(&marker)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
+	return r.softDeleteHealthEntity(ctx, "procedures", "PROCEDURE", in.ID, in.PetID, in.RowVersion, in.DeletedBy)
 }
 
 func (r *LogRepository) GetMedicalRecord(ctx context.Context, petID, recordID uuid.UUID) (*model.MedicalRecord, error) {
@@ -854,7 +899,7 @@ func (r *LogRepository) ListMedicalRecords(ctx context.Context, in repo.ListMedi
 			%s AS cursor_sort_at
 		FROM medical_records mr
 		LEFT JOIN LATERAL (
-			SELECT COUNT(1)::int AS cnt FROM health_attachment_refs har WHERE har.entity_type = 'MEDICAL_RECORD' AND har.entity_id = mr.id
+			SELECT COUNT(1)::int AS cnt FROM attachment_refs ar WHERE ar.entity_type = 'MEDICAL_RECORD' AND ar.entity_id = mr.id
 		) att ON TRUE
 		WHERE %s
 		ORDER BY %s %s, mr.id %s
@@ -968,7 +1013,7 @@ func (r *LogRepository) UpdateMedicalRecord(ctx context.Context, in repo.UpdateM
 }
 
 func (r *LogRepository) DeleteMedicalRecord(ctx context.Context, in repo.DeleteMedicalRecordInput) error {
-	return r.softDeleteHealthEntity(ctx, "medical_records", in.ID, in.PetID, in.RowVersion, in.DeletedBy)
+	return r.softDeleteHealthEntity(ctx, "medical_records", "MEDICAL_RECORD", in.ID, in.PetID, in.RowVersion, in.DeletedBy)
 }
 
 func (r *LogRepository) ListCalendarDayItems(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.CalendarDayItem, error) {
@@ -1038,10 +1083,15 @@ func (r *LogRepository) ListCalendarDayItems(ctx context.Context, petID uuid.UUI
 func (r *LogRepository) listVetVisitRelatedLogs(ctx context.Context, petID, visitID uuid.UUID) ([]model.RelatedLog, error) {
 	const query = `
 		SELECT l.id, l.occurred_at, lt.name, l.description, l.source
-		FROM vet_visit_log_refs ref
-		JOIN logs l ON l.id = ref.log_id
+		FROM entity_relations rel
+		JOIN logs l ON l.id = rel.left_entity_id
 		LEFT JOIN log_types lt ON lt.id = l.log_type_id
-		WHERE ref.vet_visit_id = $1 AND l.pet_id = $2 AND l.deleted_at IS NULL
+		WHERE rel.pet_id = $2
+		  AND rel.left_entity_type = 'LOG'
+		  AND rel.right_entity_type = 'VET_VISIT'
+		  AND rel.right_entity_id = $1
+		  AND l.pet_id = $2
+		  AND l.deleted_at IS NULL
 		ORDER BY l.occurred_at DESC, l.id DESC
 	`
 	rows, err := r.db.Query(ctx, query, visitID, petID)
@@ -1088,7 +1138,7 @@ func (r *LogRepository) getRelatedLog(ctx context.Context, petID, logID uuid.UUI
 func (r *LogRepository) listHealthAttachments(ctx context.Context, entityType string, entityID uuid.UUID) ([]model.HealthAttachment, error) {
 	const query = `
 		SELECT id, entity_type, entity_id, file_id, file_name, file_type, added_by_user_id, added_at
-		FROM health_attachment_refs
+		FROM attachment_refs
 		WHERE entity_type = $1 AND entity_id = $2
 		ORDER BY added_at ASC, id ASC
 	`
@@ -1112,7 +1162,7 @@ func (r *LogRepository) listHealthAttachments(ctx context.Context, entityType st
 }
 
 func (r *LogRepository) replaceHealthAttachmentsTx(ctx context.Context, tx pgx.Tx, petID uuid.UUID, entityType string, entityID uuid.UUID, addedBy uuid.UUID, attachments []repo.AttachmentInput) (repo.AttachmentSync, error) {
-	existingRows, err := tx.Query(ctx, `SELECT file_id FROM health_attachment_refs WHERE entity_type = $1 AND entity_id = $2`, entityType, entityID)
+	existingRows, err := tx.Query(ctx, `SELECT file_id FROM attachment_refs WHERE entity_type = $1 AND entity_id = $2`, entityType, entityID)
 	if err != nil {
 		return repo.AttachmentSync{}, err
 	}
@@ -1134,14 +1184,14 @@ func (r *LogRepository) replaceHealthAttachmentsTx(ctx context.Context, tx pgx.T
 		att := attachments[i]
 		desired[att.FileID] = att
 		if _, ok := existing[att.FileID]; ok {
-			_, err := tx.Exec(ctx, `UPDATE health_attachment_refs SET file_name = $4, file_type = $5 WHERE entity_type = $1 AND entity_id = $2 AND file_id = $3`, entityType, entityID, att.FileID, att.FileName, att.FileType)
+			_, err := tx.Exec(ctx, `UPDATE attachment_refs SET file_name = $4, file_type = $5 WHERE entity_type = $1 AND entity_id = $2 AND file_id = $3`, entityType, entityID, att.FileID, att.FileName, att.FileType)
 			if err != nil {
 				return repo.AttachmentSync{}, err
 			}
 			continue
 		}
 		_, err := tx.Exec(ctx, `
-			INSERT INTO health_attachment_refs (id, pet_id, entity_type, entity_id, file_id, file_name, file_type, added_by_user_id, added_at)
+			INSERT INTO attachment_refs (id, pet_id, entity_type, entity_id, file_id, file_name, file_type, added_by_user_id, added_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
 		`, uuid.New(), petID, entityType, entityID, att.FileID, att.FileName, att.FileType, addedBy)
 		if err != nil {
@@ -1156,7 +1206,7 @@ func (r *LogRepository) replaceHealthAttachmentsTx(ctx context.Context, tx pgx.T
 		if _, ok := desired[fileID]; ok {
 			continue
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM health_attachment_refs WHERE entity_type = $1 AND entity_id = $2 AND file_id = $3`, entityType, entityID, fileID); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = $1 AND entity_id = $2 AND file_id = $3`, entityType, entityID, fileID); err != nil {
 			return repo.AttachmentSync{}, err
 		}
 		sync.Remove = append(sync.Remove, fileID)
@@ -1164,7 +1214,38 @@ func (r *LogRepository) replaceHealthAttachmentsTx(ctx context.Context, tx pgx.T
 	return sync, nil
 }
 
-func (r *LogRepository) softDeleteHealthEntity(ctx context.Context, table string, id, petID uuid.UUID, rowVersion int, deletedBy uuid.UUID) error {
+func (r *LogRepository) replaceVisitRelationTx(ctx context.Context, tx pgx.Tx, petID uuid.UUID, entityType string, entityID uuid.UUID, visitID *uuid.UUID, addedBy uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM entity_relations
+		WHERE pet_id = $1
+		  AND left_entity_type = $2
+		  AND left_entity_id = $3
+		  AND right_entity_type = 'VET_VISIT'
+	`, petID, entityType, entityID); err != nil {
+		return err
+	}
+	if visitID == nil {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO entity_relations (
+			id, pet_id, left_entity_type, left_entity_id, right_entity_type, right_entity_id, created_by_user_id, created_at
+		) VALUES ($1,$2,$3,$4,'VET_VISIT',$5,$6,NOW())
+	`, uuid.New(), petID, entityType, entityID, *visitID, addedBy); err != nil {
+		if isUniqueViolation(err) {
+			return repo.ErrConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *LogRepository) softDeleteHealthEntity(ctx context.Context, table string, entityType string, id, petID uuid.UUID, rowVersion int, deletedBy uuid.UUID) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET deleted_at = NOW(),
@@ -1174,12 +1255,12 @@ func (r *LogRepository) softDeleteHealthEntity(ctx context.Context, table string
 		    row_version = row_version + 1
 		WHERE id = $1 AND pet_id = $2 AND row_version = $3 AND deleted_at IS NULL
 	`, table)
-	cmd, err := r.db.Exec(ctx, query, id, petID, rowVersion, deletedBy)
+	cmd, err := tx.Exec(ctx, query, id, petID, rowVersion, deletedBy)
 	if err != nil {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		exists, err := r.healthEntityExists(ctx, table, id, petID)
+		exists, err := r.healthEntityExistsTx(ctx, tx, table, id, petID)
 		if err != nil {
 			return err
 		}
@@ -1188,17 +1269,42 @@ func (r *LogRepository) softDeleteHealthEntity(ctx context.Context, table string
 		}
 		return repo.ErrConflict
 	}
-	return nil
-}
-
-func (r *LogRepository) healthEntityExists(ctx context.Context, table string, id, petID uuid.UUID) (bool, error) {
-	query := fmt.Sprintf(`SELECT 1 FROM %s WHERE id = $1 AND pet_id = $2 AND deleted_at IS NULL`, table)
-	var marker int
-	err := r.db.QueryRow(ctx, query, id, petID).Scan(&marker)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+	if healthLogID, err := r.lookupHealthEntityLogIDTx(ctx, tx, petID, entityType, id); err != nil {
+		return err
+	} else if healthLogID != nil {
+		if _, err := tx.Exec(ctx, `
+			UPDATE logs
+			SET deleted_at = NOW(),
+			    deleted_by_user_id = $3,
+			    updated_at = NOW(),
+			    updated_by_user_id = $3,
+			    row_version = row_version + 1
+			WHERE id = $1
+			  AND pet_id = $2
+			  AND source = 'HEALTH'
+			  AND deleted_at IS NULL
+		`, *healthLogID, petID, deletedBy); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, *healthLogID); err != nil {
+			return err
+		}
 	}
-	return err == nil, err
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM entity_relations
+		WHERE pet_id = $1
+		  AND (
+			(left_entity_type = $2 AND left_entity_id = $3)
+			OR
+			(right_entity_type = $2 AND right_entity_id = $3)
+		  )
+	`, petID, entityType, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = $1 AND entity_id = $2`, entityType, id); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *LogRepository) healthEntityExistsTx(ctx context.Context, tx pgx.Tx, table string, id, petID uuid.UUID) (bool, error) {

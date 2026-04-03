@@ -13,6 +13,8 @@ type Config struct {
 
 	ACLGRPCAddr  string
 	FileGRPCAddr string
+	JWTSecret    string
+	JWTIssuer    string
 }
 
 func Load() *Config {
@@ -25,6 +27,8 @@ func Load() *Config {
 		PostgresPort:     getEnv("POSTGRES_PORT", "5437"),
 		ACLGRPCAddr:      getEnv("ACL_GRPC_ADDR", "localhost:50057"),
 		FileGRPCAddr:     getEnv("FILE_GRPC_ADDR", "localhost:50056"),
+		JWTSecret:        getEnv("JWT_SECRET", "local_dev_jwt_secret"),
+		JWTIssuer:        getEnv("JWT_ISSUER", "pawly"),
 	}
 }
 

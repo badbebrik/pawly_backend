@@ -4,6 +4,7 @@ import (
 	"context"
 	"health/internal/model"
 	"health/internal/repository"
+	"math"
 	"strings"
 	"time"
 
@@ -24,10 +25,9 @@ type ACLClient interface {
 type FileClient interface {
 	EnsureFilesExist(ctx context.Context, fileIDs []uuid.UUID) error
 	BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error)
-	LinkLogAttachments(ctx context.Context, petID, logID uuid.UUID, fileIDs []uuid.UUID) error
 	GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]model.HealthFile, error)
-	LinkHealthAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
-	UnlinkHealthAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
+	LinkAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
+	UnlinkAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
 }
 
 type Service struct {
@@ -202,7 +202,7 @@ func (s *Service) CreateLog(ctx context.Context, p CreateLogParams) (*model.Log,
 	}
 
 	if len(cleanAttachments) > 0 {
-		if err := s.file.LinkLogAttachments(ctx, p.PetID, id, cleanAttachments); err != nil {
+		if err := s.file.LinkAttachments(ctx, p.PetID, "LOG", id, cleanAttachments); err != nil {
 			return nil, err
 		}
 	}
@@ -228,6 +228,10 @@ func (s *Service) UpdateLog(ctx context.Context, p UpdateLogParams) (*model.Log,
 	if err != nil {
 		return nil, err
 	}
+	current, err := s.repo.GetLog(ctx, p.PetID, p.LogID)
+	if err != nil {
+		return nil, mapRepoErr(err)
+	}
 
 	item, err := s.repo.UpdateLog(ctx, repository.UpdateLogInput{
 		ID:                p.LogID,
@@ -244,8 +248,16 @@ func (s *Service) UpdateLog(ctx context.Context, p UpdateLogParams) (*model.Log,
 		return nil, mapRepoErr(err)
 	}
 
-	if err := s.file.LinkLogAttachments(ctx, p.PetID, p.LogID, cleanAttachments); err != nil {
-		return nil, err
+	addIDs, removeIDs := diffFileIDs(logAttachmentFileIDs(current.Attachments), cleanAttachments)
+	if len(addIDs) > 0 {
+		if err := s.file.LinkAttachments(ctx, p.PetID, "LOG", p.LogID, addIDs); err != nil {
+			return nil, err
+		}
+	}
+	if len(removeIDs) > 0 {
+		if err := s.file.UnlinkAttachments(ctx, "LOG", p.LogID, removeIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	s.enrichAttachmentURLs(ctx, item)
@@ -264,6 +276,10 @@ func (s *Service) DeleteLog(ctx context.Context, p DeleteLogParams) error {
 	if !allowed {
 		return ErrForbidden
 	}
+	current, err := s.repo.GetLog(ctx, p.PetID, p.LogID)
+	if err != nil {
+		return mapRepoErr(err)
+	}
 
 	err = s.repo.SoftDeleteLog(ctx, repository.DeleteLogInput{
 		ID:              p.LogID,
@@ -274,7 +290,61 @@ func (s *Service) DeleteLog(ctx context.Context, p DeleteLogParams) error {
 	if err != nil {
 		return mapRepoErr(err)
 	}
+	fileIDs := logAttachmentFileIDs(current.Attachments)
+	if len(fileIDs) > 0 {
+		if err := s.file.UnlinkAttachments(ctx, "LOG", p.LogID, fileIDs); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func logAttachmentFileIDs(items []model.LogAttachment) []uuid.UUID {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]uuid.UUID, 0, len(items))
+	for i := range items {
+		out = append(out, items[i].FileID)
+	}
+	return out
+}
+
+func healthAttachmentFileIDs(items []model.HealthAttachment) []uuid.UUID {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]uuid.UUID, 0, len(items))
+	for i := range items {
+		out = append(out, items[i].FileID)
+	}
+	return out
+}
+
+func diffFileIDs(existing []uuid.UUID, desired []uuid.UUID) ([]uuid.UUID, []uuid.UUID) {
+	existingSet := make(map[uuid.UUID]struct{}, len(existing))
+	for i := range existing {
+		existingSet[existing[i]] = struct{}{}
+	}
+	desiredSet := make(map[uuid.UUID]struct{}, len(desired))
+	for i := range desired {
+		desiredSet[desired[i]] = struct{}{}
+	}
+	add := make([]uuid.UUID, 0)
+	for i := range desired {
+		if _, ok := existingSet[desired[i]]; ok {
+			continue
+		}
+		add = append(add, desired[i])
+	}
+	remove := make([]uuid.UUID, 0)
+	for i := range existing {
+		if _, ok := desiredSet[existing[i]]; ok {
+			continue
+		}
+		remove = append(remove, existing[i])
+	}
+	return add, remove
 }
 
 func (s *Service) validateLogPayload(
@@ -321,6 +391,12 @@ func (s *Service) validateLogPayload(
 
 	for i := range cleanMetricValues {
 		metric := metricsByID[cleanMetricValues[i].MetricID]
+		if metric.InputKind == "BOOLEAN" && cleanMetricValues[i].ValueNum != 0 && cleanMetricValues[i].ValueNum != 1 {
+			return nil, nil, nil, nil, ErrInvalidInput
+		}
+		if metric.InputKind == "SCALE" && math.Trunc(cleanMetricValues[i].ValueNum) != cleanMetricValues[i].ValueNum {
+			return nil, nil, nil, nil, ErrInvalidInput
+		}
 		if metric.MinValue != nil && cleanMetricValues[i].ValueNum < *metric.MinValue {
 			return nil, nil, nil, nil, ErrInvalidInput
 		}

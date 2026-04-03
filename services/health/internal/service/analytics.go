@@ -11,19 +11,20 @@ import (
 )
 
 type ListAnalyticsMetricsParams struct {
-	UserID uuid.UUID
-	PetID  uuid.UUID
-	Q      string
-	Range  string
-	Source string
-	Limit  int
+	UserID   uuid.UUID
+	PetID    uuid.UUID
+	Q        string
+	DateFrom *time.Time
+	DateTo   *time.Time
+	Source   string
+	TypeIDs  []uuid.UUID
+	Limit    int
 }
 
 type GetMetricSeriesParams struct {
 	UserID         uuid.UUID
 	PetID          uuid.UUID
 	MetricID       uuid.UUID
-	Range          string
 	DateFrom       *time.Time
 	DateTo         *time.Time
 	Source         string
@@ -68,8 +69,7 @@ func (s *Service) ListAnalyticsMetrics(ctx context.Context, p ListAnalyticsMetri
 		source = &userSource
 	}
 
-	dateFrom, ok := normalizeRangeDateFrom(p.Range)
-	if !ok {
+	if p.DateFrom != nil && p.DateTo != nil && p.DateFrom.After(*p.DateTo) {
 		return nil, ErrInvalidInput
 	}
 
@@ -84,8 +84,10 @@ func (s *Service) ListAnalyticsMetrics(ctx context.Context, p ListAnalyticsMetri
 	items, err := s.repo.ListAnalyticsMetrics(ctx, repository.ListAnalyticsMetricsInput{
 		PetID:    p.PetID,
 		Q:        strings.TrimSpace(p.Q),
-		DateFrom: dateFrom,
+		DateFrom: p.DateFrom,
+		DateTo:   p.DateTo,
 		Source:   source,
+		TypeIDs:  uniqueUUIDs(p.TypeIDs),
 		Limit:    limit,
 	})
 	if err != nil {
@@ -117,8 +119,7 @@ func (s *Service) GetMetricSeries(ctx context.Context, p GetMetricSeriesParams) 
 	if !validSource {
 		return nil, ErrInvalidInput
 	}
-	dateFrom, dateTo, validDates := normalizeMetricSeriesDates(p.Range, p.DateFrom, p.DateTo)
-	if !validDates {
+	if p.DateFrom != nil && p.DateTo != nil && p.DateFrom.After(*p.DateTo) {
 		return nil, ErrInvalidInput
 	}
 	sort, validSort := normalizeMetricSeriesSort(p.Sort)
@@ -150,8 +151,8 @@ func (s *Service) GetMetricSeries(ctx context.Context, p GetMetricSeriesParams) 
 	points, summary, err := s.repo.ListMetricSeries(ctx, repository.ListMetricSeriesInput{
 		PetID:          p.PetID,
 		MetricID:       p.MetricID,
-		DateFrom:       dateFrom,
-		DateTo:         dateTo,
+		DateFrom:       p.DateFrom,
+		DateTo:         p.DateTo,
 		Source:         source,
 		TypeIDs:        uniqueUUIDs(p.TypeIDs),
 		Sort:           sort,
@@ -177,47 +178,6 @@ func normalizeAnalyticsSource(raw string) (*string, bool) {
 		return &v, true
 	}
 	return nil, false
-}
-
-func normalizeRangeDateFrom(raw string) (*time.Time, bool) {
-	v := strings.ToLower(strings.TrimSpace(raw))
-	if v == "" || v == "all" {
-		return nil, true
-	}
-	var days int
-	switch v {
-	case "7d":
-		days = 7
-	case "30d":
-		days = 30
-	case "90d":
-		days = 90
-	default:
-		return nil, false
-	}
-	t := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour)
-	return &t, true
-}
-
-func normalizeMetricSeriesDates(rawRange string, dateFrom, dateTo *time.Time) (*time.Time, *time.Time, bool) {
-	rangeTrimmed := strings.TrimSpace(rawRange)
-	hasCustomRange := dateFrom != nil || dateTo != nil
-	if rangeTrimmed != "" && hasCustomRange {
-		return nil, nil, false
-	}
-
-	if rangeTrimmed != "" {
-		rangeDateFrom, ok := normalizeRangeDateFrom(rangeTrimmed)
-		if !ok {
-			return nil, nil, false
-		}
-		return rangeDateFrom, nil, true
-	}
-
-	if dateFrom != nil && dateTo != nil && dateFrom.After(*dateTo) {
-		return nil, nil, false
-	}
-	return dateFrom, dateTo, true
 }
 
 func normalizeMetricSeriesSort(raw string) (string, bool) {

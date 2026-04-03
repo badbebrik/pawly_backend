@@ -7,38 +7,39 @@ import (
 )
 
 type Log struct {
-	ID               uuid.UUID
-	PetID            uuid.UUID
-	OccurredAt       time.Time
-	LogTypeID        *uuid.UUID
-	LogTypeName      *string
-	LogTypeScope     *string
-	Description      *string
-	Source           string
-	SourceEntityType *string
-	SourceEntityID   *uuid.UUID
-	RowVersion       int
-	CreatedAt        time.Time
-	CreatedByUserID  uuid.UUID
-	UpdatedAt        time.Time
-	UpdatedByUserID  uuid.UUID
-	DeletedAt        *time.Time
-	DeletedByUserID  *uuid.UUID
-	MetricValues     []LogMetricValue
-	Attachments      []LogAttachment
+	ID                uuid.UUID
+	PetID             uuid.UUID
+	OccurredAt        time.Time
+	LogTypeID         *uuid.UUID
+	LogTypeName       *string
+	LogTypeScope      *string
+	Description       *string
+	Source            string
+	RelatedEntityType *string
+	RelatedEntityID   *uuid.UUID
+	RowVersion        int
+	CreatedAt         time.Time
+	CreatedByUserID   uuid.UUID
+	UpdatedAt         time.Time
+	UpdatedByUserID   uuid.UUID
+	DeletedAt         *time.Time
+	DeletedByUserID   *uuid.UUID
+	MetricValues      []LogMetricValue
+	Attachments       []LogAttachment
 }
 
 type LogMetricValue struct {
 	MetricID   uuid.UUID
 	MetricName string
 	InputKind  string
-	UnitCode   *string
+	Unit       *string
 	ValueNum   float64
 }
 
 type LogAttachment struct {
 	ID            uuid.UUID
 	FileID        uuid.UUID
+	FileName      *string
 	FileType      string
 	AddedByUserID uuid.UUID
 	AddedAt       time.Time
@@ -55,8 +56,8 @@ type LogListItem struct {
 	LogTypeScope       *string
 	DescriptionPreview *string
 	Source             string
-	SourceEntityType   *string
-	SourceEntityID     *uuid.UUID
+	RelatedEntityType  *string
+	RelatedEntityID    *uuid.UUID
 	RowVersion         int
 	CreatedByUserID    uuid.UUID
 	AttachmentsCount   int
@@ -70,7 +71,7 @@ type Metric struct {
 	Code            *string
 	Name            string
 	InputKind       string
-	UnitCode        *string
+	Unit            *string
 	MinValue        *float64
 	MaxValue        *float64
 	CreatedAt       time.Time
@@ -128,7 +129,7 @@ type AnalyticsMetricSummary struct {
 	MetricName      string
 	MetricScope     string
 	InputKind       string
-	UnitCode        *string
+	Unit            *string
 	PointsCount     int
 	FirstOccurredAt time.Time
 	LastOccurredAt  time.Time

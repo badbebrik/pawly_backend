@@ -380,6 +380,8 @@ services:
       POSTGRES_PORT: "5432"
       ACL_GRPC_ADDR: acl:50057
       FILE_GRPC_ADDR: file:50056
+      JWT_SECRET: local_dev_jwt_secret
+      JWT_ISSUER: pawly
     depends_on:
       health_postgres:
         condition: service_healthy

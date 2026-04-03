@@ -25,7 +25,7 @@ func (a *App) setupRoutes() http.Handler {
 	h := handlers.New(a.logSvc)
 
 	r.Group(func(r chi.Router) {
-		r.Use(appmw.WithUserID)
+		r.Use(appmw.WithUserID(a.cfg.JWTSecret, a.cfg.JWTIssuer))
 		r.Get("/v1/pets/{pet_id}/health/bootstrap", h.GetHealthBootstrap)
 		r.Get("/v1/pets/{pet_id}/health/day", h.GetHealthDay)
 

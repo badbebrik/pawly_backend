@@ -61,7 +61,7 @@ type CreateMetricParams struct {
 	PetID     uuid.UUID
 	Name      string
 	InputKind string
-	UnitCode  *string
+	Unit      *string
 	MinValue  *float64
 	MaxValue  *float64
 }
@@ -73,7 +73,7 @@ type UpdateMetricParams struct {
 	RowVersion int
 	Name       string
 	InputKind  string
-	UnitCode   *string
+	Unit       *string
 	MinValue   *float64
 	MaxValue   *float64
 }
@@ -349,12 +349,15 @@ func (s *Service) CreateMetric(ctx context.Context, p CreateMetricParams) (*mode
 	if inputKind == "" {
 		return nil, ErrInvalidInput
 	}
-	unitCode := trimOrNil(p.UnitCode)
+	unit := trimOrNil(p.Unit)
 	minValue, maxValue, ok := normalizeRange(p.MinValue, p.MaxValue)
 	if !ok {
 		return nil, ErrInvalidInput
 	}
 	if inputKind == "SCALE" && (minValue == nil || maxValue == nil) {
+		return nil, ErrInvalidInput
+	}
+	if inputKind == "BOOLEAN" && (unit != nil || minValue != nil || maxValue != nil) {
 		return nil, ErrInvalidInput
 	}
 
@@ -363,7 +366,7 @@ func (s *Service) CreateMetric(ctx context.Context, p CreateMetricParams) (*mode
 		PetID:           p.PetID,
 		Name:            name,
 		InputKind:       inputKind,
-		UnitCode:        unitCode,
+		Unit:            unit,
 		MinValue:        minValue,
 		MaxValue:        maxValue,
 		CreatedByUserID: p.UserID,
@@ -395,12 +398,15 @@ func (s *Service) UpdateMetric(ctx context.Context, p UpdateMetricParams) (*mode
 	if inputKind == "" {
 		return nil, ErrInvalidInput
 	}
-	unitCode := trimOrNil(p.UnitCode)
+	unit := trimOrNil(p.Unit)
 	minValue, maxValue, ok := normalizeRange(p.MinValue, p.MaxValue)
 	if !ok {
 		return nil, ErrInvalidInput
 	}
 	if inputKind == "SCALE" && (minValue == nil || maxValue == nil) {
+		return nil, ErrInvalidInput
+	}
+	if inputKind == "BOOLEAN" && (unit != nil || minValue != nil || maxValue != nil) {
 		return nil, ErrInvalidInput
 	}
 
@@ -418,7 +424,7 @@ func (s *Service) UpdateMetric(ctx context.Context, p UpdateMetricParams) (*mode
 		RowVersion:      p.RowVersion,
 		Name:            name,
 		InputKind:       inputKind,
-		UnitCode:        unitCode,
+		Unit:            unit,
 		MinValue:        minValue,
 		MaxValue:        maxValue,
 		UpdatedByUserID: p.UserID,
@@ -463,7 +469,7 @@ func normalizeScope(raw string) string {
 
 func normalizeInputKind(raw string) string {
 	v := strings.ToUpper(strings.TrimSpace(raw))
-	if v == "NUMERIC" || v == "SCALE" {
+	if v == "NUMERIC" || v == "SCALE" || v == "BOOLEAN" {
 		return v
 	}
 	return ""

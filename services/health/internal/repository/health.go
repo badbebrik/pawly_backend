@@ -92,7 +92,6 @@ type CreateVaccinationInput struct {
 	ClinicName          *string
 	VetName             *string
 	Notes               *string
-	SourceVaccinationID *uuid.UUID
 	CreatedBy           uuid.UUID
 	UpdatedBy           uuid.UUID
 	Attachments         []AttachmentInput
@@ -153,7 +152,6 @@ type CreateProcedureInput struct {
 	NextDueAt           *time.Time
 	VetVisitID          *uuid.UUID
 	Notes               *string
-	SourceProcedureID   *uuid.UUID
 	CreatedBy           uuid.UUID
 	UpdatedBy           uuid.UUID
 	Attachments         []AttachmentInput
@@ -266,14 +264,12 @@ type HealthRepository interface {
 	CreateVaccination(ctx context.Context, in CreateVaccinationInput) (*model.Vaccination, AttachmentSync, error)
 	UpdateVaccination(ctx context.Context, in UpdateVaccinationInput) (*model.Vaccination, AttachmentSync, error)
 	DeleteVaccination(ctx context.Context, in DeleteVaccinationInput) error
-	HasPlannedVaccinationFromSource(ctx context.Context, petID, sourceVaccinationID uuid.UUID) (bool, error)
 
 	GetProcedure(ctx context.Context, petID, procedureID uuid.UUID) (*model.Procedure, error)
 	ListProcedures(ctx context.Context, in ListProceduresInput) (ListProceduresOutput, error)
 	CreateProcedure(ctx context.Context, in CreateProcedureInput) (*model.Procedure, AttachmentSync, error)
 	UpdateProcedure(ctx context.Context, in UpdateProcedureInput) (*model.Procedure, AttachmentSync, error)
 	DeleteProcedure(ctx context.Context, in DeleteProcedureInput) error
-	HasPlannedProcedureFromSource(ctx context.Context, petID, sourceProcedureID uuid.UUID) (bool, error)
 
 	GetMedicalRecord(ctx context.Context, petID, recordID uuid.UUID) (*model.MedicalRecord, error)
 	ListMedicalRecords(ctx context.Context, in ListMedicalRecordsInput) (ListMedicalRecordsOutput, error)

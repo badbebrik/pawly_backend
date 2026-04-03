@@ -62,7 +62,7 @@ type updateLogTypeRequest struct {
 type createMetricRequest struct {
 	Name      string   `json:"name"`
 	InputKind string   `json:"input_kind"`
-	UnitCode  *string  `json:"unit_code"`
+	Unit      *string  `json:"unit"`
 	MinValue  *float64 `json:"min_value"`
 	MaxValue  *float64 `json:"max_value"`
 }
@@ -70,7 +70,7 @@ type createMetricRequest struct {
 type updateMetricRequest struct {
 	Name       string   `json:"name"`
 	InputKind  string   `json:"input_kind"`
-	UnitCode   *string  `json:"unit_code"`
+	Unit       *string  `json:"unit"`
 	MinValue   *float64 `json:"min_value"`
 	MaxValue   *float64 `json:"max_value"`
 	RowVersion int      `json:"row_version"`
@@ -639,7 +639,7 @@ func (h *Handlers) CreateMetric(w http.ResponseWriter, r *http.Request) {
 		PetID:     petID,
 		Name:      req.Name,
 		InputKind: req.InputKind,
-		UnitCode:  req.UnitCode,
+		Unit:      req.Unit,
 		MinValue:  req.MinValue,
 		MaxValue:  req.MaxValue,
 	})
@@ -679,7 +679,7 @@ func (h *Handlers) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		RowVersion: req.RowVersion,
 		Name:       req.Name,
 		InputKind:  req.InputKind,
-		UnitCode:   req.UnitCode,
+		Unit:       req.Unit,
 		MinValue:   req.MinValue,
 		MaxValue:   req.MaxValue,
 	})
@@ -729,6 +729,23 @@ func (h *Handlers) GetAnalyticsMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	typeIDs, err := parseUUIDCSVOrMulti(r.URL.Query()["type_ids"])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid type_ids")
+		return
+	}
+
+	dateFrom, err := parseOptionalDateTime(r.URL.Query().Get("date_from"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_from")
+		return
+	}
+	dateTo, err := parseOptionalDateTime(r.URL.Query().Get("date_to"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_to")
+		return
+	}
+
 	limit := parseIntOrDefault(r.URL.Query().Get("limit"), 100)
 	if limit < 1 || limit > 500 {
 		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid limit")
@@ -736,12 +753,14 @@ func (h *Handlers) GetAnalyticsMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items, err := h.svc.ListAnalyticsMetrics(r.Context(), service.ListAnalyticsMetricsParams{
-		UserID: userID,
-		PetID:  petID,
-		Q:      r.URL.Query().Get("q"),
-		Range:  r.URL.Query().Get("range"),
-		Source: r.URL.Query().Get("source"),
-		Limit:  limit,
+		UserID:   userID,
+		PetID:    petID,
+		Q:        r.URL.Query().Get("q"),
+		DateFrom: dateFrom,
+		DateTo:   dateTo,
+		Source:   r.URL.Query().Get("source"),
+		TypeIDs:  typeIDs,
+		Limit:    limit,
 	})
 	if err != nil {
 		writeServiceError(w, err)
@@ -805,7 +824,6 @@ func (h *Handlers) GetMetricSeries(w http.ResponseWriter, r *http.Request) {
 		UserID:         userID,
 		PetID:          petID,
 		MetricID:       metricID,
-		Range:          r.URL.Query().Get("range"),
 		DateFrom:       dateFrom,
 		DateTo:         dateTo,
 		Source:         r.URL.Query().Get("source"),
@@ -1048,22 +1066,20 @@ func parseIntOrDefault(raw string, fallback int) int {
 
 func logListItemToDTO(item model.LogListItem) map[string]any {
 	return map[string]any{
-		"id":                      item.ID.String(),
-		"pet_id":                  item.PetID.String(),
-		"occurred_at":             item.OccurredAt.UTC().Format(time.RFC3339),
-		"log_type_id":             uuidOrNil(item.LogTypeID),
-		"log_type_name":           strOrNil(item.LogTypeName),
-		"log_type_scope":          strOrNil(item.LogTypeScope),
-		"description_preview":     strOrNil(item.DescriptionPreview),
-		"source":                  item.Source,
-		"source_entity_type":      strOrNil(item.SourceEntityType),
-		"source_entity_id":        uuidOrNil(item.SourceEntityID),
-		"source_label":            nil,
-		"metric_values_preview":   []any{},
-		"attachments_count":       item.AttachmentsCount,
-		"has_attachments":         item.HasAttachments,
-		"created_by_user_id":      item.CreatedByUserID.String(),
-		"created_by_display_name": nil,
+		"id":                    item.ID.String(),
+		"pet_id":                item.PetID.String(),
+		"occurred_at":           item.OccurredAt.UTC().Format(time.RFC3339),
+		"log_type_id":           uuidOrNil(item.LogTypeID),
+		"log_type_name":         strOrNil(item.LogTypeName),
+		"log_type_scope":        strOrNil(item.LogTypeScope),
+		"description_preview":   strOrNil(item.DescriptionPreview),
+		"source":                item.Source,
+		"related_entity_type":   strOrNil(item.RelatedEntityType),
+		"related_entity_id":     uuidOrNil(item.RelatedEntityID),
+		"metric_values_preview": []any{},
+		"attachments_count":     item.AttachmentsCount,
+		"has_attachments":       item.HasAttachments,
+		"created_by_user_id":    item.CreatedByUserID.String(),
 	}
 }
 
@@ -1075,7 +1091,7 @@ func logToDTO(item *model.Log) map[string]any {
 			"metric_id":   mv.MetricID.String(),
 			"metric_name": mv.MetricName,
 			"input_kind":  mv.InputKind,
-			"unit_code":   strOrNil(mv.UnitCode),
+			"unit":        strOrNil(mv.Unit),
 			"value_num":   mv.ValueNum,
 		})
 	}
@@ -1086,7 +1102,7 @@ func logToDTO(item *model.Log) map[string]any {
 		attachments = append(attachments, map[string]any{
 			"id":               a.ID.String(),
 			"file_id":          a.FileID.String(),
-			"file_name":        nil,
+			"file_name":        strOrNil(a.FileName),
 			"file_type":        a.FileType,
 			"download_url":     strOrNil(a.DownloadURL),
 			"preview_url":      strOrNil(a.PreviewURL),
@@ -1097,28 +1113,25 @@ func logToDTO(item *model.Log) map[string]any {
 
 	canEdit := item.Source == "USER"
 	return map[string]any{
-		"id":                      item.ID.String(),
-		"pet_id":                  item.PetID.String(),
-		"occurred_at":             item.OccurredAt.UTC().Format(time.RFC3339),
-		"log_type_id":             uuidOrNil(item.LogTypeID),
-		"log_type_name":           strOrNil(item.LogTypeName),
-		"log_type_scope":          strOrNil(item.LogTypeScope),
-		"description":             strOrNil(item.Description),
-		"source":                  item.Source,
-		"source_entity_type":      strOrNil(item.SourceEntityType),
-		"source_entity_id":        uuidOrNil(item.SourceEntityID),
-		"source_label":            nil,
-		"metric_values":           metricValues,
-		"attachments":             attachments,
-		"row_version":             item.RowVersion,
-		"created_at":              item.CreatedAt.UTC().Format(time.RFC3339),
-		"created_by_user_id":      item.CreatedByUserID.String(),
-		"created_by_display_name": nil,
-		"updated_at":              item.UpdatedAt.UTC().Format(time.RFC3339),
-		"updated_by_user_id":      item.UpdatedByUserID.String(),
-		"updated_by_display_name": nil,
-		"can_edit":                canEdit,
-		"can_delete":              canEdit,
+		"id":                  item.ID.String(),
+		"pet_id":              item.PetID.String(),
+		"occurred_at":         item.OccurredAt.UTC().Format(time.RFC3339),
+		"log_type_id":         uuidOrNil(item.LogTypeID),
+		"log_type_name":       strOrNil(item.LogTypeName),
+		"log_type_scope":      strOrNil(item.LogTypeScope),
+		"description":         strOrNil(item.Description),
+		"source":              item.Source,
+		"related_entity_type": strOrNil(item.RelatedEntityType),
+		"related_entity_id":   uuidOrNil(item.RelatedEntityID),
+		"metric_values":       metricValues,
+		"attachments":         attachments,
+		"row_version":         item.RowVersion,
+		"created_at":          item.CreatedAt.UTC().Format(time.RFC3339),
+		"created_by_user_id":  item.CreatedByUserID.String(),
+		"updated_at":          item.UpdatedAt.UTC().Format(time.RFC3339),
+		"updated_by_user_id":  item.UpdatedByUserID.String(),
+		"can_edit":            canEdit,
+		"can_delete":          canEdit,
 	}
 }
 
@@ -1131,7 +1144,7 @@ func logTypeToDTO(item model.LogType) map[string]any {
 			"metric_name":  nil,
 			"metric_scope": nil,
 			"input_kind":   nil,
-			"unit_code":    nil,
+			"unit":         nil,
 			"min_value":    nil,
 			"max_value":    nil,
 			"is_required":  req.IsRequired,
@@ -1162,7 +1175,7 @@ func metricToDTO(item model.Metric) map[string]any {
 		"code":               strOrNil(item.Code),
 		"name":               item.Name,
 		"input_kind":         item.InputKind,
-		"unit_code":          strOrNil(item.UnitCode),
+		"unit":               strOrNil(item.Unit),
 		"min_value":          float64OrNil(item.MinValue),
 		"max_value":          float64OrNil(item.MaxValue),
 		"created_at":         item.CreatedAt.UTC().Format(time.RFC3339),
@@ -1191,7 +1204,7 @@ func analyticsMetricSummaryToDTO(item model.AnalyticsMetricSummary) map[string]a
 		"metric_name":       item.MetricName,
 		"metric_scope":      item.MetricScope,
 		"input_kind":        item.InputKind,
-		"unit_code":         strOrNil(item.UnitCode),
+		"unit":              strOrNil(item.Unit),
 		"points_count":      item.PointsCount,
 		"first_occurred_at": item.FirstOccurredAt.UTC().Format(time.RFC3339),
 		"last_occurred_at":  item.LastOccurredAt.UTC().Format(time.RFC3339),

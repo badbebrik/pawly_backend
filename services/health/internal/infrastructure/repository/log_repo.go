@@ -33,8 +33,8 @@ func (r *LogRepository) GetLog(ctx context.Context, petID, logID uuid.UUID) (*mo
 			lt.scope,
 			l.description,
 			l.source,
-			l.source_entity_type,
-			l.source_entity_id,
+			rel.right_entity_type,
+			rel.right_entity_id,
 			l.row_version,
 			l.created_at,
 			l.created_by_user_id,
@@ -44,6 +44,16 @@ func (r *LogRepository) GetLog(ctx context.Context, petID, logID uuid.UUID) (*mo
 			l.deleted_by_user_id
 		FROM logs l
 		LEFT JOIN log_types lt ON lt.id = l.log_type_id
+		LEFT JOIN LATERAL (
+			SELECT er.right_entity_type, er.right_entity_id
+			FROM entity_relations er
+			WHERE er.pet_id = l.pet_id
+			  AND er.left_entity_type = 'LOG'
+			  AND er.left_entity_id = l.id
+			  AND er.right_entity_type IN ('PROCEDURE', 'VACCINATION')
+			ORDER BY er.created_at ASC, er.id ASC
+			LIMIT 1
+		) rel ON TRUE
 		WHERE l.id = $1 AND l.pet_id = $2 AND l.deleted_at IS NULL
 	`
 
@@ -57,8 +67,8 @@ func (r *LogRepository) GetLog(ctx context.Context, petID, logID uuid.UUID) (*mo
 		&logItem.LogTypeScope,
 		&logItem.Description,
 		&logItem.Source,
-		&logItem.SourceEntityType,
-		&logItem.SourceEntityID,
+		&logItem.RelatedEntityType,
+		&logItem.RelatedEntityID,
 		&logItem.RowVersion,
 		&logItem.CreatedAt,
 		&logItem.CreatedByUserID,
@@ -136,9 +146,9 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 	}
 	if in.HasAttachments != nil {
 		if *in.HasAttachments {
-			where = append(where, "EXISTS (SELECT 1 FROM log_attachment_refs lar WHERE lar.log_id = l.id)")
+			where = append(where, "EXISTS (SELECT 1 FROM attachment_refs ar WHERE ar.entity_type = 'LOG' AND ar.entity_id = l.id)")
 		} else {
-			where = append(where, "NOT EXISTS (SELECT 1 FROM log_attachment_refs lar WHERE lar.log_id = l.id)")
+			where = append(where, "NOT EXISTS (SELECT 1 FROM attachment_refs ar WHERE ar.entity_type = 'LOG' AND ar.entity_id = l.id)")
 		}
 	}
 	if in.HasMetricValues != nil {
@@ -165,17 +175,27 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 			lt.scope,
 			l.description,
 			l.source,
-			l.source_entity_type,
-			l.source_entity_id,
+			rel.right_entity_type,
+			rel.right_entity_id,
 			l.row_version,
 			l.created_by_user_id,
 			COALESCE(att.cnt, 0) AS attachments_count
 		FROM logs l
 		LEFT JOIN log_types lt ON lt.id = l.log_type_id
 		LEFT JOIN LATERAL (
+			SELECT er.right_entity_type, er.right_entity_id
+			FROM entity_relations er
+			WHERE er.pet_id = l.pet_id
+			  AND er.left_entity_type = 'LOG'
+			  AND er.left_entity_id = l.id
+			  AND er.right_entity_type IN ('PROCEDURE', 'VACCINATION')
+			ORDER BY er.created_at ASC, er.id ASC
+			LIMIT 1
+		) rel ON TRUE
+		LEFT JOIN LATERAL (
 			SELECT COUNT(1)::int AS cnt
-			FROM log_attachment_refs lar
-			WHERE lar.log_id = l.id
+			FROM attachment_refs ar
+			WHERE ar.entity_type = 'LOG' AND ar.entity_id = l.id
 		) att ON TRUE
 		WHERE %s
 		ORDER BY l.occurred_at %s, l.id %s
@@ -201,8 +221,8 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 			&item.LogTypeScope,
 			&description,
 			&item.Source,
-			&item.SourceEntityType,
-			&item.SourceEntityID,
+			&item.RelatedEntityType,
+			&item.RelatedEntityID,
 			&item.RowVersion,
 			&item.CreatedByUserID,
 			&item.AttachmentsCount,
@@ -243,8 +263,6 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 			log_type_id,
 			description,
 			source,
-			source_entity_type,
-			source_entity_id,
 			row_version,
 			created_at,
 			created_by_user_id,
@@ -258,13 +276,11 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 			$4,
 			$5,
 			$6,
-			$7,
-			$8,
 			1,
 			NOW(),
-			$9,
+			$7,
 			NOW(),
-			$10
+			$8
 		)
 	`
 	_, err = tx.Exec(ctx, insertQuery,
@@ -274,8 +290,6 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 		in.LogTypeID,
 		in.Description,
 		in.Source,
-		in.SourceEntityType,
-		in.SourceEntityID,
 		in.CreatedByUserID,
 		in.UpdatedByUserID,
 	)
@@ -289,7 +303,7 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 	if err := r.replaceMetricValuesTx(ctx, tx, in.ID, in.MetricValues); err != nil {
 		return nil, err
 	}
-	if err := r.replaceAttachmentsTx(ctx, tx, in.ID, in.AttachmentFileIDs, in.CreatedByUserID); err != nil {
+	if err := r.replaceAttachmentsTx(ctx, tx, in.PetID, in.ID, in.AttachmentFileIDs, in.CreatedByUserID); err != nil {
 		return nil, err
 	}
 
@@ -355,7 +369,7 @@ func (r *LogRepository) UpdateLog(ctx context.Context, in repo.UpdateLogInput) (
 	if err := r.replaceMetricValuesTx(ctx, tx, in.ID, in.MetricValues); err != nil {
 		return nil, err
 	}
-	if err := r.replaceAttachmentsTx(ctx, tx, in.ID, in.AttachmentFileIDs, in.UpdatedByUserID); err != nil {
+	if err := r.replaceAttachmentsTx(ctx, tx, in.PetID, in.ID, in.AttachmentFileIDs, in.UpdatedByUserID); err != nil {
 		return nil, err
 	}
 
@@ -367,6 +381,12 @@ func (r *LogRepository) UpdateLog(ctx context.Context, in repo.UpdateLogInput) (
 }
 
 func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInput) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	const query = `
 		UPDATE logs
 		SET deleted_at = NOW(),
@@ -380,12 +400,12 @@ func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInpu
 		  AND source = 'USER'
 		  AND deleted_at IS NULL
 	`
-	cmd, err := r.db.Exec(ctx, query, in.ID, in.PetID, in.RowVersion, in.DeletedByUserID)
+	cmd, err := tx.Exec(ctx, query, in.ID, in.PetID, in.RowVersion, in.DeletedByUserID)
 	if err != nil {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		exists, source, err := r.lookupLogState(ctx, in.PetID, in.ID)
+		exists, source, err := r.lookupLogStateTx(ctx, tx, in.PetID, in.ID)
 		if err != nil {
 			return err
 		}
@@ -397,7 +417,127 @@ func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInpu
 		}
 		return repo.ErrConflict
 	}
-	return nil
+	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, in.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM entity_relations
+		WHERE pet_id = $1
+		  AND (
+			(left_entity_type = 'LOG' AND left_entity_id = $2)
+			OR
+			(right_entity_type = 'LOG' AND right_entity_id = $2)
+		  )
+	`, in.PetID, in.ID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *LogRepository) UpsertHealthEntityLog(ctx context.Context, in repo.UpsertHealthEntityLogInput) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	logID, err := r.lookupHealthEntityLogIDTx(ctx, tx, in.PetID, in.EntityType, in.EntityID)
+	if err != nil {
+		return err
+	}
+	if logID != nil {
+		_, err := tx.Exec(ctx, `
+			UPDATE logs
+			SET occurred_at = $3,
+			    description = $4,
+			    updated_at = NOW(),
+			    updated_by_user_id = $5,
+			    row_version = row_version + 1
+			WHERE id = $1
+			  AND pet_id = $2
+			  AND source = 'HEALTH'
+			  AND deleted_at IS NULL
+		`, *logID, in.PetID, in.OccurredAt, in.Description, in.UpdatedByUserID)
+		if err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+
+	newLogID := uuid.New()
+	_, err = tx.Exec(ctx, `
+		INSERT INTO logs (
+			id, pet_id, occurred_at, log_type_id, description, source, row_version,
+			created_at, created_by_user_id, updated_at, updated_by_user_id
+		) VALUES (
+			$1, $2, $3, NULL, $4, 'HEALTH', 1,
+			NOW(), $5, NOW(), $6
+		)
+	`, newLogID, in.PetID, in.OccurredAt, in.Description, in.CreatedByUserID, in.UpdatedByUserID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return repo.ErrConflict
+		}
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO entity_relations (
+			id, pet_id, left_entity_type, left_entity_id, right_entity_type, right_entity_id, created_by_user_id, created_at
+		) VALUES ($1, $2, 'LOG', $3, $4, $5, $6, NOW())
+	`, uuid.New(), in.PetID, newLogID, in.EntityType, in.EntityID, in.CreatedByUserID)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return repo.ErrConflict
+		}
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *LogRepository) DeleteHealthEntityLog(ctx context.Context, in repo.DeleteHealthEntityLogInput) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	logID, err := r.lookupHealthEntityLogIDTx(ctx, tx, in.PetID, in.EntityType, in.EntityID)
+	if err != nil {
+		return err
+	}
+	if logID == nil {
+		return tx.Commit(ctx)
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE logs
+		SET deleted_at = NOW(),
+		    deleted_by_user_id = $3,
+		    updated_at = NOW(),
+		    updated_by_user_id = $3,
+		    row_version = row_version + 1
+		WHERE id = $1
+		  AND pet_id = $2
+		  AND source = 'HEALTH'
+		  AND deleted_at IS NULL
+	`, *logID, in.PetID, in.DeletedByUserID)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, *logID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM entity_relations
+		WHERE pet_id = $1
+		  AND (
+			(left_entity_type = 'LOG' AND left_entity_id = $2)
+			OR
+			(right_entity_type = 'LOG' AND right_entity_id = $2)
+		  )
+	`, in.PetID, *logID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *LogRepository) GetLogTypeByID(ctx context.Context, petID uuid.UUID, logTypeID uuid.UUID) (*model.LogType, error) {
@@ -408,7 +548,6 @@ func (r *LogRepository) GetLogTypeByID(ctx context.Context, petID uuid.UUID, log
 			pet_id,
 			code,
 			name,
-			metric_requirements,
 			created_at,
 			created_by_user_id,
 			updated_at,
@@ -421,13 +560,18 @@ func (r *LogRepository) GetLogTypeByID(ctx context.Context, petID uuid.UUID, log
 		  AND (scope = 'SYSTEM' OR pet_id = $2)
 		  AND deleted_at IS NULL
 	`
-	item, err := scanLogType(r.db.QueryRow(ctx, query, logTypeID, petID))
+	item, err := scanLogTypeBase(r.db.QueryRow(ctx, query, logTypeID, petID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repo.ErrNotFound
 		}
 		return nil, err
 	}
+	reqs, err := r.loadLogTypeRequirements(ctx, []uuid.UUID{item.ID})
+	if err != nil {
+		return nil, err
+	}
+	item.MetricRequirements = reqs[item.ID]
 	return item, nil
 }
 
@@ -436,8 +580,8 @@ func (r *LogRepository) GetMetricsByIDs(ctx context.Context, petID uuid.UUID, me
 		return map[uuid.UUID]model.Metric{}, nil
 	}
 	const query = `
-		SELECT id, scope, pet_id, code, name, input_kind, unit_code, min_value, max_value
-		FROM metrics
+			SELECT id, scope, pet_id, code, name, input_kind, unit, min_value, max_value
+			FROM metrics
 		WHERE id = ANY($1::uuid[])
 		  AND deleted_at IS NULL
 		  AND (scope = 'SYSTEM' OR pet_id = $2)
@@ -458,7 +602,7 @@ func (r *LogRepository) GetMetricsByIDs(ctx context.Context, petID uuid.UUID, me
 			&item.Code,
 			&item.Name,
 			&item.InputKind,
-			&item.UnitCode,
+			&item.Unit,
 			&item.MinValue,
 			&item.MaxValue,
 		)
@@ -494,16 +638,16 @@ func (r *LogRepository) replaceMetricValuesTx(ctx context.Context, tx pgx.Tx, lo
 	return nil
 }
 
-func (r *LogRepository) replaceAttachmentsTx(ctx context.Context, tx pgx.Tx, logID uuid.UUID, fileIDs []uuid.UUID, addedBy uuid.UUID) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM log_attachment_refs WHERE log_id = $1`, logID); err != nil {
+func (r *LogRepository) replaceAttachmentsTx(ctx context.Context, tx pgx.Tx, petID, logID uuid.UUID, fileIDs []uuid.UUID, addedBy uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, logID); err != nil {
 		return err
 	}
 	for i := range fileIDs {
 		const query = `
-			INSERT INTO log_attachment_refs (id, log_id, file_id, file_type, added_by_user_id, added_at)
-			VALUES ($1, $2, $3, 'other', $4, NOW())
+			INSERT INTO attachment_refs (id, pet_id, entity_type, entity_id, file_id, file_name, file_type, added_by_user_id, added_at)
+			VALUES ($1, $2, 'LOG', $3, $4, NULL, 'other', $5, NOW())
 		`
-		_, err := tx.Exec(ctx, query, uuid.New(), logID, fileIDs[i], addedBy)
+		_, err := tx.Exec(ctx, query, uuid.New(), petID, logID, fileIDs[i], addedBy)
 		if err != nil {
 			if isUniqueViolation(err) {
 				return repo.ErrConflict
@@ -520,7 +664,7 @@ func (r *LogRepository) listMetricValues(ctx context.Context, logID uuid.UUID) (
 			mv.metric_id,
 			m.name,
 			m.input_kind,
-			m.unit_code,
+			m.unit,
 			mv.value_num
 		FROM metric_values mv
 		JOIN metrics m ON m.id = mv.metric_id
@@ -540,7 +684,7 @@ func (r *LogRepository) listMetricValues(ctx context.Context, logID uuid.UUID) (
 			&item.MetricID,
 			&item.MetricName,
 			&item.InputKind,
-			&item.UnitCode,
+			&item.Unit,
 			&item.ValueNum,
 		)
 		if err != nil {
@@ -559,11 +703,12 @@ func (r *LogRepository) listAttachments(ctx context.Context, logID uuid.UUID) ([
 		SELECT
 			id,
 			file_id,
+			file_name,
 			file_type,
 			added_by_user_id,
 			added_at
-		FROM log_attachment_refs
-		WHERE log_id = $1
+		FROM attachment_refs
+		WHERE entity_type = 'LOG' AND entity_id = $1
 		ORDER BY added_at ASC, id ASC
 	`
 	rows, err := r.db.Query(ctx, query, logID)
@@ -578,6 +723,7 @@ func (r *LogRepository) listAttachments(ctx context.Context, logID uuid.UUID) ([
 		err := rows.Scan(
 			&item.ID,
 			&item.FileID,
+			&item.FileName,
 			&item.FileType,
 			&item.AddedByUserID,
 			&item.AddedAt,
@@ -625,6 +771,32 @@ func (r *LogRepository) lookupLogStateTx(ctx context.Context, tx pgx.Tx, petID, 
 		return false, "", err
 	}
 	return true, source, nil
+}
+
+func (r *LogRepository) lookupHealthEntityLogIDTx(ctx context.Context, tx pgx.Tx, petID uuid.UUID, entityType string, entityID uuid.UUID) (*uuid.UUID, error) {
+	const query = `
+		SELECT l.id
+		FROM entity_relations rel
+		JOIN logs l ON l.id = rel.left_entity_id
+		WHERE rel.pet_id = $1
+		  AND rel.left_entity_type = 'LOG'
+		  AND rel.right_entity_type = $2
+		  AND rel.right_entity_id = $3
+		  AND l.pet_id = $1
+		  AND l.source = 'HEALTH'
+		  AND l.deleted_at IS NULL
+		ORDER BY l.created_at ASC, l.id ASC
+		LIMIT 1
+	`
+	var logID uuid.UUID
+	err := tx.QueryRow(ctx, query, petID, entityType, entityID).Scan(&logID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &logID, nil
 }
 
 func preview(v *string, limit int) *string {

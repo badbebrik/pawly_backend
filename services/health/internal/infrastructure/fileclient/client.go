@@ -102,32 +102,18 @@ func (c *Client) GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UU
 	return out, nil
 }
 
-func (c *Client) LinkLogAttachments(ctx context.Context, petID, logID uuid.UUID, fileIDs []uuid.UUID) error {
-	for i := range fileIDs {
-		_, err := c.client.LinkFile(ctx, &filepb.LinkFileRequest{
-			FileId:       fileIDs[i].String(),
-			OwnerService: filepb.OwnerService_OWNER_SERVICE_LOG,
-			OwnerType:    "LOG_ATTACHMENT",
-			OwnerId:      logID.String(),
-			PetId:        petID.String(),
-		})
-		if err != nil {
-			mapped := mapErr(err)
-			if mapped == service.ErrConflict {
-				continue
-			}
-			return mapped
-		}
+func (c *Client) LinkAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
+	ownerService := filepb.OwnerService_OWNER_SERVICE_HEALTH
+	ownerType := entityType
+	if entityType == "LOG" {
+		ownerService = filepb.OwnerService_OWNER_SERVICE_LOG
+		ownerType = "LOG_ATTACHMENT"
 	}
-	return nil
-}
-
-func (c *Client) LinkHealthAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
 	for i := range fileIDs {
 		_, err := c.client.LinkFile(ctx, &filepb.LinkFileRequest{
 			FileId:       fileIDs[i].String(),
-			OwnerService: filepb.OwnerService_OWNER_SERVICE_HEALTH,
-			OwnerType:    entityType,
+			OwnerService: ownerService,
+			OwnerType:    ownerType,
 			OwnerId:      entityID.String(),
 			PetId:        petID.String(),
 		})
@@ -142,12 +128,18 @@ func (c *Client) LinkHealthAttachments(ctx context.Context, petID uuid.UUID, ent
 	return nil
 }
 
-func (c *Client) UnlinkHealthAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
+func (c *Client) UnlinkAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
+	ownerService := filepb.OwnerService_OWNER_SERVICE_HEALTH
+	ownerType := entityType
+	if entityType == "LOG" {
+		ownerService = filepb.OwnerService_OWNER_SERVICE_LOG
+		ownerType = "LOG_ATTACHMENT"
+	}
 	for i := range fileIDs {
 		_, err := c.client.UnlinkFile(ctx, &filepb.UnlinkFileRequest{
 			FileId:       fileIDs[i].String(),
-			OwnerService: filepb.OwnerService_OWNER_SERVICE_HEALTH,
-			OwnerType:    entityType,
+			OwnerService: ownerService,
+			OwnerType:    ownerType,
 			OwnerId:      entityID.String(),
 		})
 		if err != nil {

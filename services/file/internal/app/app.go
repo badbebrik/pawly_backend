@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -104,6 +105,9 @@ func (a *App) Close() {
 }
 
 func (a *App) Run() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	go func() {
 		log.Info().Str("port", a.cfg.AppPort).Msg("starting gRPC server")
 		if err := a.grpcSrv.Serve(a.listener); err != nil {
@@ -111,11 +115,55 @@ func (a *App) Run() error {
 		}
 	}()
 
+	cleanupInterval, err := strconv.Atoi(a.cfg.CleanupIntervalSeconds)
+	if err != nil {
+		return fmt.Errorf("parse CLEANUP_INTERVAL_SECONDS: %w", err)
+	}
+	if cleanupInterval <= 0 {
+		return fmt.Errorf("parse CLEANUP_INTERVAL_SECONDS: must be > 0")
+	}
+	cleanupBatchSize, err := strconv.Atoi(a.cfg.CleanupBatchSize)
+	if err != nil {
+		return fmt.Errorf("parse CLEANUP_BATCH_SIZE: %w", err)
+	}
+	if cleanupBatchSize <= 0 {
+		return fmt.Errorf("parse CLEANUP_BATCH_SIZE: must be > 0")
+	}
+
+	go a.runCleanupLoop(ctx, time.Duration(cleanupInterval)*time.Second, cleanupBatchSize)
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
 	log.Info().Msg("shutting down File service...")
+	cancel()
 
 	return nil
+}
+
+func (a *App) runCleanupLoop(ctx context.Context, interval time.Duration, batchSize int) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			res, err := a.fileSvc.RunCleanupBatch(ctx, batchSize)
+			if err != nil {
+				log.Error().Err(err).Msg("file cleanup batch failed")
+				continue
+			}
+			if res.DeletedPending == 0 && res.MarkedPendingDelete == 0 && res.DeletedExpired == 0 {
+				continue
+			}
+			log.Info().
+				Int("deleted_pending", res.DeletedPending).
+				Int("still_pending", res.MarkedPendingDelete).
+				Int("deleted_expired", res.DeletedExpired).
+				Msg("file cleanup batch completed")
+		}
+	}
 }

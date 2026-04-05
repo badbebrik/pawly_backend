@@ -31,8 +31,10 @@ func (s *Server) InitUpload(ctx context.Context, req *filepb.InitUploadRequest) 
 		v := req.GetExpectedSizeBytes()
 		params.ExpectedSizeBytes = &v
 	}
-
-	params.CreatedByUserID = uuid.Nil
+	if req.GetOriginalFilename() != "" {
+		v := req.GetOriginalFilename()
+		params.OriginalFilename = &v
+	}
 
 	f, upload, err := s.svc.InitUpload(ctx, params)
 	if err != nil {
@@ -115,22 +117,15 @@ func (s *Server) LinkFile(ctx context.Context, req *filepb.LinkFileRequest) (*fi
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid owner_id")
 	}
-	var petID *uuid.UUID
-	if req.GetPetId() != "" {
-		v, err := uuid.Parse(req.GetPetId())
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "invalid pet_id")
-		}
-		petID = &v
+	usageType, ok := mapUsageType(req.GetOwnerService(), req.GetOwnerType())
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "unsupported owner mapping")
 	}
 
 	link, err := s.svc.Link(ctx, service.LinkParams{
-		FileID:        fileID,
-		OwnerService:  mapOwnerService(req.GetOwnerService()),
-		OwnerType:     req.GetOwnerType(),
-		OwnerID:       ownerID,
-		PetID:         petID,
-		CreatedByUser: uuid.Nil,
+		FileID:    fileID,
+		UsageType: usageType,
+		OwnerID:   ownerID,
 	})
 	if err != nil {
 		return nil, mapSvcErr(err)
@@ -148,8 +143,12 @@ func (s *Server) UnlinkFile(ctx context.Context, req *filepb.UnlinkFileRequest) 
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid owner_id")
 	}
+	usageType, ok := mapUsageType(req.GetOwnerService(), req.GetOwnerType())
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "unsupported owner mapping")
+	}
 
-	deleted, err := s.svc.Unlink(ctx, fileID, mapOwnerService(req.GetOwnerService()), req.GetOwnerType(), ownerID)
+	deleted, err := s.svc.Unlink(ctx, fileID, usageType, ownerID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -164,6 +163,20 @@ func (s *Server) GetFile(ctx context.Context, req *filepb.GetFileRequest) (*file
 	}
 
 	f, err := s.svc.GetFile(ctx, fileID)
+	if err != nil {
+		return nil, mapSvcErr(err)
+	}
+
+	return &filepb.GetFileResponse{File: toProtoFile(f)}, nil
+}
+
+func (s *Server) DeleteFileIfUnlinked(ctx context.Context, req *filepb.GetFileRequest) (*filepb.GetFileResponse, error) {
+	fileID, err := uuid.Parse(req.GetFileId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid file_id")
+	}
+
+	f, err := s.svc.DeleteFileIfUnlinked(ctx, fileID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -199,28 +212,33 @@ func toProtoFile(f *model.FileObject) *filepb.FileObject {
 		Status:          mapFileStatus(f.Status),
 		MimeType:        f.MimeType,
 		SizeBytes:       size,
-		Bucket:          f.Bucket,
-		ObjectKey:       f.ObjectKey,
-		CreatedByUserId: f.CreatedByUserID.String(),
+		Bucket:          f.StorageBucket,
+		ObjectKey:       f.StorageKey,
+		CreatedByUserId: uuid.Nil.String(),
 		CreatedAt:       timestamppb.New(f.CreatedAt),
 		UpdatedAt:       timestamppb.New(f.UpdatedAt),
 		UploadExpiresAt: timestamppb.New(f.UploadExpiresAt),
+		OriginalFilename: strOrEmpty(f.OriginalFilename),
 	}
 }
 
-func toProtoLink(l *model.FileLink) *filepb.FileLink {
-	petID := ""
-	if l.PetID != nil {
-		petID = l.PetID.String()
+func strOrEmpty(v *string) string {
+	if v == nil {
+		return ""
 	}
+	return *v
+}
+
+func toProtoLink(l *model.FileLink) *filepb.FileLink {
+	ownerService, ownerType := mapUsageTypeToProto(l.UsageType)
 	return &filepb.FileLink{
 		Id:              l.ID.String(),
 		FileId:          l.FileID.String(),
-		OwnerService:    mapOwnerServiceToProto(l.OwnerService),
-		OwnerType:       l.OwnerType,
+		OwnerService:    ownerService,
+		OwnerType:       ownerType,
 		OwnerId:         l.OwnerID.String(),
-		PetId:           petID,
-		CreatedByUserId: l.CreatedByUserID.String(),
+		PetId:           "",
+		CreatedByUserId: uuid.Nil.String(),
 		CreatedAt:       timestamppb.New(l.CreatedAt),
 	}
 }
@@ -237,6 +255,8 @@ func mapSvcErr(err error) error {
 		return status.Error(codes.FailedPrecondition, "upload expired")
 	case errors.Is(err, service.ErrNotReady):
 		return status.Error(codes.FailedPrecondition, "file not ready")
+	case errors.Is(err, service.ErrHasLinks):
+		return status.Error(codes.FailedPrecondition, "file still has links")
 	default:
 		return status.Error(codes.Internal, "internal error")
 	}
@@ -248,8 +268,8 @@ func mapFileStatus(s model.FileStatus) filepb.FileStatus {
 		return filepb.FileStatus_FILE_STATUS_UPLOADING
 	case model.FileStatusReady:
 		return filepb.FileStatus_FILE_STATUS_READY
-	case model.FileStatusFailed:
-		return filepb.FileStatus_FILE_STATUS_FAILED
+	case model.FileStatusPendingDelete:
+		return filepb.FileStatus_FILE_STATUS_PENDING_DELETE
 	case model.FileStatusDeleted:
 		return filepb.FileStatus_FILE_STATUS_DELETED
 	default:
@@ -257,45 +277,51 @@ func mapFileStatus(s model.FileStatus) filepb.FileStatus {
 	}
 }
 
-func mapOwnerService(s filepb.OwnerService) model.OwnerService {
-	switch s {
+func mapUsageType(ownerService filepb.OwnerService, ownerType string) (model.FileUsageType, bool) {
+	switch ownerService {
 	case filepb.OwnerService_OWNER_SERVICE_PROFILE:
-		return model.OwnerServiceProfile
+		if ownerType == "AVATAR" {
+			return model.FileUsageTypeUserAvatar, true
+		}
 	case filepb.OwnerService_OWNER_SERVICE_PET:
-		return model.OwnerServicePet
-	case filepb.OwnerService_OWNER_SERVICE_GUIDE:
-		return model.OwnerServiceGuide
+		if ownerType == "PET_AVATAR" {
+			return model.FileUsageTypePetAvatar, true
+		}
 	case filepb.OwnerService_OWNER_SERVICE_LOG:
-		return model.OwnerServiceLog
+		if ownerType == "LOG_ATTACHMENT" {
+			return model.FileUsageTypeLogAttachment, true
+		}
 	case filepb.OwnerService_OWNER_SERVICE_HEALTH:
-		return model.OwnerServiceHealth
+		switch ownerType {
+		case "VET_VISIT":
+		case "VACCINATION":
+		case "MEDICAL_RECORD":
+		case "PROCEDURE":
+		case "HEALTH_ATTACHMENT":
+			return model.FileUsageTypeHealthAttach, true
+		}
 	case filepb.OwnerService_OWNER_SERVICE_CHAT:
-		return model.OwnerServiceChat
-	case filepb.OwnerService_OWNER_SERVICE_CATALOG:
-		return model.OwnerServiceCatalog
-	default:
-		return ""
+		if ownerType == "MESSAGE_ATTACHMENT" {
+			return model.FileUsageTypeChatAttachment, true
+		}
 	}
+	return "", false
 }
 
-func mapOwnerServiceToProto(s model.OwnerService) filepb.OwnerService {
-	switch s {
-	case model.OwnerServiceProfile:
-		return filepb.OwnerService_OWNER_SERVICE_PROFILE
-	case model.OwnerServicePet:
-		return filepb.OwnerService_OWNER_SERVICE_PET
-	case model.OwnerServiceGuide:
-		return filepb.OwnerService_OWNER_SERVICE_GUIDE
-	case model.OwnerServiceLog:
-		return filepb.OwnerService_OWNER_SERVICE_LOG
-	case model.OwnerServiceHealth:
-		return filepb.OwnerService_OWNER_SERVICE_HEALTH
-	case model.OwnerServiceChat:
-		return filepb.OwnerService_OWNER_SERVICE_CHAT
-	case model.OwnerServiceCatalog:
-		return filepb.OwnerService_OWNER_SERVICE_CATALOG
+func mapUsageTypeToProto(usageType model.FileUsageType) (filepb.OwnerService, string) {
+	switch usageType {
+	case model.FileUsageTypeUserAvatar:
+		return filepb.OwnerService_OWNER_SERVICE_PROFILE, "AVATAR"
+	case model.FileUsageTypePetAvatar:
+		return filepb.OwnerService_OWNER_SERVICE_PET, "PET_AVATAR"
+	case model.FileUsageTypeLogAttachment:
+		return filepb.OwnerService_OWNER_SERVICE_LOG, "LOG_ATTACHMENT"
+	case model.FileUsageTypeHealthAttach:
+		return filepb.OwnerService_OWNER_SERVICE_HEALTH, "HEALTH_ATTACHMENT"
+	case model.FileUsageTypeChatAttachment:
+		return filepb.OwnerService_OWNER_SERVICE_CHAT, "MESSAGE_ATTACHMENT"
 	default:
-		return filepb.OwnerService_OWNER_SERVICE_UNSPECIFIED
+		return filepb.OwnerService_OWNER_SERVICE_UNSPECIFIED, ""
 	}
 }
 

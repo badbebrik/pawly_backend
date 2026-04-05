@@ -2,8 +2,11 @@ package storage
 
 import (
 	"context"
+	"file/internal/model"
 	"fmt"
 	"time"
+
+	"github.com/minio/minio-go/v7"
 )
 
 type MinioStorageAdapter struct {
@@ -50,4 +53,22 @@ func (m *MinioStorageAdapter) PresignGet(ctx context.Context, bucket, objectKey 
 		return "", fmt.Errorf("minio presign get: %w", err)
 	}
 	return u.String(), nil
+}
+
+func (m *MinioStorageAdapter) StatObject(ctx context.Context, bucket, objectKey string) (model.ObjectInfo, error) {
+	info, err := m.client.Client.StatObject(ctx, bucket, objectKey, minio.StatObjectOptions{})
+	if err != nil {
+		return model.ObjectInfo{}, fmt.Errorf("minio stat object: %w", err)
+	}
+	return model.ObjectInfo{
+		Size:        info.Size,
+		ContentType: info.ContentType,
+	}, nil
+}
+
+func (m *MinioStorageAdapter) DeleteObject(ctx context.Context, bucket, objectKey string) error {
+	if err := m.client.Client.RemoveObject(ctx, bucket, objectKey, minio.RemoveObjectOptions{}); err != nil {
+		return fmt.Errorf("minio delete object: %w", err)
+	}
+	return nil
 }

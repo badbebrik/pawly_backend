@@ -9,4 +9,5 @@ var (
 	ErrInvalidState  = errors.New("invalid_state")
 	ErrUploadExpired = errors.New("upload_expired")
 	ErrNotReady      = errors.New("not_ready")
+	ErrHasLinks      = errors.New("has_links")
 )

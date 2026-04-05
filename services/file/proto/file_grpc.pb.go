@@ -25,6 +25,7 @@ const (
 	FileService_BatchGetDownloadUrls_FullMethodName = "/file.FileService/BatchGetDownloadUrls"
 	FileService_LinkFile_FullMethodName             = "/file.FileService/LinkFile"
 	FileService_UnlinkFile_FullMethodName           = "/file.FileService/UnlinkFile"
+	FileService_DeleteFileIfUnlinked_FullMethodName = "/file.FileService/DeleteFileIfUnlinked"
 	FileService_GetFile_FullMethodName              = "/file.FileService/GetFile"
 	FileService_ListFileLinks_FullMethodName        = "/file.FileService/ListFileLinks"
 )
@@ -39,6 +40,7 @@ type FileServiceClient interface {
 	BatchGetDownloadUrls(ctx context.Context, in *BatchGetDownloadUrlsRequest, opts ...grpc.CallOption) (*BatchGetDownloadUrlsResponse, error)
 	LinkFile(ctx context.Context, in *LinkFileRequest, opts ...grpc.CallOption) (*LinkFileResponse, error)
 	UnlinkFile(ctx context.Context, in *UnlinkFileRequest, opts ...grpc.CallOption) (*UnlinkFileResponse, error)
+	DeleteFileIfUnlinked(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error)
 	GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error)
 	ListFileLinks(ctx context.Context, in *ListFileLinksRequest, opts ...grpc.CallOption) (*ListFileLinksResponse, error)
 }
@@ -111,6 +113,16 @@ func (c *fileServiceClient) UnlinkFile(ctx context.Context, in *UnlinkFileReques
 	return out, nil
 }
 
+func (c *fileServiceClient) DeleteFileIfUnlinked(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFileResponse)
+	err := c.cc.Invoke(ctx, FileService_DeleteFileIfUnlinked_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *fileServiceClient) GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetFileResponse)
@@ -141,6 +153,7 @@ type FileServiceServer interface {
 	BatchGetDownloadUrls(context.Context, *BatchGetDownloadUrlsRequest) (*BatchGetDownloadUrlsResponse, error)
 	LinkFile(context.Context, *LinkFileRequest) (*LinkFileResponse, error)
 	UnlinkFile(context.Context, *UnlinkFileRequest) (*UnlinkFileResponse, error)
+	DeleteFileIfUnlinked(context.Context, *GetFileRequest) (*GetFileResponse, error)
 	GetFile(context.Context, *GetFileRequest) (*GetFileResponse, error)
 	ListFileLinks(context.Context, *ListFileLinksRequest) (*ListFileLinksResponse, error)
 	mustEmbedUnimplementedFileServiceServer()
@@ -170,6 +183,9 @@ func (UnimplementedFileServiceServer) LinkFile(context.Context, *LinkFileRequest
 }
 func (UnimplementedFileServiceServer) UnlinkFile(context.Context, *UnlinkFileRequest) (*UnlinkFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnlinkFile not implemented")
+}
+func (UnimplementedFileServiceServer) DeleteFileIfUnlinked(context.Context, *GetFileRequest) (*GetFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteFileIfUnlinked not implemented")
 }
 func (UnimplementedFileServiceServer) GetFile(context.Context, *GetFileRequest) (*GetFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFile not implemented")
@@ -306,6 +322,24 @@ func _FileService_UnlinkFile_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FileService_DeleteFileIfUnlinked_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FileServiceServer).DeleteFileIfUnlinked(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FileService_DeleteFileIfUnlinked_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FileServiceServer).DeleteFileIfUnlinked(ctx, req.(*GetFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _FileService_GetFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetFileRequest)
 	if err := dec(in); err != nil {
@@ -372,6 +406,10 @@ var FileService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnlinkFile",
 			Handler:    _FileService_UnlinkFile_Handler,
+		},
+		{
+			MethodName: "DeleteFileIfUnlinked",
+			Handler:    _FileService_DeleteFileIfUnlinked_Handler,
 		},
 		{
 			MethodName: "GetFile",

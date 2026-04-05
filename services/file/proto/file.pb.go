@@ -28,7 +28,7 @@ const (
 	FileStatus_FILE_STATUS_UNSPECIFIED FileStatus = 0
 	FileStatus_FILE_STATUS_UPLOADING   FileStatus = 1
 	FileStatus_FILE_STATUS_READY       FileStatus = 2
-	FileStatus_FILE_STATUS_FAILED      FileStatus = 3
+	FileStatus_FILE_STATUS_PENDING_DELETE FileStatus = 3
 	FileStatus_FILE_STATUS_DELETED     FileStatus = 4
 )
 
@@ -38,15 +38,15 @@ var (
 		0: "FILE_STATUS_UNSPECIFIED",
 		1: "FILE_STATUS_UPLOADING",
 		2: "FILE_STATUS_READY",
-		3: "FILE_STATUS_FAILED",
+		3: "FILE_STATUS_PENDING_DELETE",
 		4: "FILE_STATUS_DELETED",
 	}
 	FileStatus_value = map[string]int32{
-		"FILE_STATUS_UNSPECIFIED": 0,
-		"FILE_STATUS_UPLOADING":   1,
-		"FILE_STATUS_READY":       2,
-		"FILE_STATUS_FAILED":      3,
-		"FILE_STATUS_DELETED":     4,
+		"FILE_STATUS_UNSPECIFIED":    0,
+		"FILE_STATUS_UPLOADING":      1,
+		"FILE_STATUS_READY":          2,
+		"FILE_STATUS_PENDING_DELETE": 3,
+		"FILE_STATUS_DELETED":        4,
 	}
 )
 
@@ -153,6 +153,7 @@ type FileObject struct {
 	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	UploadExpiresAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=upload_expires_at,json=uploadExpiresAt,proto3" json:"upload_expires_at,omitempty"`
+	OriginalFilename string                `protobuf:"bytes,11,opt,name=original_filename,json=originalFilename,proto3" json:"original_filename,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -255,6 +256,13 @@ func (x *FileObject) GetUploadExpiresAt() *timestamppb.Timestamp {
 		return x.UploadExpiresAt
 	}
 	return nil
+}
+
+func (x *FileObject) GetOriginalFilename() string {
+	if x != nil {
+		return x.OriginalFilename
+	}
+	return ""
 }
 
 type FileLink struct {
@@ -429,6 +437,7 @@ type InitUploadRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	MimeType          string                 `protobuf:"bytes,1,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
 	ExpectedSizeBytes int64                  `protobuf:"varint,2,opt,name=expected_size_bytes,json=expectedSizeBytes,proto3" json:"expected_size_bytes,omitempty"`
+	OriginalFilename  string                 `protobuf:"bytes,3,opt,name=original_filename,json=originalFilename,proto3" json:"original_filename,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -475,6 +484,13 @@ func (x *InitUploadRequest) GetExpectedSizeBytes() int64 {
 		return x.ExpectedSizeBytes
 	}
 	return 0
+}
+
+func (x *InitUploadRequest) GetOriginalFilename() string {
+	if x != nil {
+		return x.OriginalFilename
+	}
+	return ""
 }
 
 type InitUploadResponse struct {
@@ -1321,8 +1337,8 @@ const file_file_proto_rawDesc = "" +
 	"FileStatus\x12\x1b\n" +
 	"\x17FILE_STATUS_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15FILE_STATUS_UPLOADING\x10\x01\x12\x15\n" +
-	"\x11FILE_STATUS_READY\x10\x02\x12\x16\n" +
-	"\x12FILE_STATUS_FAILED\x10\x03\x12\x17\n" +
+	"\x11FILE_STATUS_READY\x10\x02\x12\x1e\n" +
+	"\x1aFILE_STATUS_PENDING_DELETE\x10\x03\x12\x17\n" +
 	"\x13FILE_STATUS_DELETED\x10\x04*\xdc\x01\n" +
 	"\fOwnerService\x12\x1d\n" +
 	"\x19OWNER_SERVICE_UNSPECIFIED\x10\x00\x12\x19\n" +

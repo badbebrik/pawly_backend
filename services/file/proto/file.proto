@@ -14,6 +14,7 @@ service FileService {
 
   rpc LinkFile(LinkFileRequest) returns (LinkFileResponse);
   rpc UnlinkFile(UnlinkFileRequest) returns (UnlinkFileResponse);
+  rpc DeleteFileIfUnlinked(GetFileRequest) returns (GetFileResponse);
 
   rpc GetFile(GetFileRequest) returns (GetFileResponse);
   rpc ListFileLinks(ListFileLinksRequest) returns (ListFileLinksResponse);
@@ -23,7 +24,7 @@ enum FileStatus {
   FILE_STATUS_UNSPECIFIED = 0;
   FILE_STATUS_UPLOADING = 1;
   FILE_STATUS_READY = 2;
-  FILE_STATUS_FAILED = 3;
+  FILE_STATUS_PENDING_DELETE = 3;
   FILE_STATUS_DELETED = 4;
 }
 
@@ -49,6 +50,7 @@ message FileObject {
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
   google.protobuf.Timestamp upload_expires_at = 10;
+  string original_filename = 11;
 }
 
 message FileLink {
@@ -72,6 +74,7 @@ message UploadInfo {
 message InitUploadRequest {
   string mime_type = 1;
   int64 expected_size_bytes = 2;
+  string original_filename = 3;
 }
 
 message InitUploadResponse {

@@ -24,6 +24,8 @@ type Config struct {
 
 	UploadURLTTLSeconds   string
 	DownloadURLTTLSeconds string
+	CleanupIntervalSeconds string
+	CleanupBatchSize       string
 }
 
 func Load() *Config {
@@ -45,6 +47,8 @@ func Load() *Config {
 		MinioSkipBucketEnsure: getEnv("MINIO_SKIP_BUCKET_ENSURE", "false"),
 		UploadURLTTLSeconds:   getEnv("UPLOAD_URL_TTL_SECONDS", ""),
 		DownloadURLTTLSeconds: getEnv("DOWNLOAD_URL_TTL_SECONDS", ""),
+		CleanupIntervalSeconds: getEnv("CLEANUP_INTERVAL_SECONDS", "300"),
+		CleanupBatchSize:       getEnv("CLEANUP_BATCH_SIZE", "100"),
 	}
 }
 

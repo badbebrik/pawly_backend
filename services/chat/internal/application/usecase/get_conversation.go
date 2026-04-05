@@ -16,6 +16,11 @@ type GetConversation struct {
 	acl           ports.ACLClient
 	profiles      ports.ProfileClient
 	pets          ports.PetClient
+	presence      conversationPresenceReader
+}
+
+type conversationPresenceReader interface {
+	IsUserInConversation(ctx context.Context, conversationID, userID uuid.UUID) (bool, error)
 }
 
 func NewGetConversation(
@@ -24,6 +29,7 @@ func NewGetConversation(
 	acl ports.ACLClient,
 	profiles ports.ProfileClient,
 	pets ports.PetClient,
+	presence conversationPresenceReader,
 ) *GetConversation {
 	return &GetConversation{
 		conversations: conversations,
@@ -31,12 +37,13 @@ func NewGetConversation(
 		acl:           acl,
 		profiles:      profiles,
 		pets:          pets,
+		presence:      presence,
 	}
 }
 
 type GetConversationParams struct {
-	CurrentUserID   uuid.UUID
-	ConversationID  uuid.UUID
+	CurrentUserID  uuid.UUID
+	ConversationID uuid.UUID
 }
 
 type GetConversationPet struct {
@@ -52,16 +59,18 @@ type GetConversationOtherUser struct {
 }
 
 type GetConversationDetails struct {
-	ConversationID      uuid.UUID
-	Pet                 GetConversationPet
-	OtherUser           GetConversationOtherUser
-	LastMessageID       *uuid.UUID
-	LastMessageAt       *time.Time
-	LastMessagePreview  *string
-	LastMessageSenderID *uuid.UUID
-	LastReadMessageID   *uuid.UUID
-	UnreadCount         int
-	CanSend             bool
+	ConversationID             uuid.UUID
+	Pet                        GetConversationPet
+	OtherUser                  GetConversationOtherUser
+	LastMessageID              *uuid.UUID
+	LastMessageAt              *time.Time
+	LastMessagePreview         *string
+	LastMessageSenderID        *uuid.UUID
+	LastReadMessageID          *uuid.UUID
+	OtherUserLastReadMessageID *uuid.UUID
+	OtherUserInChat            bool
+	UnreadCount                int
+	CanSend                    bool
 }
 
 type GetConversationResult struct {
@@ -90,6 +99,13 @@ func (uc *GetConversation) Execute(ctx context.Context, params GetConversationPa
 	}
 
 	otherUserID := conversation.OtherUserID(params.CurrentUserID)
+	otherParticipant, err := uc.participants.GetByConversationAndUser(ctx, conversation.ID, otherUserID)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			return GetConversationResult{}, ErrForbidden
+		}
+		return GetConversationResult{}, err
+	}
 
 	profiles, err := uc.profiles.BatchGetBrief(ctx, []uuid.UUID{otherUserID})
 	if err != nil {
@@ -119,6 +135,14 @@ func (uc *GetConversation) Execute(ctx context.Context, params GetConversationPa
 		return GetConversationResult{}, ErrForbidden
 	}
 
+	otherUserInChat := false
+	if uc.presence != nil {
+		otherUserInChat, err = uc.presence.IsUserInConversation(ctx, conversation.ID, otherUserID)
+		if err != nil {
+			return GetConversationResult{}, err
+		}
+	}
+
 	return GetConversationResult{
 		Conversation: GetConversationDetails{
 			ConversationID: conversation.ID,
@@ -132,13 +156,15 @@ func (uc *GetConversation) Execute(ctx context.Context, params GetConversationPa
 				DisplayName: profile.DisplayName,
 				AvatarURL:   profile.AvatarURL,
 			},
-			LastMessageID:       conversation.LastMessageID,
-			LastMessageAt:       conversation.LastMessageAt,
-			LastMessagePreview:  conversation.LastMessagePreview,
-			LastMessageSenderID: conversation.LastMessageSenderID,
-			LastReadMessageID:   participant.LastReadMessageID,
-			UnreadCount:         participant.UnreadCount,
-			CanSend:             canSend,
+			LastMessageID:              conversation.LastMessageID,
+			LastMessageAt:              conversation.LastMessageAt,
+			LastMessagePreview:         conversation.LastMessagePreview,
+			LastMessageSenderID:        conversation.LastMessageSenderID,
+			LastReadMessageID:          participant.LastReadMessageID,
+			OtherUserLastReadMessageID: otherParticipant.LastReadMessageID,
+			OtherUserInChat:            otherUserInChat,
+			UnreadCount:                participant.UnreadCount,
+			CanSend:                    canSend,
 		},
 	}, nil
 }

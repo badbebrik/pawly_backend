@@ -17,6 +17,7 @@ type OpenDirectConversation struct {
 	acl           ports.ACLClient
 	profiles      ports.ProfileClient
 	pets          ports.PetClient
+	presence      conversationPresenceReader
 }
 
 func NewOpenDirectConversation(
@@ -26,6 +27,7 @@ func NewOpenDirectConversation(
 	acl ports.ACLClient,
 	profiles ports.ProfileClient,
 	pets ports.PetClient,
+	presence conversationPresenceReader,
 ) *OpenDirectConversation {
 	return &OpenDirectConversation{
 		conversations: conversations,
@@ -34,6 +36,7 @@ func NewOpenDirectConversation(
 		acl:           acl,
 		profiles:      profiles,
 		pets:          pets,
+		presence:      presence,
 	}
 }
 
@@ -56,16 +59,18 @@ type OpenDirectConversationOtherUser struct {
 }
 
 type OpenDirectConversationConversation struct {
-	ConversationID      uuid.UUID
-	Pet                 OpenDirectConversationPet
-	OtherUser           OpenDirectConversationOtherUser
-	LastMessageID       *uuid.UUID
-	LastMessageAt       *time.Time
-	LastMessagePreview  *string
-	LastMessageSenderID *uuid.UUID
-	LastReadMessageID   *uuid.UUID
-	UnreadCount         int
-	CanSend             bool
+	ConversationID             uuid.UUID
+	Pet                        OpenDirectConversationPet
+	OtherUser                  OpenDirectConversationOtherUser
+	LastMessageID              *uuid.UUID
+	LastMessageAt              *time.Time
+	LastMessagePreview         *string
+	LastMessageSenderID        *uuid.UUID
+	LastReadMessageID          *uuid.UUID
+	OtherUserLastReadMessageID *uuid.UUID
+	OtherUserInChat            bool
+	UnreadCount                int
+	CanSend                    bool
 }
 
 type OpenDirectConversationResult struct {
@@ -183,6 +188,13 @@ func (uc *OpenDirectConversation) buildResult(
 	}
 
 	otherUserID := conversation.OtherUserID(currentUserID)
+	otherParticipant, err := uc.participants.GetByConversationAndUser(ctx, conversation.ID, otherUserID)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			return OpenDirectConversationResult{}, ErrForbidden
+		}
+		return OpenDirectConversationResult{}, err
+	}
 
 	profiles, err := uc.profiles.BatchGetBrief(ctx, []uuid.UUID{otherUserID})
 	if err != nil {
@@ -217,6 +229,14 @@ func (uc *OpenDirectConversation) buildResult(
 		return OpenDirectConversationResult{}, err
 	}
 
+	otherUserInChat := false
+	if uc.presence != nil {
+		otherUserInChat, err = uc.presence.IsUserInConversation(ctx, conversation.ID, otherUserID)
+		if err != nil {
+			return OpenDirectConversationResult{}, err
+		}
+	}
+
 	return OpenDirectConversationResult{
 		Conversation: OpenDirectConversationConversation{
 			ConversationID: conversation.ID,
@@ -230,13 +250,15 @@ func (uc *OpenDirectConversation) buildResult(
 				DisplayName: profile.DisplayName,
 				AvatarURL:   profile.AvatarURL,
 			},
-			LastMessageID:       conversation.LastMessageID,
-			LastMessageAt:       conversation.LastMessageAt,
-			LastMessagePreview:  conversation.LastMessagePreview,
-			LastMessageSenderID: conversation.LastMessageSenderID,
-			LastReadMessageID:   participant.LastReadMessageID,
-			UnreadCount:         participant.UnreadCount,
-			CanSend:             currentUserActive && otherUserActive,
+			LastMessageID:              conversation.LastMessageID,
+			LastMessageAt:              conversation.LastMessageAt,
+			LastMessagePreview:         conversation.LastMessagePreview,
+			LastMessageSenderID:        conversation.LastMessageSenderID,
+			LastReadMessageID:          participant.LastReadMessageID,
+			OtherUserLastReadMessageID: otherParticipant.LastReadMessageID,
+			OtherUserInChat:            otherUserInChat,
+			UnreadCount:                participant.UnreadCount,
+			CanSend:                    currentUserActive && otherUserActive,
 		},
 	}, nil
 }

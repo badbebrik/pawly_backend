@@ -29,16 +29,18 @@ type conversationOtherUserResponse struct {
 }
 
 type conversationResponse struct {
-	ConversationID      uuid.UUID                     `json:"conversation_id"`
-	Pet                 conversationPetResponse       `json:"pet"`
-	OtherUser           conversationOtherUserResponse `json:"other_user"`
-	LastMessageID       *uuid.UUID                    `json:"last_message_id,omitempty"`
-	LastMessageAt       *string                       `json:"last_message_at,omitempty"`
-	LastMessagePreview  *string                       `json:"last_message_preview,omitempty"`
-	LastMessageSenderID *uuid.UUID                    `json:"last_message_sender_id,omitempty"`
-	LastReadMessageID   *uuid.UUID                    `json:"last_read_message_id,omitempty"`
-	UnreadCount         int                           `json:"unread_count"`
-	CanSend             bool                          `json:"can_send"`
+	ConversationID             uuid.UUID                     `json:"conversation_id"`
+	Pet                        conversationPetResponse       `json:"pet"`
+	OtherUser                  conversationOtherUserResponse `json:"other_user"`
+	LastMessageID              *uuid.UUID                    `json:"last_message_id,omitempty"`
+	LastMessageAt              *string                       `json:"last_message_at,omitempty"`
+	LastMessagePreview         *string                       `json:"last_message_preview,omitempty"`
+	LastMessageSenderID        *uuid.UUID                    `json:"last_message_sender_id,omitempty"`
+	LastReadMessageID          *uuid.UUID                    `json:"last_read_message_id,omitempty"`
+	OtherUserLastReadMessageID *uuid.UUID                    `json:"other_user_last_read_message_id,omitempty"`
+	OtherUserInChat            bool                          `json:"other_user_in_chat"`
+	UnreadCount                int                           `json:"unread_count"`
+	CanSend                    bool                          `json:"can_send"`
 }
 
 type listConversationsResponse struct {
@@ -302,32 +304,36 @@ func (h *Handlers) MarkRead(w http.ResponseWriter, r *http.Request) {
 func mapOpenConversationResponse(result chatuc.OpenDirectConversationResult) conversationResponse {
 	conversation := result.Conversation
 	return conversationResponse{
-		ConversationID:      conversation.ConversationID,
-		Pet:                 mapConversationPet(conversation.Pet.PetID, conversation.Pet.Name, conversation.Pet.AvatarURL),
-		OtherUser:           mapOtherUser(conversation.OtherUser.UserID, conversation.OtherUser.DisplayName, conversation.OtherUser.AvatarURL),
-		LastMessageID:       conversation.LastMessageID,
-		LastMessageAt:       formatTimePtr(conversation.LastMessageAt),
-		LastMessagePreview:  conversation.LastMessagePreview,
-		LastMessageSenderID: conversation.LastMessageSenderID,
-		LastReadMessageID:   conversation.LastReadMessageID,
-		UnreadCount:         conversation.UnreadCount,
-		CanSend:             conversation.CanSend,
+		ConversationID:             conversation.ConversationID,
+		Pet:                        mapConversationPet(conversation.Pet.PetID, conversation.Pet.Name, conversation.Pet.AvatarURL),
+		OtherUser:                  mapOtherUser(conversation.OtherUser.UserID, conversation.OtherUser.DisplayName, conversation.OtherUser.AvatarURL),
+		LastMessageID:              conversation.LastMessageID,
+		LastMessageAt:              formatTimePtr(conversation.LastMessageAt),
+		LastMessagePreview:         conversation.LastMessagePreview,
+		LastMessageSenderID:        conversation.LastMessageSenderID,
+		LastReadMessageID:          conversation.LastReadMessageID,
+		OtherUserLastReadMessageID: conversation.OtherUserLastReadMessageID,
+		OtherUserInChat:            conversation.OtherUserInChat,
+		UnreadCount:                conversation.UnreadCount,
+		CanSend:                    conversation.CanSend,
 	}
 }
 
 func mapGetConversationResponse(result chatuc.GetConversationResult) conversationResponse {
 	conversation := result.Conversation
 	return conversationResponse{
-		ConversationID:      conversation.ConversationID,
-		Pet:                 mapConversationPet(conversation.Pet.PetID, conversation.Pet.Name, conversation.Pet.AvatarURL),
-		OtherUser:           mapOtherUser(conversation.OtherUser.UserID, conversation.OtherUser.DisplayName, conversation.OtherUser.AvatarURL),
-		LastMessageID:       conversation.LastMessageID,
-		LastMessageAt:       formatTimePtr(conversation.LastMessageAt),
-		LastMessagePreview:  conversation.LastMessagePreview,
-		LastMessageSenderID: conversation.LastMessageSenderID,
-		LastReadMessageID:   conversation.LastReadMessageID,
-		UnreadCount:         conversation.UnreadCount,
-		CanSend:             conversation.CanSend,
+		ConversationID:             conversation.ConversationID,
+		Pet:                        mapConversationPet(conversation.Pet.PetID, conversation.Pet.Name, conversation.Pet.AvatarURL),
+		OtherUser:                  mapOtherUser(conversation.OtherUser.UserID, conversation.OtherUser.DisplayName, conversation.OtherUser.AvatarURL),
+		LastMessageID:              conversation.LastMessageID,
+		LastMessageAt:              formatTimePtr(conversation.LastMessageAt),
+		LastMessagePreview:         conversation.LastMessagePreview,
+		LastMessageSenderID:        conversation.LastMessageSenderID,
+		LastReadMessageID:          conversation.LastReadMessageID,
+		OtherUserLastReadMessageID: conversation.OtherUserLastReadMessageID,
+		OtherUserInChat:            conversation.OtherUserInChat,
+		UnreadCount:                conversation.UnreadCount,
+		CanSend:                    conversation.CanSend,
 	}
 }
 

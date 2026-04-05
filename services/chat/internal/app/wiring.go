@@ -6,7 +6,11 @@ import (
 	chatdb "chat/internal/infrastructure/db"
 	petclient "chat/internal/infrastructure/petclient"
 	profileclient "chat/internal/infrastructure/profileclient"
+	"chat/internal/infrastructure/realtime"
 	"chat/internal/infrastructure/repository"
+	"context"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func (a *App) wire() error {
@@ -45,15 +49,33 @@ func (a *App) wire() error {
 	participants := repository.NewParticipantRepository(pg.Pool)
 	txManager := chatdb.NewTxManager(pg.Pool)
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     a.cfg.RedisAddr,
+		Password: a.cfg.RedisPassword,
+		DB:       a.cfg.RedisDB,
+	})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		pet.Close()
+		profile.Close()
+		acl.Close()
+		pg.Close()
+		return err
+	}
+	a.redis = redisClient
+	a.presence = realtime.NewRedisPresenceTracker(redisClient, "chat:presence")
+
 	a.useCases = &UseCases{
-		OpenDirectConversation: usecase.NewOpenDirectConversation(conversations, participants, txManager, acl, profile, pet),
+		OpenDirectConversation: usecase.NewOpenDirectConversation(conversations, participants, txManager, acl, profile, pet, a.presence),
 		ListConversations:      usecase.NewListConversations(conversations, acl, profile, pet),
-		GetConversation:        usecase.NewGetConversation(conversations, participants, acl, profile, pet),
+		GetConversation:        usecase.NewGetConversation(conversations, participants, acl, profile, pet, a.presence),
 		GetUnreadSummary:       usecase.NewGetUnreadSummary(conversations),
 		GetMessageHistory:      usecase.NewGetMessageHistory(conversations, participants, messages),
 		SendMessage:            usecase.NewSendMessage(conversations, participants, messages, txManager, acl, nil),
 		MarkRead:               usecase.NewMarkRead(conversations, participants, messages, txManager, nil),
 	}
+
+	a.rtPub = realtime.NewRedisPublisher(redisClient, a.cfg.RedisChannel)
+	a.rtSub = realtime.NewRedisSubscriber(redisClient, a.cfg.RedisChannel, a.hub, a.useCases.GetConversation, a.useCases.GetUnreadSummary)
 
 	return nil
 }

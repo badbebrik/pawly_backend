@@ -5,6 +5,7 @@ import (
 	appmw "chat/internal/transport/http/middleware"
 	"chat/internal/transport/ws"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -32,6 +33,10 @@ func (a *App) setupRoutes() http.Handler {
 	)
 	wsHandler := ws.NewHandler(
 		a.hub,
+		a.rtPub,
+		a.presence,
+		time.Duration(a.cfg.PresenceTTL)*time.Second,
+		time.Duration(a.cfg.PresenceHeartbeat)*time.Second,
 		a.cfg.JWTSecret,
 		a.useCases.SendMessage,
 		a.useCases.MarkRead,

@@ -23,18 +23,23 @@ func NewHub() *Hub {
 }
 
 type Client struct {
+	ID     uuid.UUID
 	UserID uuid.UUID
 
 	send chan []byte
 	done chan struct{}
 	once sync.Once
+	mu   sync.RWMutex
+	subs map[uuid.UUID]struct{}
 }
 
 func NewClient(userID uuid.UUID, send chan []byte) *Client {
 	return &Client{
+		ID:     uuid.New(),
 		UserID: userID,
 		send:   send,
 		done:   make(chan struct{}),
+		subs:   make(map[uuid.UUID]struct{}),
 	}
 }
 
@@ -168,6 +173,41 @@ func (h *Hub) PublishToConversationExcept(conversationID uuid.UUID, excluded *Cl
 	}
 }
 
+func (h *Hub) PublishToConversationExceptClientID(conversationID, excludedClientID uuid.UUID, message []byte) {
+	h.mu.RLock()
+	clients := h.convSubs[conversationID]
+	targets := make([]*Client, 0, len(clients))
+	for client := range clients {
+		if client.ID == excludedClientID {
+			continue
+		}
+		targets = append(targets, client)
+	}
+	h.mu.RUnlock()
+
+	for _, client := range targets {
+		client.publish(message)
+	}
+}
+
+func (h *Hub) HasConversationSubscribers(conversationID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.convSubs[conversationID]) > 0
+}
+
+func (h *Hub) HasUserInboxSubscribers(userID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	clients := h.clientsByUser[userID]
+	for client := range clients {
+		if _, ok := h.inboxSubs[client]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Client) publish(message []byte) {
 	select {
 	case <-c.done:
@@ -185,4 +225,27 @@ func (c *Client) close() {
 	c.once.Do(func() {
 		close(c.done)
 	})
+}
+
+func (c *Client) AddConversationSubscription(conversationID uuid.UUID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.subs[conversationID] = struct{}{}
+}
+
+func (c *Client) RemoveConversationSubscription(conversationID uuid.UUID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.subs, conversationID)
+}
+
+func (c *Client) ConversationSubscriptions() []uuid.UUID {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	result := make([]uuid.UUID, 0, len(c.subs))
+	for conversationID := range c.subs {
+		result = append(result, conversationID)
+	}
+	return result
 }

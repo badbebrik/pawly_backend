@@ -12,12 +12,16 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 type Handler struct {
 	hub              *realtime.Hub
+	publisher        realtime.EventPublisher
+	presence         realtime.PresenceTracker
+	presenceTTL      time.Duration
+	heartbeatEvery   time.Duration
 	jwtSecret        string
 	sendMessage      *usecase.SendMessage
 	markRead         *usecase.MarkRead
@@ -92,16 +96,18 @@ type conversationOtherUserPayload struct {
 }
 
 type conversationUpdatedPayload struct {
-	ConversationID      uuid.UUID                    `json:"conversation_id"`
-	Pet                 conversationPetPayload       `json:"pet"`
-	OtherUser           conversationOtherUserPayload `json:"other_user"`
-	LastMessageID       *uuid.UUID                   `json:"last_message_id,omitempty"`
-	LastMessageAt       *string                      `json:"last_message_at,omitempty"`
-	LastMessagePreview  *string                      `json:"last_message_preview,omitempty"`
-	LastMessageSenderID *uuid.UUID                   `json:"last_message_sender_id,omitempty"`
-	LastReadMessageID   *uuid.UUID                   `json:"last_read_message_id,omitempty"`
-	UnreadCount         int                          `json:"unread_count"`
-	CanSend             bool                         `json:"can_send"`
+	ConversationID             uuid.UUID                    `json:"conversation_id"`
+	Pet                        conversationPetPayload       `json:"pet"`
+	OtherUser                  conversationOtherUserPayload `json:"other_user"`
+	LastMessageID              *uuid.UUID                   `json:"last_message_id,omitempty"`
+	LastMessageAt              *string                      `json:"last_message_at,omitempty"`
+	LastMessagePreview         *string                      `json:"last_message_preview,omitempty"`
+	LastMessageSenderID        *uuid.UUID                   `json:"last_message_sender_id,omitempty"`
+	LastReadMessageID          *uuid.UUID                   `json:"last_read_message_id,omitempty"`
+	OtherUserLastReadMessageID *uuid.UUID                   `json:"other_user_last_read_message_id,omitempty"`
+	OtherUserInChat            bool                         `json:"other_user_in_chat"`
+	UnreadCount                int                          `json:"unread_count"`
+	CanSend                    bool                         `json:"can_send"`
 }
 
 type globalUnreadUpdatedPayload struct {
@@ -117,6 +123,10 @@ var upgrader = websocket.Upgrader{
 
 func NewHandler(
 	hub *realtime.Hub,
+	publisher realtime.EventPublisher,
+	presence realtime.PresenceTracker,
+	presenceTTL time.Duration,
+	heartbeatEvery time.Duration,
 	jwtSecret string,
 	sendMessage *usecase.SendMessage,
 	markRead *usecase.MarkRead,
@@ -125,6 +135,10 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		hub:              hub,
+		publisher:        publisher,
+		presence:         presence,
+		presenceTTL:      presenceTTL,
+		heartbeatEvery:   heartbeatEvery,
 		jwtSecret:        jwtSecret,
 		sendMessage:      sendMessage,
 		markRead:         markRead,
@@ -157,6 +171,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	client := realtime.NewClient(userID, send)
 	h.hub.AddClient(client)
 	defer func() {
+		h.clearPresence(client)
 		h.hub.RemoveClient(client)
 		_ = conn.Close()
 	}()
@@ -201,6 +216,8 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 			}
 
 			h.hub.SubscribeConversation(msg.ConversationID, client)
+			client.AddConversationSubscription(msg.ConversationID)
+			h.setPresence(ctx, client, msg.ConversationID)
 		case "unsubscribe_conversation":
 			var msg subscribeConversationPayload
 			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
@@ -212,6 +229,8 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 				continue
 			}
 			h.hub.UnsubscribeConversation(msg.ConversationID, client)
+			client.RemoveConversationSubscription(msg.ConversationID)
+			h.clearConversationPresence(ctx, client, msg.ConversationID)
 		case "send_message":
 			var msg sendMessagePayload
 			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
@@ -251,25 +270,6 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 
 			h.hub.PublishToClient(client, payload)
 
-			messageNew, err := json.Marshal(outboundEnvelope{
-				Type: "message_new",
-				Payload: messageNewPayload{
-					MessageID:      result.Message.MessageID,
-					ConversationID: result.Message.ConversationID,
-					SenderUserID:   result.Message.SenderUserID,
-					ClientMsgID:    result.Message.ClientMsgID,
-					Text:           result.Message.Text,
-					CreatedAt:      result.Message.CreatedAt.UTC().Format(time.RFC3339),
-				},
-			})
-			if err != nil {
-				continue
-			}
-
-			h.hub.PublishToConversationExcept(msg.ConversationID, client, messageNew)
-			h.publishConversationUpdated(ctx, client.UserID, msg.ConversationID)
-			h.publishGlobalUnreadUpdated(ctx, client.UserID)
-
 			conversation, err := h.getConversation.Execute(ctx, usecase.GetConversationParams{
 				CurrentUserID:  client.UserID,
 				ConversationID: msg.ConversationID,
@@ -279,8 +279,18 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 				continue
 			}
 
-			h.publishConversationUpdated(ctx, conversation.Conversation.OtherUser.UserID, msg.ConversationID)
-			h.publishGlobalUnreadUpdated(ctx, conversation.Conversation.OtherUser.UserID)
+			if err := h.publisher.PublishMessageSent(ctx, realtime.MessageSentEvent{
+				OriginClientID:  client.ID,
+				ConversationID:  result.Message.ConversationID,
+				MessageID:       result.Message.MessageID,
+				SenderUserID:    result.Message.SenderUserID,
+				RecipientUserID: conversation.Conversation.OtherUser.UserID,
+				ClientMsgID:     result.Message.ClientMsgID,
+				Text:            result.Message.Text,
+				CreatedAt:       result.Message.CreatedAt,
+			}); err != nil {
+				h.publishError(client, "realtime_publish_failed", "message saved but realtime update failed")
+			}
 		case "mark_read":
 			var msg markReadPayload
 			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
@@ -302,21 +312,13 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 				continue
 			}
 
-			readUpdated, err := json.Marshal(outboundEnvelope{
-				Type: "read_updated",
-				Payload: readUpdatedPayload{
-					ConversationID:    result.ConversationID,
-					UserID:            client.UserID,
-					LastReadMessageID: result.LastReadMessageID,
-				},
-			})
-			if err != nil {
-				continue
+			if err := h.publisher.PublishReadUpdated(ctx, realtime.ReadUpdatedEvent{
+				ConversationID:    result.ConversationID,
+				UserID:            client.UserID,
+				LastReadMessageID: result.LastReadMessageID,
+			}); err != nil {
+				h.publishError(client, "realtime_publish_failed", "read state saved but realtime update failed")
 			}
-
-			h.hub.PublishToConversation(msg.ConversationID, readUpdated)
-			h.publishConversationUpdated(ctx, client.UserID, msg.ConversationID)
-			h.publishGlobalUnreadUpdated(ctx, client.UserID)
 		default:
 			h.publishError(client, "unsupported_event", "unsupported event type")
 		}
@@ -324,7 +326,7 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 }
 
 func (h *Handler) writeLoop(conn *websocket.Conn, client *realtime.Client, send <-chan []byte) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(h.heartbeatEvery)
 	defer ticker.Stop()
 
 	for {
@@ -337,72 +339,12 @@ func (h *Handler) writeLoop(conn *websocket.Conn, client *realtime.Client, send 
 				return
 			}
 		case <-ticker.C:
+			h.refreshPresence(client)
 			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
 				return
 			}
 		}
 	}
-}
-
-func (h *Handler) publishConversationUpdated(ctx context.Context, userID, conversationID uuid.UUID) {
-	result, err := h.getConversation.Execute(ctx, usecase.GetConversationParams{
-		CurrentUserID:  userID,
-		ConversationID: conversationID,
-	})
-	if err != nil {
-		return
-	}
-
-	payload, err := json.Marshal(outboundEnvelope{
-		Type: "conversation_updated",
-		Payload: conversationUpdatedPayload{
-			ConversationID: result.Conversation.ConversationID,
-			Pet: conversationPetPayload{
-				PetID:     result.Conversation.Pet.PetID,
-				Name:      result.Conversation.Pet.Name,
-				AvatarURL: result.Conversation.Pet.AvatarURL,
-			},
-			OtherUser: conversationOtherUserPayload{
-				UserID:      result.Conversation.OtherUser.UserID,
-				DisplayName: result.Conversation.OtherUser.DisplayName,
-				AvatarURL:   result.Conversation.OtherUser.AvatarURL,
-			},
-			LastMessageID:       result.Conversation.LastMessageID,
-			LastMessageAt:       formatTimePtr(result.Conversation.LastMessageAt),
-			LastMessagePreview:  result.Conversation.LastMessagePreview,
-			LastMessageSenderID: result.Conversation.LastMessageSenderID,
-			LastReadMessageID:   result.Conversation.LastReadMessageID,
-			UnreadCount:         result.Conversation.UnreadCount,
-			CanSend:             result.Conversation.CanSend,
-		},
-	})
-	if err != nil {
-		return
-	}
-
-	h.hub.PublishToUserInbox(userID, payload)
-}
-
-func (h *Handler) publishGlobalUnreadUpdated(ctx context.Context, userID uuid.UUID) {
-	result, err := h.getUnreadSummary.Execute(ctx, usecase.GetUnreadSummaryParams{
-		CurrentUserID: userID,
-	})
-	if err != nil {
-		return
-	}
-
-	payload, err := json.Marshal(outboundEnvelope{
-		Type: "global_unread_updated",
-		Payload: globalUnreadUpdatedPayload{
-			UnreadConversations: result.UnreadConversations,
-			UnreadMessages:      result.UnreadMessages,
-		},
-	})
-	if err != nil {
-		return
-	}
-
-	h.hub.PublishToUserInbox(userID, payload)
 }
 
 func formatTimePtr(value *time.Time) *string {
@@ -427,6 +369,73 @@ func (h *Handler) publishError(client *realtime.Client, code, message string) {
 	}
 
 	h.hub.PublishToClient(client, payload)
+}
+
+func (h *Handler) setPresence(ctx context.Context, client *realtime.Client, conversationID uuid.UUID) {
+	if h.presence == nil {
+		return
+	}
+
+	change, changed, err := h.presence.SetInConversation(ctx, conversationID, client.UserID, client.ID, h.presenceTTL)
+	if err != nil || !changed {
+		return
+	}
+	h.publishPresenceChange(ctx, change)
+}
+
+func (h *Handler) clearConversationPresence(ctx context.Context, client *realtime.Client, conversationID uuid.UUID) {
+	if h.presence == nil {
+		return
+	}
+
+	change, changed, err := h.presence.ClearInConversation(ctx, conversationID, client.UserID, client.ID)
+	if err != nil || !changed {
+		return
+	}
+	h.publishPresenceChange(ctx, change)
+}
+
+func (h *Handler) clearPresence(client *realtime.Client) {
+	if h.presence == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	changes, err := h.presence.ClearClient(ctx, client.UserID, client.ID, client.ConversationSubscriptions())
+	if err != nil {
+		return
+	}
+	for _, change := range changes {
+		h.publishPresenceChange(ctx, change)
+	}
+}
+
+func (h *Handler) refreshPresence(client *realtime.Client) {
+	if h.presence == nil {
+		return
+	}
+
+	subscriptions := client.ConversationSubscriptions()
+	if len(subscriptions) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = h.presence.RefreshConversations(ctx, client.UserID, client.ID, subscriptions, h.presenceTTL)
+}
+
+func (h *Handler) publishPresenceChange(ctx context.Context, change realtime.PresenceChange) {
+	if h.publisher == nil {
+		return
+	}
+	_ = h.publisher.PublishConversationPresenceUpdated(ctx, realtime.ConversationPresenceUpdatedEvent{
+		ConversationID: change.ConversationID,
+		UserID:         change.UserID,
+		IsInChat:       change.IsInChat,
+	})
 }
 
 func (h *Handler) userIDFromAuthorization(authorization string) (uuid.UUID, error) {

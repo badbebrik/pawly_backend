@@ -116,6 +116,17 @@ services:
       timeout: 3s
       retries: 20
 
+  chat_redis:
+    image: redis:7-alpine
+    container_name: chat_redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:7
     container_name: auth_redis
@@ -293,6 +304,8 @@ services:
       - ../services/chat/.env.docker
     depends_on:
       chat_postgres:
+        condition: service_healthy
+      chat_redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8089/health >/dev/null 2>&1 || exit 1"]

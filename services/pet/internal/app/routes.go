@@ -36,6 +36,7 @@ func (a *App) setupRoutes() http.Handler {
 		r.Post("/v1/pets/{pet_id}/status", h.ChangePetStatus)
 		r.Post("/v1/pets/{pet_id}/photo:init-upload", h.InitPetPhotoUpload)
 		r.Post("/v1/pets/{pet_id}/photo:confirm-upload", h.ConfirmPetPhotoUpload)
+		r.Delete("/v1/pets/{pet_id}/photo", h.DeletePetPhoto)
 	})
 
 	return r

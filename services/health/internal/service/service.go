@@ -23,11 +23,28 @@ type ACLClient interface {
 }
 
 type FileClient interface {
+	InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, UploadInfo, error)
+	ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) (*UploadedFile, error)
 	EnsureFilesExist(ctx context.Context, fileIDs []uuid.UUID) error
 	BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error)
 	GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]model.HealthFile, error)
 	LinkAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
 	UnlinkAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error
+	DeleteFilesIfUnlinked(ctx context.Context, fileIDs []uuid.UUID) error
+}
+
+type UploadInfo struct {
+	Method    string
+	URL       string
+	Headers   map[string]string
+	ExpiresAt time.Time
+}
+
+type UploadedFile struct {
+	ID               uuid.UUID
+	MimeType         string
+	SizeBytes        int64
+	OriginalFilename *string
 }
 
 type Service struct {
@@ -87,6 +104,53 @@ type DeleteLogParams struct {
 	PetID      uuid.UUID
 	LogID      uuid.UUID
 	RowVersion int
+}
+
+type InitAttachmentUploadParams struct {
+	UserID            uuid.UUID
+	PetID             uuid.UUID
+	MimeType          string
+	OriginalFilename  string
+	ExpectedSizeBytes int64
+}
+
+type ConfirmAttachmentUploadParams struct {
+	UserID    uuid.UUID
+	PetID     uuid.UUID
+	FileID    uuid.UUID
+	SizeBytes int64
+}
+
+func (s *Service) InitAttachmentUpload(ctx context.Context, p InitAttachmentUploadParams) (uuid.UUID, UploadInfo, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || strings.TrimSpace(p.MimeType) == "" || p.ExpectedSizeBytes <= 0 {
+		return uuid.Nil, UploadInfo{}, ErrInvalidInput
+	}
+
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionHealthWrite)
+	if err != nil {
+		return uuid.Nil, UploadInfo{}, err
+	}
+	if !allowed {
+		return uuid.Nil, UploadInfo{}, ErrForbidden
+	}
+
+	return s.file.InitUpload(ctx, strings.TrimSpace(strings.ToLower(p.MimeType)), p.ExpectedSizeBytes, strings.TrimSpace(p.OriginalFilename))
+}
+
+func (s *Service) ConfirmAttachmentUpload(ctx context.Context, p ConfirmAttachmentUploadParams) (*UploadedFile, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.FileID == uuid.Nil || p.SizeBytes <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionHealthWrite)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	return s.file.ConfirmUpload(ctx, p.FileID, p.SizeBytes)
 }
 
 func (s *Service) ListLogs(ctx context.Context, p ListLogsParams) (repository.ListLogsOutput, error) {
@@ -195,14 +259,14 @@ func (s *Service) CreateLog(ctx context.Context, p CreateLogParams) (*model.Log,
 		CreatedByUserID:   p.UserID,
 		UpdatedByUserID:   p.UserID,
 		MetricValues:      cleanMetricValues,
-		AttachmentFileIDs: cleanAttachments,
+		Attachments:       cleanAttachments,
 	})
 	if err != nil {
 		return nil, mapRepoErr(err)
 	}
 
 	if len(cleanAttachments) > 0 {
-		if err := s.file.LinkAttachments(ctx, p.PetID, "LOG", id, cleanAttachments); err != nil {
+		if err := s.file.LinkAttachments(ctx, p.PetID, "LOG", id, attachmentInputsFileIDs(cleanAttachments)); err != nil {
 			return nil, err
 		}
 	}
@@ -242,13 +306,13 @@ func (s *Service) UpdateLog(ctx context.Context, p UpdateLogParams) (*model.Log,
 		Description:       description,
 		UpdatedByUserID:   p.UserID,
 		MetricValues:      cleanMetricValues,
-		AttachmentFileIDs: cleanAttachments,
+		Attachments:       cleanAttachments,
 	})
 	if err != nil {
 		return nil, mapRepoErr(err)
 	}
 
-	addIDs, removeIDs := diffFileIDs(logAttachmentFileIDs(current.Attachments), cleanAttachments)
+	addIDs, removeIDs := diffFileIDs(logAttachmentFileIDs(current.Attachments), attachmentInputsFileIDs(cleanAttachments))
 	if len(addIDs) > 0 {
 		if err := s.file.LinkAttachments(ctx, p.PetID, "LOG", p.LogID, addIDs); err != nil {
 			return nil, err
@@ -256,6 +320,9 @@ func (s *Service) UpdateLog(ctx context.Context, p UpdateLogParams) (*model.Log,
 	}
 	if len(removeIDs) > 0 {
 		if err := s.file.UnlinkAttachments(ctx, "LOG", p.LogID, removeIDs); err != nil {
+			return nil, err
+		}
+		if err := s.file.DeleteFilesIfUnlinked(ctx, removeIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -293,6 +360,9 @@ func (s *Service) DeleteLog(ctx context.Context, p DeleteLogParams) error {
 	fileIDs := logAttachmentFileIDs(current.Attachments)
 	if len(fileIDs) > 0 {
 		if err := s.file.UnlinkAttachments(ctx, "LOG", p.LogID, fileIDs); err != nil {
+			return err
+		}
+		if err := s.file.DeleteFilesIfUnlinked(ctx, fileIDs); err != nil {
 			return err
 		}
 	}
@@ -354,7 +424,7 @@ func (s *Service) validateLogPayload(
 	description *string,
 	metricValues []CreateOrUpdateMetricValue,
 	attachmentFileIDs []uuid.UUID,
-) ([]repository.LogMetricValueInput, []uuid.UUID, *uuid.UUID, *string, error) {
+) ([]repository.LogMetricValueInput, []repository.AttachmentInput, *uuid.UUID, *string, error) {
 	cleanDescription := trimOrNil(description)
 	cleanAttachments := uniqueUUIDs(attachmentFileIDs)
 	cleanMetricValues := make([]repository.LogMetricValueInput, 0, len(metricValues))
@@ -375,10 +445,15 @@ func (s *Service) validateLogPayload(
 		metricIDs = append(metricIDs, metricValues[i].MetricID)
 	}
 
+	var preparedAttachments []repository.AttachmentInput
 	if len(cleanAttachments) > 0 {
-		if err := s.file.EnsureFilesExist(ctx, cleanAttachments); err != nil {
+		attachments, err := s.prepareHealthAttachments(ctx, cleanAttachments)
+		if err != nil {
 			return nil, nil, nil, nil, err
 		}
+		preparedAttachments = attachments
+	} else {
+		preparedAttachments = []repository.AttachmentInput{}
 	}
 
 	metricsByID, err := s.repo.GetMetricsByIDs(ctx, petID, metricIDs)
@@ -427,10 +502,21 @@ func (s *Service) validateLogPayload(
 				return nil, nil, nil, nil, ErrInvalidInput
 			}
 		}
-		return cleanMetricValues, cleanAttachments, logTypeID, cleanDescription, nil
+		return cleanMetricValues, preparedAttachments, logTypeID, cleanDescription, nil
 	}
 
-	return cleanMetricValues, cleanAttachments, nil, cleanDescription, nil
+	return cleanMetricValues, preparedAttachments, nil, cleanDescription, nil
+}
+
+func attachmentInputsFileIDs(items []repository.AttachmentInput) []uuid.UUID {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]uuid.UUID, 0, len(items))
+	for i := range items {
+		out = append(out, items[i].FileID)
+	}
+	return out
 }
 
 func (s *Service) enrichAttachmentURLs(ctx context.Context, item *model.Log) {

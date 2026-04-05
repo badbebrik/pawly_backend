@@ -23,6 +23,6 @@ type PetRepository interface {
 	ListColorPresets(ctx context.Context) ([]model.ColorPreset, error)
 	Update(ctx context.Context, petID uuid.UUID, rowVersion int, pet model.Pet) (*model.Pet, error)
 	UpdateOwner(ctx context.Context, petID uuid.UUID, rowVersion int, ownerUserID uuid.UUID) (*model.Pet, error)
-	UpdatePhoto(ctx context.Context, petID uuid.UUID, rowVersion int, fileID uuid.UUID) (*model.Pet, error)
+	UpdatePhoto(ctx context.Context, petID uuid.UUID, rowVersion int, fileID *uuid.UUID) (*model.Pet, error)
 	UpdateStatus(ctx context.Context, petID uuid.UUID, rowVersion int, status string, missingSince *time.Time, archivedAt *time.Time) (*model.Pet, error)
 }

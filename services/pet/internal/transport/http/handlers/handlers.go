@@ -34,7 +34,6 @@ type createPetRequest struct {
 	CustomPatternName    *string        `json:"custom_pattern_name"`
 	IsNeutered           string         `json:"is_neutered"`
 	IsOutdoor            bool           `json:"is_outdoor"`
-	ProfilePhotoFileID   *string        `json:"profile_photo_file_id"`
 	MicrochipID          *string        `json:"microchip_id"`
 	MicrochipInstalledAt *string        `json:"microchip_installed_at"`
 }
@@ -52,7 +51,6 @@ type updatePetRequest struct {
 	CustomPatternName    *string        `json:"custom_pattern_name"`
 	IsNeutered           string         `json:"is_neutered"`
 	IsOutdoor            bool           `json:"is_outdoor"`
-	ProfilePhotoFileID   *string        `json:"profile_photo_file_id"`
 	MicrochipID          *string        `json:"microchip_id"`
 	MicrochipInstalledAt *string        `json:"microchip_installed_at"`
 }
@@ -131,6 +129,10 @@ type confirmPetPhotoUploadRequest struct {
 	SizeBytes  int64  `json:"size_bytes"`
 }
 
+type deletePetPhotoRequest struct {
+	RowVersion int `json:"row_version"`
+}
+
 func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 	userID, ok := appmw.UserIDFromContext(r.Context())
 	if !ok {
@@ -170,7 +172,6 @@ func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 	var (
 		birthDate            *time.Time
 		microchipInstalledAt *time.Time
-		profilePhotoID       *uuid.UUID
 	)
 	if req.BirthDate != nil && *req.BirthDate != "" {
 		t, err := time.Parse("2006-01-02", *req.BirthDate)
@@ -188,15 +189,6 @@ func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 		}
 		microchipInstalledAt = &t
 	}
-	if req.ProfilePhotoFileID != nil && *req.ProfilePhotoFileID != "" {
-		id, err := uuid.Parse(*req.ProfilePhotoFileID)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid profile_photo_file_id")
-			return
-		}
-		profilePhotoID = &id
-	}
-
 	pet, err := h.svc.CreatePet(r.Context(), service.CreatePetParams{
 		UserID:               userID,
 		Name:                 req.Name,
@@ -210,7 +202,6 @@ func (h *Handlers) CreatePet(w http.ResponseWriter, r *http.Request) {
 		CustomPatternName:    req.CustomPatternName,
 		IsNeutered:           req.IsNeutered,
 		IsOutdoor:            req.IsOutdoor,
-		ProfilePhotoFileID:   profilePhotoID,
 		MicrochipID:          req.MicrochipID,
 		MicrochipInstalledAt: microchipInstalledAt,
 	})
@@ -392,7 +383,6 @@ func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 	var (
 		birthDate            *time.Time
 		microchipInstalledAt *time.Time
-		profilePhotoID       *uuid.UUID
 	)
 	if req.BirthDate != nil && *req.BirthDate != "" {
 		t, err := time.Parse("2006-01-02", *req.BirthDate)
@@ -410,15 +400,6 @@ func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 		}
 		microchipInstalledAt = &t
 	}
-	if req.ProfilePhotoFileID != nil && *req.ProfilePhotoFileID != "" {
-		id, err := uuid.Parse(*req.ProfilePhotoFileID)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid profile_photo_file_id")
-			return
-		}
-		profilePhotoID = &id
-	}
-
 	pet, err := h.svc.UpdatePet(r.Context(), service.UpdatePetParams{
 		UserID:               userID,
 		PetID:                petID,
@@ -434,7 +415,6 @@ func (h *Handlers) UpdatePet(w http.ResponseWriter, r *http.Request) {
 		CustomPatternName:    req.CustomPatternName,
 		IsNeutered:           req.IsNeutered,
 		IsOutdoor:            req.IsOutdoor,
-		ProfilePhotoFileID:   profilePhotoID,
 		MicrochipID:          req.MicrochipID,
 		MicrochipInstalledAt: microchipInstalledAt,
 	})
@@ -610,6 +590,40 @@ func (h *Handlers) ConfirmPetPhotoUpload(w http.ResponseWriter, r *http.Request)
 		RowVersion: req.RowVersion,
 		FileID:     fileID,
 		SizeBytes:  req.SizeBytes,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"pet": petToDTO(pet, h.getPetPhotoDownloadURL(r, pet))})
+}
+
+func (h *Handlers) DeletePetPhoto(w http.ResponseWriter, r *http.Request) {
+	userID, ok := appmw.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
+		return
+	}
+
+	petID, err := uuid.Parse(chi.URLParam(r, "pet_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pet_id")
+		return
+	}
+
+	var req deletePetPhotoRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid body")
+		return
+	}
+
+	pet, err := h.svc.DeletePetPhoto(r.Context(), service.DeletePetPhotoParams{
+		UserID:     userID,
+		PetID:      petID,
+		RowVersion: req.RowVersion,
 	})
 	if err != nil {
 		writeServiceError(w, err)

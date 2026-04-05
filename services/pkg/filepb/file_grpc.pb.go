@@ -27,7 +27,6 @@ const (
 	FileService_UnlinkFile_FullMethodName           = "/file.FileService/UnlinkFile"
 	FileService_DeleteFileIfUnlinked_FullMethodName = "/file.FileService/DeleteFileIfUnlinked"
 	FileService_GetFile_FullMethodName              = "/file.FileService/GetFile"
-	FileService_ListFileLinks_FullMethodName        = "/file.FileService/ListFileLinks"
 )
 
 // FileServiceClient is the client API for FileService service.
@@ -42,7 +41,6 @@ type FileServiceClient interface {
 	UnlinkFile(ctx context.Context, in *UnlinkFileRequest, opts ...grpc.CallOption) (*UnlinkFileResponse, error)
 	DeleteFileIfUnlinked(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error)
 	GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error)
-	ListFileLinks(ctx context.Context, in *ListFileLinksRequest, opts ...grpc.CallOption) (*ListFileLinksResponse, error)
 }
 
 type fileServiceClient struct {
@@ -133,16 +131,6 @@ func (c *fileServiceClient) GetFile(ctx context.Context, in *GetFileRequest, opt
 	return out, nil
 }
 
-func (c *fileServiceClient) ListFileLinks(ctx context.Context, in *ListFileLinksRequest, opts ...grpc.CallOption) (*ListFileLinksResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListFileLinksResponse)
-	err := c.cc.Invoke(ctx, FileService_ListFileLinks_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // FileServiceServer is the server API for FileService service.
 // All implementations must embed UnimplementedFileServiceServer
 // for forward compatibility.
@@ -155,7 +143,6 @@ type FileServiceServer interface {
 	UnlinkFile(context.Context, *UnlinkFileRequest) (*UnlinkFileResponse, error)
 	DeleteFileIfUnlinked(context.Context, *GetFileRequest) (*GetFileResponse, error)
 	GetFile(context.Context, *GetFileRequest) (*GetFileResponse, error)
-	ListFileLinks(context.Context, *ListFileLinksRequest) (*ListFileLinksResponse, error)
 	mustEmbedUnimplementedFileServiceServer()
 }
 
@@ -189,9 +176,6 @@ func (UnimplementedFileServiceServer) DeleteFileIfUnlinked(context.Context, *Get
 }
 func (UnimplementedFileServiceServer) GetFile(context.Context, *GetFileRequest) (*GetFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFile not implemented")
-}
-func (UnimplementedFileServiceServer) ListFileLinks(context.Context, *ListFileLinksRequest) (*ListFileLinksResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListFileLinks not implemented")
 }
 func (UnimplementedFileServiceServer) mustEmbedUnimplementedFileServiceServer() {}
 func (UnimplementedFileServiceServer) testEmbeddedByValue()                     {}
@@ -358,24 +342,6 @@ func _FileService_GetFile_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FileService_ListFileLinks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListFileLinksRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileServiceServer).ListFileLinks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileService_ListFileLinks_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileServiceServer).ListFileLinks(ctx, req.(*ListFileLinksRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // FileService_ServiceDesc is the grpc.ServiceDesc for FileService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -414,10 +380,6 @@ var FileService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFile",
 			Handler:    _FileService_GetFile_Handler,
-		},
-		{
-			MethodName: "ListFileLinks",
-			Handler:    _FileService_ListFileLinks_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

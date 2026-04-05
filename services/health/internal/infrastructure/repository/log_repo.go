@@ -303,7 +303,7 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 	if err := r.replaceMetricValuesTx(ctx, tx, in.ID, in.MetricValues); err != nil {
 		return nil, err
 	}
-	if err := r.replaceAttachmentsTx(ctx, tx, in.PetID, in.ID, in.AttachmentFileIDs, in.CreatedByUserID); err != nil {
+	if err := r.replaceAttachmentsTx(ctx, tx, in.PetID, in.ID, in.Attachments, in.CreatedByUserID); err != nil {
 		return nil, err
 	}
 
@@ -369,7 +369,7 @@ func (r *LogRepository) UpdateLog(ctx context.Context, in repo.UpdateLogInput) (
 	if err := r.replaceMetricValuesTx(ctx, tx, in.ID, in.MetricValues); err != nil {
 		return nil, err
 	}
-	if err := r.replaceAttachmentsTx(ctx, tx, in.PetID, in.ID, in.AttachmentFileIDs, in.UpdatedByUserID); err != nil {
+	if err := r.replaceAttachmentsTx(ctx, tx, in.PetID, in.ID, in.Attachments, in.UpdatedByUserID); err != nil {
 		return nil, err
 	}
 
@@ -638,16 +638,17 @@ func (r *LogRepository) replaceMetricValuesTx(ctx context.Context, tx pgx.Tx, lo
 	return nil
 }
 
-func (r *LogRepository) replaceAttachmentsTx(ctx context.Context, tx pgx.Tx, petID, logID uuid.UUID, fileIDs []uuid.UUID, addedBy uuid.UUID) error {
+func (r *LogRepository) replaceAttachmentsTx(ctx context.Context, tx pgx.Tx, petID, logID uuid.UUID, attachments []repo.AttachmentInput, addedBy uuid.UUID) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, logID); err != nil {
 		return err
 	}
-	for i := range fileIDs {
+	for i := range attachments {
+		att := attachments[i]
 		const query = `
 			INSERT INTO attachment_refs (id, pet_id, entity_type, entity_id, file_id, file_name, file_type, added_by_user_id, added_at)
-			VALUES ($1, $2, 'LOG', $3, $4, NULL, 'other', $5, NOW())
+			VALUES ($1, $2, 'LOG', $3, $4, $5, $6, $7, NOW())
 		`
-		_, err := tx.Exec(ctx, query, uuid.New(), petID, logID, fileIDs[i], addedBy)
+		_, err := tx.Exec(ctx, query, uuid.New(), petID, logID, att.FileID, att.FileName, att.FileType, addedBy)
 		if err != nil {
 			if isUniqueViolation(err) {
 				return repo.ErrConflict

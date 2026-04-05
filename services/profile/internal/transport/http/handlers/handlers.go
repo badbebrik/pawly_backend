@@ -207,6 +207,22 @@ func (h *Handlers) ConfirmAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ConfirmAvatarUploadResponse{Profile: h.fromModel(r.Context(), p)})
 }
 
+func (h *Handlers) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	p, err := h.uc.DeleteAvatar.Execute(r.Context(), userID)
+	if err != nil {
+		writeAvatarError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ConfirmAvatarUploadResponse{Profile: h.fromModel(r.Context(), p)})
+}
+
 type BatchProfilesBriefRequest struct {
 	UserIDs []string `json:"user_ids"`
 }

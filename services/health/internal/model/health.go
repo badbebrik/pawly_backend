@@ -19,6 +19,20 @@ type HealthAttachment struct {
 	PreviewURL    *string
 }
 
+type PetDocument struct {
+	ID            uuid.UUID
+	PetID         uuid.UUID
+	EntityType    string
+	EntityID      uuid.UUID
+	FileID        uuid.UUID
+	FileName      *string
+	FileType      string
+	AddedByUserID uuid.UUID
+	AddedAt       time.Time
+	DownloadURL   *string
+	PreviewURL    *string
+}
+
 type RelatedLog struct {
 	ID                 uuid.UUID
 	OccurredAt         time.Time

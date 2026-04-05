@@ -77,6 +77,17 @@ type createOrUpdateMedicalRecordRequest struct {
 	RowVersion        int      `json:"row_version"`
 }
 
+type initAttachmentUploadRequest struct {
+	MimeType          string `json:"mime_type"`
+	OriginalFilename  string `json:"original_filename"`
+	ExpectedSizeBytes int64  `json:"expected_size_bytes"`
+}
+
+type confirmAttachmentUploadRequest struct {
+	FileID    string `json:"file_id"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
 func (h *Handlers) GetHealthBootstrap(w http.ResponseWriter, r *http.Request) {
 	userID, petID, ok := h.getUserAndPet(w, r)
 	if !ok {
@@ -115,6 +126,109 @@ func (h *Handlers) GetHealthDay(w http.ResponseWriter, r *http.Request) {
 		out = append(out, calendarDayItemToDTO(items[i]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"date": date.Format("2006-01-02"), "items": out})
+}
+
+func (h *Handlers) InitAttachmentUpload(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	var req initAttachmentUploadRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+
+	fileID, upload, err := h.svc.InitAttachmentUpload(r.Context(), service.InitAttachmentUploadParams{
+		UserID:            userID,
+		PetID:             petID,
+		MimeType:          req.MimeType,
+		OriginalFilename:  req.OriginalFilename,
+		ExpectedSizeBytes: req.ExpectedSizeBytes,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"file_id": fileID.String(),
+		"upload": map[string]any{
+			"method":     upload.Method,
+			"url":        upload.URL,
+			"headers":    upload.Headers,
+			"expires_at": upload.ExpiresAt.UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func (h *Handlers) ConfirmAttachmentUpload(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+
+	var req confirmAttachmentUploadRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+
+	fileID, err := uuid.Parse(req.FileID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid file_id")
+		return
+	}
+
+	file, err := h.svc.ConfirmAttachmentUpload(r.Context(), service.ConfirmAttachmentUploadParams{
+		UserID:    userID,
+		PetID:     petID,
+		FileID:    fileID,
+		SizeBytes: req.SizeBytes,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"file": map[string]any{
+			"id":                file.ID.String(),
+			"mime_type":         file.MimeType,
+			"size_bytes":        file.SizeBytes,
+			"original_filename": strOrNil(file.OriginalFilename),
+		},
+	})
+}
+
+func (h *Handlers) GetPetDocuments(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	cursor, err := decodeTimeCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid cursor")
+		return
+	}
+	entityType := optionalQueryString(r, "entity_type")
+	fileType := optionalQueryString(r, "file_type")
+	resp, err := h.svc.ListPetDocuments(r.Context(), service.ListPetDocumentsParams{
+		UserID:     userID,
+		PetID:      petID,
+		Cursor:     cursor,
+		Limit:      parseIntOrDefault(r.URL.Query().Get("limit"), 20),
+		EntityType: entityType,
+		FileType:   fileType,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	items := make([]any, 0, len(resp.Items))
+	for i := range resp.Items {
+		items = append(items, petDocumentToDTO(resp.Items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": encodeTimeCursor(resp.NextCursor)})
 }
 
 func (h *Handlers) GetVetVisits(w http.ResponseWriter, r *http.Request) {
@@ -1005,6 +1119,20 @@ func medicalRecordToDTO(item *model.MedicalRecord) map[string]any {
 
 func healthAttachmentToDTO(item model.HealthAttachment) map[string]any {
 	return map[string]any{"id": item.ID.String(), "file_id": item.FileID.String(), "file_name": strOrNil(item.FileName), "file_type": item.FileType, "download_url": strOrNil(item.DownloadURL), "preview_url": strOrNil(item.PreviewURL), "added_by_user_id": item.AddedByUserID.String(), "added_at": item.AddedAt.UTC().Format(time.RFC3339)}
+}
+
+func petDocumentToDTO(item model.PetDocument) map[string]any {
+	return map[string]any{
+		"file_id":          item.FileID.String(),
+		"file_name":        strOrNil(item.FileName),
+		"file_type":        item.FileType,
+		"download_url":     strOrNil(item.DownloadURL),
+		"preview_url":      strOrNil(item.PreviewURL),
+		"added_at":         item.AddedAt.UTC().Format(time.RFC3339),
+		"added_by_user_id": item.AddedByUserID.String(),
+		"entity_type":      item.EntityType,
+		"entity_id":        item.EntityID.String(),
+	}
 }
 
 func relatedLogToDTO(item model.RelatedLog) map[string]any {

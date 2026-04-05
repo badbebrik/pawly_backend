@@ -59,6 +59,9 @@ services:
         paths:
           - ~/v1/pets/.+/health/bootstrap$
           - ~/v1/pets/.+/health/day$
+          - ~/v1/pets/.+/documents$
+          - ~/v1/pets/.+/attachments:init-upload$
+          - ~/v1/pets/.+/attachments:confirm-upload$
           - ~/v1/pets/.+/vet-visits$
           - ~/v1/pets/.+/vet-visits/.+$
           - ~/v1/pets/.+/vet-visits/.+/logs$

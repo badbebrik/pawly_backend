@@ -22,11 +22,13 @@ type ACLClient interface {
 }
 
 type FileClient interface {
-	InitUpload(ctx context.Context, mimeType string, expectedSize int64) (uuid.UUID, UploadInfo, error)
+	InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, UploadInfo, error)
 	ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) error
 	GetDownloadURL(ctx context.Context, fileID uuid.UUID) (string, time.Time, error)
 	BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error)
 	LinkPetAvatar(ctx context.Context, fileID, petID uuid.UUID) error
+	UnlinkPetAvatar(ctx context.Context, fileID, petID uuid.UUID) error
+	DeleteFileIfUnlinked(ctx context.Context, fileID uuid.UUID) error
 }
 
 type PetService struct {
@@ -52,7 +54,6 @@ type CreatePetParams struct {
 	CustomPatternName    *string
 	IsNeutered           string
 	IsOutdoor            bool
-	ProfilePhotoFileID   *uuid.UUID
 	MicrochipID          *string
 	MicrochipInstalledAt *time.Time
 }
@@ -79,7 +80,6 @@ type UpdatePetParams struct {
 	CustomPatternName    *string
 	IsNeutered           string
 	IsOutdoor            bool
-	ProfilePhotoFileID   *uuid.UUID
 	MicrochipID          *string
 	MicrochipInstalledAt *time.Time
 }
@@ -120,6 +120,12 @@ type ConfirmPetPhotoUploadParams struct {
 	RowVersion int
 	FileID     uuid.UUID
 	SizeBytes  int64
+}
+
+type DeletePetPhotoParams struct {
+	UserID     uuid.UUID
+	PetID      uuid.UUID
+	RowVersion int
 }
 
 type ACLPolicy struct {
@@ -203,7 +209,6 @@ func (s *PetService) CreatePet(ctx context.Context, p CreatePetParams) (*model.P
 		Colors:               colors,
 		IsNeutered:           p.IsNeutered,
 		IsOutdoor:            p.IsOutdoor,
-		ProfilePhotoFileID:   p.ProfilePhotoFileID,
 		MicrochipID:          p.MicrochipID,
 		MicrochipInstalledAt: p.MicrochipInstalledAt,
 		Status:               "ACTIVE",
@@ -462,7 +467,6 @@ func (s *PetService) UpdatePet(ctx context.Context, p UpdatePetParams) (*model.P
 		Colors:               colors,
 		IsNeutered:           p.IsNeutered,
 		IsOutdoor:            p.IsOutdoor,
-		ProfilePhotoFileID:   p.ProfilePhotoFileID,
 		MicrochipID:          p.MicrochipID,
 		MicrochipInstalledAt: p.MicrochipInstalledAt,
 	})
@@ -611,7 +615,7 @@ func (s *PetService) InitPetPhotoUpload(ctx context.Context, p InitPetPhotoUploa
 		return uuid.Nil, UploadInfo{}, ErrConflict
 	}
 
-	fileID, upload, err := s.file.InitUpload(ctx, strings.TrimSpace(strings.ToLower(p.MimeType)), p.ExpectedSizeBytes)
+	fileID, upload, err := s.file.InitUpload(ctx, strings.TrimSpace(strings.ToLower(p.MimeType)), p.ExpectedSizeBytes, p.OriginalFilename)
 	if err != nil {
 		return uuid.Nil, UploadInfo{}, err
 	}
@@ -648,11 +652,69 @@ func (s *PetService) ConfirmPetPhotoUpload(ctx context.Context, p ConfirmPetPhot
 	if err := s.file.ConfirmUpload(ctx, p.FileID, p.SizeBytes); err != nil {
 		return nil, err
 	}
+
+	var oldPhotoID *uuid.UUID
+	if pet.ProfilePhotoFileID != nil {
+		oldID := *pet.ProfilePhotoFileID
+		oldPhotoID = &oldID
+	}
+
 	if err := s.file.LinkPetAvatar(ctx, p.FileID, p.PetID); err != nil {
 		return nil, err
 	}
 
-	updated, err := s.repo.UpdatePhoto(ctx, p.PetID, p.RowVersion, p.FileID)
+	updated, err := s.repo.UpdatePhoto(ctx, p.PetID, p.RowVersion, &p.FileID)
+	if err != nil {
+		_ = s.file.UnlinkPetAvatar(ctx, p.FileID, p.PetID)
+		switch err {
+		case repository.ErrNotFound:
+			return nil, ErrNotFound
+		case repository.ErrConflict:
+			return nil, ErrConflict
+		default:
+			return nil, err
+		}
+	}
+
+	if oldPhotoID != nil && *oldPhotoID != p.FileID {
+		_ = s.file.UnlinkPetAvatar(ctx, *oldPhotoID, p.PetID)
+		_ = s.file.DeleteFileIfUnlinked(ctx, *oldPhotoID)
+	}
+	return updated, nil
+}
+
+func (s *PetService) DeletePetPhoto(ctx context.Context, p DeletePetPhotoParams) (*model.Pet, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.RowVersion <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	allowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionPetWrite)
+	if err != nil {
+		if err == ErrNotFound {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	pet, err := s.repo.GetByID(ctx, p.PetID)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if pet.Status == "ARCHIVED" {
+		return nil, ErrConflict
+	}
+	if pet.ProfilePhotoFileID == nil {
+		return pet, nil
+	}
+
+	oldPhotoID := *pet.ProfilePhotoFileID
+	updated, err := s.repo.UpdatePhoto(ctx, p.PetID, p.RowVersion, nil)
 	if err != nil {
 		switch err {
 		case repository.ErrNotFound:
@@ -663,6 +725,10 @@ func (s *PetService) ConfirmPetPhotoUpload(ctx context.Context, p ConfirmPetPhot
 			return nil, err
 		}
 	}
+
+	_ = s.file.UnlinkPetAvatar(ctx, oldPhotoID, p.PetID)
+	_ = s.file.DeleteFileIfUnlinked(ctx, oldPhotoID)
+
 	return updated, nil
 }
 

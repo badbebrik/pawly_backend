@@ -8,7 +8,6 @@ import (
 	"file/internal/service"
 	"file/internal/storage"
 	grpcserver "file/internal/transport/grpc"
-	filepb "file/proto"
 	"fmt"
 	"net"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	filepb "pawly/pkg/filepb"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 )

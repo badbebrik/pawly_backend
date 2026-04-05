@@ -47,7 +47,7 @@ type CreateLogInput struct {
 	CreatedByUserID   uuid.UUID
 	UpdatedByUserID   uuid.UUID
 	MetricValues      []LogMetricValueInput
-	AttachmentFileIDs []uuid.UUID
+	Attachments       []AttachmentInput
 }
 
 type UpdateLogInput struct {
@@ -59,7 +59,7 @@ type UpdateLogInput struct {
 	Description       *string
 	UpdatedByUserID   uuid.UUID
 	MetricValues      []LogMetricValueInput
-	AttachmentFileIDs []uuid.UUID
+	Attachments       []AttachmentInput
 }
 
 type DeleteLogInput struct {

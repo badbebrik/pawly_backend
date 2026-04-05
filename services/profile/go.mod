@@ -3,7 +3,6 @@ module profile
 go 1.24.7
 
 require (
-	file v0.0.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
@@ -11,6 +10,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	google.golang.org/grpc v1.78.0
 	google.golang.org/protobuf v1.36.11
+	pawly/pkg v0.0.0
 )
 
 require (
@@ -26,4 +26,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
 )
 
-replace file => ../file
+replace pawly/pkg => ../pkg

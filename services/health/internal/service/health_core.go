@@ -16,6 +16,15 @@ type HealthBootstrapParams struct {
 	PetID  uuid.UUID
 }
 
+type ListPetDocumentsParams struct {
+	UserID     uuid.UUID
+	PetID      uuid.UUID
+	Cursor     *repository.TimeCursor
+	Limit      int
+	EntityType *string
+	FileType   *string
+}
+
 type ListVetVisitsParams struct {
 	UserID   uuid.UUID
 	PetID    uuid.UUID
@@ -414,6 +423,9 @@ func (s *Service) DeleteVetVisit(ctx context.Context, p DeleteVetVisitParams) er
 		if err := s.file.UnlinkAttachments(ctx, "VET_VISIT", p.VisitID, fileIDs); err != nil {
 			return err
 		}
+		if err := s.file.DeleteFilesIfUnlinked(ctx, fileIDs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -627,6 +639,9 @@ func (s *Service) DeleteVaccination(ctx context.Context, p DeleteVaccinationPara
 		if err := s.file.UnlinkAttachments(ctx, "VACCINATION", p.VaccinationID, fileIDs); err != nil {
 			return err
 		}
+		if err := s.file.DeleteFilesIfUnlinked(ctx, fileIDs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -815,6 +830,9 @@ func (s *Service) DeleteProcedure(ctx context.Context, p DeleteProcedureParams) 
 		if err := s.file.UnlinkAttachments(ctx, "PROCEDURE", p.ProcedureID, fileIDs); err != nil {
 			return err
 		}
+		if err := s.file.DeleteFilesIfUnlinked(ctx, fileIDs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -947,6 +965,9 @@ func (s *Service) DeleteMedicalRecord(ctx context.Context, p DeleteMedicalRecord
 		if err := s.file.UnlinkAttachments(ctx, "MEDICAL_RECORD", p.RecordID, fileIDs); err != nil {
 			return err
 		}
+		if err := s.file.DeleteFilesIfUnlinked(ctx, fileIDs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -974,6 +995,57 @@ func (s *Service) GetHealthDay(ctx context.Context, userID, petID uuid.UUID, day
 		return items[i].EntityID.String() < items[j].EntityID.String()
 	})
 	return items, nil
+}
+
+func (s *Service) ListPetDocuments(ctx context.Context, p ListPetDocumentsParams) (repository.ListPetDocumentsOutput, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil {
+		return repository.ListPetDocumentsOutput{}, ErrInvalidInput
+	}
+	if _, err := s.requireHealthRead(ctx, p.PetID, p.UserID); err != nil {
+		return repository.ListPetDocumentsOutput{}, err
+	}
+
+	logAllowed, err := s.acl.Check(ctx, p.PetID, p.UserID, ActionLogRead)
+	if err != nil {
+		return repository.ListPetDocumentsOutput{}, err
+	}
+
+	entityType := normalizeHealthDocumentEntityType(p.EntityType)
+	if p.EntityType != nil && entityType == nil {
+		return repository.ListPetDocumentsOutput{}, ErrInvalidInput
+	}
+	fileType := normalizeDocumentFileType(p.FileType)
+	if p.FileType != nil && fileType == nil {
+		return repository.ListPetDocumentsOutput{}, ErrInvalidInput
+	}
+	if !logAllowed && entityType != nil && *entityType == "LOG" {
+		return repository.ListPetDocumentsOutput{Items: []model.PetDocument{}}, nil
+	}
+
+	out, err := s.repo.ListPetDocuments(ctx, repository.ListPetDocumentsInput{
+		PetID:      p.PetID,
+		Cursor:     p.Cursor,
+		Limit:      p.Limit,
+		EntityType: entityType,
+		FileType:   fileType,
+	})
+	if err != nil {
+		return repository.ListPetDocumentsOutput{}, mapRepoErr(err)
+	}
+
+	if !logAllowed && len(out.Items) > 0 {
+		filtered := out.Items[:0]
+		for i := range out.Items {
+			if out.Items[i].EntityType == "LOG" {
+				continue
+			}
+			filtered = append(filtered, out.Items[i])
+		}
+		out.Items = filtered
+	}
+
+	s.enrichPetDocumentURLs(ctx, out.Items)
+	return out, nil
 }
 
 func (s *Service) requireHealthRead(ctx context.Context, petID, userID uuid.UUID) (bool, error) {
@@ -1035,6 +1107,9 @@ func (s *Service) syncHealthAttachments(ctx context.Context, petID uuid.UUID, en
 		if err := s.file.UnlinkAttachments(ctx, entityType, entityID, sync.Remove); err != nil {
 			return err
 		}
+		if err := s.file.DeleteFilesIfUnlinked(ctx, sync.Remove); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1059,6 +1134,55 @@ func (s *Service) enrichHealthAttachmentURLs(ctx context.Context, attachments []
 				attachments[i].PreviewURL = &urlCopy
 			}
 		}
+	}
+}
+
+func (s *Service) enrichPetDocumentURLs(ctx context.Context, items []model.PetDocument) {
+	if len(items) == 0 {
+		return
+	}
+	fileIDs := make([]uuid.UUID, 0, len(items))
+	for i := range items {
+		fileIDs = append(fileIDs, items[i].FileID)
+	}
+	urls, err := s.file.BatchGetDownloadURLs(ctx, fileIDs)
+	if err != nil {
+		return
+	}
+	for i := range items {
+		if url, ok := urls[items[i].FileID]; ok && strings.TrimSpace(url) != "" {
+			urlCopy := url
+			items[i].DownloadURL = &urlCopy
+			if items[i].FileType == "image" {
+				items[i].PreviewURL = &urlCopy
+			}
+		}
+	}
+}
+
+func normalizeHealthDocumentEntityType(in *string) *string {
+	if in == nil {
+		return nil
+	}
+	v := strings.ToUpper(strings.TrimSpace(*in))
+	switch v {
+	case "LOG", "VET_VISIT", "VACCINATION", "PROCEDURE", "MEDICAL_RECORD":
+		return &v
+	default:
+		return nil
+	}
+}
+
+func normalizeDocumentFileType(in *string) *string {
+	if in == nil {
+		return nil
+	}
+	v := strings.ToLower(strings.TrimSpace(*in))
+	switch v {
+	case "image", "pdf", "other":
+		return &v
+	default:
+		return nil
 	}
 }
 

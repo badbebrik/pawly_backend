@@ -250,6 +250,19 @@ type ListMedicalRecordsOutput struct {
 	NextCursor *TimeCursor
 }
 
+type ListPetDocumentsInput struct {
+	PetID      uuid.UUID
+	Cursor     *TimeCursor
+	Limit      int
+	EntityType *string
+	FileType   *string
+}
+
+type ListPetDocumentsOutput struct {
+	Items      []model.PetDocument
+	NextCursor *TimeCursor
+}
+
 type HealthRepository interface {
 	GetVetVisit(ctx context.Context, petID, visitID uuid.UUID, includeRelatedLogs bool) (*model.VetVisit, error)
 	ListVetVisits(ctx context.Context, in ListVetVisitsInput) (ListVetVisitsOutput, error)
@@ -276,6 +289,7 @@ type HealthRepository interface {
 	CreateMedicalRecord(ctx context.Context, in CreateMedicalRecordInput) (*model.MedicalRecord, AttachmentSync, error)
 	UpdateMedicalRecord(ctx context.Context, in UpdateMedicalRecordInput) (*model.MedicalRecord, AttachmentSync, error)
 	DeleteMedicalRecord(ctx context.Context, in DeleteMedicalRecordInput) error
+	ListPetDocuments(ctx context.Context, in ListPetDocumentsInput) (ListPetDocumentsOutput, error)
 
 	ListCalendarDayItems(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.CalendarDayItem, error)
 }

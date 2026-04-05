@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package file;
 
-option go_package = "file/proto;filepb";
+option go_package = "pawly/pkg/filepb;filepb";
 
 import "google/protobuf/timestamp.proto";
 
@@ -17,7 +17,6 @@ service FileService {
   rpc DeleteFileIfUnlinked(GetFileRequest) returns (GetFileResponse);
 
   rpc GetFile(GetFileRequest) returns (GetFileResponse);
-  rpc ListFileLinks(ListFileLinksRequest) returns (ListFileLinksResponse);
 }
 
 enum FileStatus {
@@ -138,12 +137,4 @@ message GetFileRequest {
 
 message GetFileResponse {
   FileObject file = 1;
-}
-
-message ListFileLinksRequest {
-  string file_id = 1;
-}
-
-message ListFileLinksResponse {
-  repeated FileLink items = 1;
 }

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"pet/internal/service"
-	filepb "pet/proto/filepb"
 	"time"
 
 	"github.com/google/uuid"
+	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -41,10 +41,11 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64) (uuid.UUID, service.UploadInfo, error) {
+func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, service.UploadInfo, error) {
 	resp, err := c.client.InitUpload(ctx, &filepb.InitUploadRequest{
 		MimeType:          mimeType,
 		ExpectedSizeBytes: expectedSize,
+		OriginalFilename:  originalFilename,
 	})
 	if err != nil {
 		return uuid.Nil, service.UploadInfo{}, mapErr(err)
@@ -119,6 +120,23 @@ func (c *Client) LinkPetAvatar(ctx context.Context, fileID, petID uuid.UUID) err
 		OwnerType:    "PET_AVATAR",
 		OwnerId:      petID.String(),
 		PetId:        petID.String(),
+	})
+	return mapErr(err)
+}
+
+func (c *Client) UnlinkPetAvatar(ctx context.Context, fileID, petID uuid.UUID) error {
+	_, err := c.client.UnlinkFile(ctx, &filepb.UnlinkFileRequest{
+		FileId:       fileID.String(),
+		OwnerService: filepb.OwnerService_OWNER_SERVICE_PET,
+		OwnerType:    "PET_AVATAR",
+		OwnerId:      petID.String(),
+	})
+	return mapErr(err)
+}
+
+func (c *Client) DeleteFileIfUnlinked(ctx context.Context, fileID uuid.UUID) error {
+	_, err := c.client.DeleteFileIfUnlinked(ctx, &filepb.GetFileRequest{
+		FileId: fileID.String(),
 	})
 	return mapErr(err)
 }

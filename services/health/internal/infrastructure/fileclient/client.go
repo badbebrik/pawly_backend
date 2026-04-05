@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"health/internal/model"
 	"health/internal/service"
-	filepb "health/proto/filepb"
-	"path"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -41,6 +41,56 @@ func (c *Client) Close() {
 	if c != nil && c.conn != nil {
 		_ = c.conn.Close()
 	}
+}
+
+func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, service.UploadInfo, error) {
+	resp, err := c.client.InitUpload(ctx, &filepb.InitUploadRequest{
+		MimeType:          mimeType,
+		ExpectedSizeBytes: expectedSize,
+		OriginalFilename:  strings.TrimSpace(originalFilename),
+	})
+	if err != nil {
+		return uuid.Nil, service.UploadInfo{}, mapErr(err)
+	}
+
+	fileID, err := uuid.Parse(resp.GetFile().GetId())
+	if err != nil {
+		return uuid.Nil, service.UploadInfo{}, err
+	}
+
+	expiresAt := time.Time{}
+	if resp.GetUpload().GetExpiresAt() != nil {
+		expiresAt = resp.GetUpload().GetExpiresAt().AsTime()
+	}
+
+	return fileID, service.UploadInfo{
+		Method:    resp.GetUpload().GetMethod(),
+		URL:       resp.GetUpload().GetUrl(),
+		Headers:   resp.GetUpload().GetHeaders(),
+		ExpiresAt: expiresAt,
+	}, nil
+}
+
+func (c *Client) ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) (*service.UploadedFile, error) {
+	resp, err := c.client.ConfirmUpload(ctx, &filepb.ConfirmUploadRequest{
+		FileId:    fileID.String(),
+		SizeBytes: sizeBytes,
+	})
+	if err != nil {
+		return nil, mapErr(err)
+	}
+
+	file := resp.GetFile()
+	if file == nil {
+		return nil, service.ErrConflict
+	}
+
+	return &service.UploadedFile{
+		ID:               fileID,
+		MimeType:         file.GetMimeType(),
+		SizeBytes:        file.GetSizeBytes(),
+		OriginalFilename: optionalString(file.GetOriginalFilename()),
+	}, nil
 }
 
 func (c *Client) EnsureFilesExist(ctx context.Context, fileIDs []uuid.UUID) error {
@@ -92,11 +142,10 @@ func (c *Client) GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UU
 			return nil, mapErr(err)
 		}
 		file := resp.GetFile()
-		fileName := deriveFileName(file.GetObjectKey())
 		out[fileIDs[i]] = model.HealthFile{
 			ID:       fileIDs[i],
 			MimeType: file.GetMimeType(),
-			FileName: fileName,
+			FileName: optionalString(file.GetOriginalFilename()),
 		}
 	}
 	return out, nil
@@ -104,7 +153,7 @@ func (c *Client) GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UU
 
 func (c *Client) LinkAttachments(ctx context.Context, petID uuid.UUID, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
 	ownerService := filepb.OwnerService_OWNER_SERVICE_HEALTH
-	ownerType := entityType
+	ownerType := "HEALTH_ATTACHMENT"
 	if entityType == "LOG" {
 		ownerService = filepb.OwnerService_OWNER_SERVICE_LOG
 		ownerType = "LOG_ATTACHMENT"
@@ -130,7 +179,7 @@ func (c *Client) LinkAttachments(ctx context.Context, petID uuid.UUID, entityTyp
 
 func (c *Client) UnlinkAttachments(ctx context.Context, entityType string, entityID uuid.UUID, fileIDs []uuid.UUID) error {
 	ownerService := filepb.OwnerService_OWNER_SERVICE_HEALTH
-	ownerType := entityType
+	ownerType := "HEALTH_ATTACHMENT"
 	if entityType == "LOG" {
 		ownerService = filepb.OwnerService_OWNER_SERVICE_LOG
 		ownerType = "LOG_ATTACHMENT"
@@ -153,16 +202,28 @@ func (c *Client) UnlinkAttachments(ctx context.Context, entityType string, entit
 	return nil
 }
 
-func deriveFileName(objectKey string) *string {
-	trimmed := strings.TrimSpace(objectKey)
+func (c *Client) DeleteFilesIfUnlinked(ctx context.Context, fileIDs []uuid.UUID) error {
+	for i := range fileIDs {
+		_, err := c.client.DeleteFileIfUnlinked(ctx, &filepb.GetFileRequest{
+			FileId: fileIDs[i].String(),
+		})
+		if err != nil {
+			mapped := mapErr(err)
+			if mapped == service.ErrConflict || mapped == service.ErrNotFound {
+				continue
+			}
+			return mapped
+		}
+	}
+	return nil
+}
+
+func optionalString(raw string) *string {
+	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return nil
 	}
-	base := strings.TrimSpace(path.Base(trimmed))
-	if base == "" || base == "." || base == "/" {
-		return nil
-	}
-	return &base
+	return &trimmed
 }
 
 func mapErr(err error) error {

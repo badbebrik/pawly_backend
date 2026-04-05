@@ -9,7 +9,8 @@ require (
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/rs/zerolog v1.34.0
 	google.golang.org/grpc v1.72.2
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.11
+	pawly/pkg v0.0.0
 )
 
 require (
@@ -25,3 +26,5 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a // indirect
 )
+
+replace pawly/pkg => ../pkg

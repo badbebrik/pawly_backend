@@ -9,6 +9,7 @@ type Set struct {
 	GetAvatarDownloadURL *GetAvatarDownloadURLUseCase
 	InitAvatarUpload     *InitAvatarUploadUseCase
 	ConfirmAvatarUpload  *ConfirmAvatarUploadUseCase
+	DeleteAvatar         *DeleteAvatarUseCase
 	GetPreferences       *GetPreferencesUseCase
 	BatchGetPreferences  *BatchGetPreferencesUseCase
 	BatchProfilesBrief   *BatchProfilesBriefUseCase
@@ -25,6 +26,7 @@ func NewSet(in Dependencies) *Set {
 		GetAvatarDownloadURL: &GetAvatarDownloadURLUseCase{deps: deps},
 		InitAvatarUpload:     &InitAvatarUploadUseCase{deps: deps},
 		ConfirmAvatarUpload:  &ConfirmAvatarUploadUseCase{deps: deps},
+		DeleteAvatar:         &DeleteAvatarUseCase{deps: deps},
 		GetPreferences:       &GetPreferencesUseCase{deps: deps},
 		BatchGetPreferences:  &BatchGetPreferencesUseCase{deps: deps},
 		BatchProfilesBrief:   &BatchProfilesBriefUseCase{deps: deps},

@@ -938,6 +938,14 @@ func parseUUIDList(in []string) ([]uuid.UUID, error) {
 	return out, nil
 }
 
+func optionalQueryString(r *http.Request, key string) *string {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return nil
+	}
+	return &raw
+}
+
 func optionalUUIDFromString(raw *string) (*uuid.UUID, error) {
 	if raw == nil {
 		return nil, nil

@@ -27,6 +27,7 @@ func (a *App) setupRoutes(uc *usecase.Set) http.Handler {
 		r.Patch("/v1/profile/me/preferences", hs.PatchPreferences)
 		r.Post("/v1/profile/me/avatar:init-upload", hs.InitAvatarUpload)
 		r.Post("/v1/profile/me/avatar:confirm-upload", hs.ConfirmAvatarUpload)
+		r.Delete("/v1/profile/me/avatar", hs.DeleteAvatar)
 	})
 
 	r.Group(func(r chi.Router) {

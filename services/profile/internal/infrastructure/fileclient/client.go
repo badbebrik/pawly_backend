@@ -2,12 +2,12 @@ package fileclient
 
 import (
 	"context"
-	filepb "file/proto"
 	"fmt"
 	"profile/internal/application/ports"
 	"time"
 
 	"github.com/google/uuid"
+	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -118,6 +118,23 @@ func (c *Client) LinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.U
 		OwnerService: filepb.OwnerService_OWNER_SERVICE_PROFILE,
 		OwnerType:    "AVATAR",
 		OwnerId:      userID.String(),
+	})
+	return err
+}
+
+func (c *Client) UnlinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.UUID) error {
+	_, err := c.client.UnlinkFile(ctx, &filepb.UnlinkFileRequest{
+		FileId:       fileID.String(),
+		OwnerService: filepb.OwnerService_OWNER_SERVICE_PROFILE,
+		OwnerType:    "AVATAR",
+		OwnerId:      userID.String(),
+	})
+	return err
+}
+
+func (c *Client) DeleteFileIfUnlinked(ctx context.Context, fileID uuid.UUID) error {
+	_, err := c.client.DeleteFileIfUnlinked(ctx, &filepb.GetFileRequest{
+		FileId: fileID.String(),
 	})
 	return err
 }

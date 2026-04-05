@@ -28,6 +28,9 @@ func (a *App) setupRoutes() http.Handler {
 		r.Use(appmw.WithUserID(a.cfg.JWTSecret, a.cfg.JWTIssuer))
 		r.Get("/v1/pets/{pet_id}/health/bootstrap", h.GetHealthBootstrap)
 		r.Get("/v1/pets/{pet_id}/health/day", h.GetHealthDay)
+		r.Get("/v1/pets/{pet_id}/documents", h.GetPetDocuments)
+		r.Post("/v1/pets/{pet_id}/attachments:init-upload", h.InitAttachmentUpload)
+		r.Post("/v1/pets/{pet_id}/attachments:confirm-upload", h.ConfirmAttachmentUpload)
 
 		r.Get("/v1/pets/{pet_id}/vet-visits", h.GetVetVisits)
 		r.Post("/v1/pets/{pet_id}/vet-visits", h.CreateVetVisit)

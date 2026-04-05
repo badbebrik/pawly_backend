@@ -20,4 +20,6 @@ type FileClient interface {
 	GetDownloadURL(ctx context.Context, fileID uuid.UUID) (string, time.Time, error)
 	BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error)
 	LinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.UUID) error
+	UnlinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.UUID) error
+	DeleteFileIfUnlinked(ctx context.Context, fileID uuid.UUID) error
 }

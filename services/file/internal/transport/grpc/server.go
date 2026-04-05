@@ -6,9 +6,9 @@ import (
 	"file/internal/model"
 	"file/internal/repository"
 	"file/internal/service"
-	filepb "file/proto"
 
 	"github.com/google/uuid"
+	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -182,24 +182,6 @@ func (s *Server) DeleteFileIfUnlinked(ctx context.Context, req *filepb.GetFileRe
 	}
 
 	return &filepb.GetFileResponse{File: toProtoFile(f)}, nil
-}
-
-func (s *Server) ListFileLinks(ctx context.Context, req *filepb.ListFileLinksRequest) (*filepb.ListFileLinksResponse, error) {
-	fileID, err := uuid.Parse(req.GetFileId())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid file_id")
-	}
-
-	items, err := s.svc.ListLinksByFileID(ctx, fileID)
-	if err != nil {
-		return nil, mapSvcErr(err)
-	}
-
-	res := make([]*filepb.FileLink, 0, len(items))
-	for i := range items {
-		res = append(res, toProtoLink(&items[i]))
-	}
-	return &filepb.ListFileLinksResponse{Items: res}, nil
 }
 
 func toProtoFile(f *model.FileObject) *filepb.FileObject {

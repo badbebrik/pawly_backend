@@ -1,10 +1,14 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /src
 
-COPY go.mod go.sum ./
+COPY file/go.mod file/go.sum /src/file/
+COPY pkg/go.mod pkg/go.sum /src/pkg/
+
+WORKDIR /src/file
 RUN go mod download
 
-COPY . .
+COPY file /src/file
+COPY pkg /src/pkg
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/service ./cmd/main.go
 
 FROM alpine:3.20

@@ -1161,6 +1161,72 @@ func (r *LogRepository) listHealthAttachments(ctx context.Context, entityType st
 	return items, nil
 }
 
+func (r *LogRepository) ListPetDocuments(ctx context.Context, in repo.ListPetDocumentsInput) (repo.ListPetDocumentsOutput, error) {
+	if in.Limit <= 0 {
+		in.Limit = 20
+	}
+	if in.Limit > 100 {
+		in.Limit = 100
+	}
+
+	args := []any{in.PetID}
+	where := []string{"pet_id = $1"}
+	if in.EntityType != nil {
+		args = append(args, *in.EntityType)
+		where = append(where, fmt.Sprintf("entity_type = $%d", len(args)))
+	}
+	if in.FileType != nil {
+		args = append(args, *in.FileType)
+		where = append(where, fmt.Sprintf("file_type = $%d", len(args)))
+	}
+	if in.Cursor != nil {
+		args = append(args, in.Cursor.SortAt, in.Cursor.ID)
+		where = append(where, fmt.Sprintf("(added_at, id) < ($%d, $%d)", len(args)-1, len(args)))
+	}
+
+	args = append(args, in.Limit+1)
+	query := fmt.Sprintf(`
+		SELECT id, pet_id, entity_type, entity_id, file_id, file_name, file_type, added_by_user_id, added_at
+		FROM attachment_refs
+		WHERE %s
+		ORDER BY added_at DESC, id DESC
+		LIMIT $%d
+	`, strings.Join(where, " AND "), len(args))
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return repo.ListPetDocumentsOutput{}, err
+	}
+	defer rows.Close()
+
+	items := make([]model.PetDocument, 0, in.Limit+1)
+	cursorRows := make([]struct {
+		AddedAt time.Time
+		ID      uuid.UUID
+	}, 0, in.Limit+1)
+	for rows.Next() {
+		var item model.PetDocument
+		if err := rows.Scan(&item.ID, &item.PetID, &item.EntityType, &item.EntityID, &item.FileID, &item.FileName, &item.FileType, &item.AddedByUserID, &item.AddedAt); err != nil {
+			return repo.ListPetDocumentsOutput{}, err
+		}
+		items = append(items, item)
+		cursorRows = append(cursorRows, struct {
+			AddedAt time.Time
+			ID      uuid.UUID
+		}{AddedAt: item.AddedAt, ID: item.ID})
+	}
+	if err := rows.Err(); err != nil {
+		return repo.ListPetDocumentsOutput{}, err
+	}
+
+	out := repo.ListPetDocumentsOutput{Items: items}
+	if len(items) > in.Limit {
+		out.NextCursor = &repo.TimeCursor{SortAt: cursorRows[in.Limit].AddedAt, ID: cursorRows[in.Limit].ID}
+		out.Items = items[:in.Limit]
+	}
+	return out, nil
+}
+
 func (r *LogRepository) replaceHealthAttachmentsTx(ctx context.Context, tx pgx.Tx, petID uuid.UUID, entityType string, entityID uuid.UUID, addedBy uuid.UUID, attachments []repo.AttachmentInput) (repo.AttachmentSync, error) {
 	existingRows, err := tx.Query(ctx, `SELECT file_id FROM attachment_refs WHERE entity_type = $1 AND entity_id = $2`, entityType, entityID)
 	if err != nil {

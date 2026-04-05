@@ -211,10 +211,6 @@ func (s *FileService) GetFile(ctx context.Context, id uuid.UUID) (*model.FileObj
 	return s.objects.GetByID(ctx, id)
 }
 
-func (s *FileService) ListLinksByFileID(ctx context.Context, fileID uuid.UUID) ([]model.FileLink, error) {
-	return s.links.ListByFileID(ctx, fileID)
-}
-
 func (s *FileService) DeleteFileIfUnlinked(ctx context.Context, fileID uuid.UUID) (*model.FileObject, error) {
 	f, err := s.objects.GetByID(ctx, fileID)
 	if err != nil {

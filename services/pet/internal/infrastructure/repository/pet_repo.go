@@ -416,7 +416,7 @@ func (r *PetRepository) UpdateOwner(ctx context.Context, petID uuid.UUID, rowVer
 	return r.GetByID(ctx, petID)
 }
 
-func (r *PetRepository) UpdatePhoto(ctx context.Context, petID uuid.UUID, rowVersion int, fileID uuid.UUID) (*model.Pet, error) {
+func (r *PetRepository) UpdatePhoto(ctx context.Context, petID uuid.UUID, rowVersion int, fileID *uuid.UUID) (*model.Pet, error) {
 	const query = `
 		UPDATE pets
 		SET profile_photo_file_id = $3,

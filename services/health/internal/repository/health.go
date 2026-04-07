@@ -263,6 +263,98 @@ type ListPetDocumentsOutput struct {
 	NextCursor *TimeCursor
 }
 
+type ListScheduledItemsInput struct {
+	PetID       uuid.UUID
+	Cursor      *TimeCursor
+	Limit       int
+	Status      *string
+	SourceType  *string
+	DateFrom    *time.Time
+	DateTo      *time.Time
+	IncludePast bool
+}
+
+type ListScheduledItemsOutput struct {
+	Items      []model.ScheduledItemListItem
+	NextCursor *TimeCursor
+}
+
+type CreateScheduledItemInput struct {
+	ID                 uuid.UUID
+	PetID              uuid.UUID
+	SourceType         string
+	SourceID           *uuid.UUID
+	Title              string
+	Note               *string
+	ScheduledFor       time.Time
+	RecurrenceRule     *string
+	RecurrenceInterval *int
+	RecurrenceUntil    *time.Time
+	Status             string
+	CreatedBy          uuid.UUID
+	UpdatedBy          uuid.UUID
+}
+
+type UpdateScheduledItemInput struct {
+	ID                 uuid.UUID
+	PetID              uuid.UUID
+	RowVersion         int
+	Title              string
+	Note               *string
+	ScheduledFor       time.Time
+	RecurrenceRule     *string
+	RecurrenceInterval *int
+	RecurrenceUntil    *time.Time
+	Status             string
+	UpdatedBy          uuid.UUID
+}
+
+type CompleteScheduledItemInput struct {
+	ID         uuid.UUID
+	PetID      uuid.UUID
+	RowVersion int
+	UpdatedBy  uuid.UUID
+}
+
+type DeleteScheduledItemInput struct {
+	ID         uuid.UUID
+	PetID      uuid.UUID
+	RowVersion int
+	DeletedBy  uuid.UUID
+}
+
+type UpsertHealthScheduledItemInput struct {
+	PetID              uuid.UUID
+	SourceType         string
+	SourceID           uuid.UUID
+	Title              string
+	Note               *string
+	ScheduledFor       time.Time
+	Status             string
+	CreatedByUserID    uuid.UUID
+	UpdatedByUserID    uuid.UUID
+}
+
+type CancelHealthScheduledItemInput struct {
+	PetID           uuid.UUID
+	SourceType      string
+	SourceID        uuid.UUID
+	UpdatedByUserID uuid.UUID
+}
+
+type DeleteHealthScheduledItemInput struct {
+	PetID           uuid.UUID
+	SourceType      string
+	SourceID        uuid.UUID
+	DeletedByUserID uuid.UUID
+}
+
+type CreateScheduledItemDispatchInput struct {
+	ID              uuid.UUID
+	ScheduledItemID uuid.UUID
+	DispatchKey     string
+}
+
 type HealthRepository interface {
 	GetVetVisit(ctx context.Context, petID, visitID uuid.UUID, includeRelatedLogs bool) (*model.VetVisit, error)
 	ListVetVisits(ctx context.Context, in ListVetVisitsInput) (ListVetVisitsOutput, error)
@@ -291,7 +383,20 @@ type HealthRepository interface {
 	DeleteMedicalRecord(ctx context.Context, in DeleteMedicalRecordInput) error
 	ListPetDocuments(ctx context.Context, in ListPetDocumentsInput) (ListPetDocumentsOutput, error)
 
+	GetScheduledItem(ctx context.Context, petID, itemID uuid.UUID) (*model.ScheduledItem, error)
+	ListScheduledItems(ctx context.Context, in ListScheduledItemsInput) (ListScheduledItemsOutput, error)
+	CreateScheduledItem(ctx context.Context, in CreateScheduledItemInput) (*model.ScheduledItem, error)
+	UpdateScheduledItem(ctx context.Context, in UpdateScheduledItemInput) (*model.ScheduledItem, error)
+	CompleteScheduledItem(ctx context.Context, in CompleteScheduledItemInput) (*model.ScheduledItem, error)
+	DeleteScheduledItem(ctx context.Context, in DeleteScheduledItemInput) error
+	UpsertHealthScheduledItem(ctx context.Context, in UpsertHealthScheduledItemInput) (*model.ScheduledItem, error)
+	CancelHealthScheduledItem(ctx context.Context, in CancelHealthScheduledItemInput) error
+	DeleteHealthScheduledItem(ctx context.Context, in DeleteHealthScheduledItemInput) error
+	CreateScheduledItemDispatch(ctx context.Context, in CreateScheduledItemDispatchInput) error
+
 	ListCalendarDayItems(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.CalendarDayItem, error)
+	ListCalendarDayScheduledItems(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItem, error)
+	ListCalendarDayScheduledItemsForPets(ctx context.Context, petIDs []uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItem, error)
 }
 
 type Repository interface {

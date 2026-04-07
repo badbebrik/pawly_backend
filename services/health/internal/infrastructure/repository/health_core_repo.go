@@ -1438,5 +1438,3 @@ func normalizeMedicalRecordSort(raw string) (expr, dir, cursorOp string, ok bool
 		return "", "", "", false
 	}
 }
-
-var _ repo.HealthRepository = (*LogRepository)(nil)

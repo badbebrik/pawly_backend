@@ -47,7 +47,7 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	logRepo := pgrepo.NewLogRepository(pg.Pool)
+	logRepo := pgrepo.NewRepository(pg.Pool)
 	logSvc := service.New(logRepo, acl, file)
 
 	a := &App{

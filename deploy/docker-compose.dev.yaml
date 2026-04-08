@@ -101,6 +101,23 @@ services:
       timeout: 3s
       retries: 20
 
+  push_postgres:
+    image: postgres:16
+    container_name: push_postgres
+    environment:
+      POSTGRES_USER: push_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: push_db
+    ports:
+      - "5440:5432"
+    volumes:
+      - push_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U push_user -d push_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   chat_postgres:
     image: postgres:16
     container_name: chat_postgres
@@ -398,6 +415,27 @@ services:
       timeout: 3s
       retries: 20
 
+  push:
+    build:
+      context: ../services/push
+    container_name: pawly_push
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8090"
+      POSTGRES_USER: push_user
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: push_db
+      POSTGRES_HOST: push_postgres
+      POSTGRES_PORT: "5432"
+    depends_on:
+      push_postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8090/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
   kong:
     image: kong:3.6
     container_name: pawly_kong
@@ -424,6 +462,8 @@ services:
         condition: service_healthy
       notification:
         condition: service_healthy
+      push:
+        condition: service_healthy
 
 volumes:
   postgres_data:
@@ -432,6 +472,7 @@ volumes:
   profile_postgres_data:
   pet_postgres_data:
   health_postgres_data:
+  push_postgres_data:
   chat_postgres_data:
   redis_data:
   rabbitmq_data:

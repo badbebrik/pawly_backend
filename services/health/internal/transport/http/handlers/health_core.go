@@ -88,6 +88,22 @@ type confirmAttachmentUploadRequest struct {
 	SizeBytes int64  `json:"size_bytes"`
 }
 
+type recurrenceDTORequest struct {
+	Rule     *string `json:"rule"`
+	Interval *int    `json:"interval"`
+	Until    *string `json:"until"`
+}
+
+type createOrUpdateScheduledItemRequest struct {
+	SourceType string                `json:"source_type"`
+	SourceID   *string               `json:"source_id"`
+	Title      string                `json:"title"`
+	Note       *string               `json:"note"`
+	StartsAt   *string               `json:"starts_at"`
+	Recurrence *recurrenceDTORequest `json:"recurrence"`
+	RowVersion int                   `json:"row_version"`
+}
+
 func (h *Handlers) GetHealthBootstrap(w http.ResponseWriter, r *http.Request) {
 	userID, petID, ok := h.getUserAndPet(w, r)
 	if !ok {
@@ -99,6 +115,33 @@ func (h *Handlers) GetHealthBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, healthBootstrapToDTO(resp))
+}
+
+func (h *Handlers) GetGlobalHealthDay(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.getUserID(w, r)
+	if !ok {
+		return
+	}
+	dateRaw := strings.TrimSpace(r.URL.Query().Get("date"))
+	if dateRaw == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "date is required")
+		return
+	}
+	date, err := time.Parse("2006-01-02", dateRaw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date")
+		return
+	}
+	items, err := h.svc.GetGlobalHealthDay(r.Context(), userID, date)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	out := make([]any, 0, len(items))
+	for i := range items {
+		out = append(out, scheduledOccurrenceToDTO(items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"date": date.Format("2006-01-02"), "items": out})
 }
 
 func (h *Handlers) GetHealthDay(w http.ResponseWriter, r *http.Request) {
@@ -123,9 +166,210 @@ func (h *Handlers) GetHealthDay(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]any, 0, len(items))
 	for i := range items {
-		out = append(out, calendarDayItemToDTO(items[i]))
+		out = append(out, scheduledOccurrenceToDTO(items[i]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"date": date.Format("2006-01-02"), "items": out})
+}
+
+func (h *Handlers) GetScheduledItems(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	cursor, err := decodeTimeCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid cursor")
+		return
+	}
+	dateFrom, err := parseOptionalDateTime(r.URL.Query().Get("date_from"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_from")
+		return
+	}
+	dateTo, err := parseOptionalDateTime(r.URL.Query().Get("date_to"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_to")
+		return
+	}
+	resp, err := h.svc.ListScheduledItems(r.Context(), service.ListScheduledItemsParams{
+		UserID:      userID,
+		PetID:       petID,
+		Cursor:      cursor,
+		Limit:       parseIntOrDefault(r.URL.Query().Get("limit"), 20),
+		SourceType:  r.URL.Query().Get("source_type"),
+		DateFrom:    dateFrom,
+		DateTo:      dateTo,
+		IncludePast: parseBoolOrDefault(r.URL.Query().Get("include_past"), false),
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	items := make([]any, 0, len(resp.Items))
+	for i := range resp.Items {
+		items = append(items, scheduledItemListItemToDTO(resp.Items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": encodeTimeCursor(resp.NextCursor)})
+}
+
+func (h *Handlers) GetScheduledItem(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	itemID, err := uuid.Parse(chi.URLParam(r, "item_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid item_id")
+		return
+	}
+	item, err := h.svc.GetScheduledItem(r.Context(), userID, petID, itemID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, scheduledItemToDTO(item))
+}
+
+func (h *Handlers) CreateScheduledItem(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	var req createOrUpdateScheduledItemRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	params, ok := parseScheduledItemRequest(w, userID, petID, req)
+	if !ok {
+		return
+	}
+	item, err := h.svc.CreateScheduledItem(r.Context(), params)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, scheduledItemToDTO(item))
+}
+
+func (h *Handlers) UpdateScheduledItem(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	itemID, err := uuid.Parse(chi.URLParam(r, "item_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid item_id")
+		return
+	}
+	var req createOrUpdateScheduledItemRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	params, ok := parseScheduledItemRequest(w, userID, petID, req)
+	if !ok {
+		return
+	}
+	item, err := h.svc.UpdateScheduledItem(r.Context(), service.UpdateScheduledItemParams{
+		UserID:             params.UserID,
+		PetID:              params.PetID,
+		ItemID:             itemID,
+		RowVersion:         req.RowVersion,
+		Title:              params.Title,
+		Note:               params.Note,
+		StartsAt:           params.StartsAt,
+		RecurrenceRule:     params.RecurrenceRule,
+		RecurrenceInterval: params.RecurrenceInterval,
+		RecurrenceUntil:    params.RecurrenceUntil,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, scheduledItemToDTO(item))
+}
+
+func (h *Handlers) DeleteScheduledItem(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	itemID, err := uuid.Parse(chi.URLParam(r, "item_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid item_id")
+		return
+	}
+	var req deleteRowVersionRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if err := h.svc.DeleteScheduledItem(r.Context(), service.DeleteScheduledItemParams{
+		UserID:     userID,
+		PetID:      petID,
+		ItemID:     itemID,
+		RowVersion: req.RowVersion,
+	}); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) GetScheduledItemOccurrences(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	cursor, err := decodeTimeCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid cursor")
+		return
+	}
+	dateFrom, err := parseOptionalDateTime(r.URL.Query().Get("date_from"), false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_from")
+		return
+	}
+	dateTo, err := parseOptionalDateTime(r.URL.Query().Get("date_to"), true)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid date_to")
+		return
+	}
+	resp, err := h.svc.ListScheduledItemOccurrences(r.Context(), service.ListScheduledItemOccurrencesParams{
+		UserID:     userID,
+		PetID:      petID,
+		Cursor:     cursor,
+		Limit:      parseIntOrDefault(r.URL.Query().Get("limit"), 20),
+		SourceType: r.URL.Query().Get("source_type"),
+		DateFrom:   dateFrom,
+		DateTo:     dateTo,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	items := make([]any, 0, len(resp.Items))
+	for i := range resp.Items {
+		items = append(items, scheduledOccurrenceToDTO(resp.Items[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": encodeTimeCursor(resp.NextCursor)})
+}
+
+func (h *Handlers) GetScheduledItemOccurrence(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	occurrenceID, err := uuid.Parse(chi.URLParam(r, "occurrence_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid occurrence_id")
+		return
+	}
+	item, err := h.svc.GetScheduledItemOccurrence(r.Context(), userID, petID, occurrenceID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, scheduledOccurrenceToDTO(*item))
 }
 
 func (h *Handlers) InitAttachmentUpload(w http.ResponseWriter, r *http.Request) {
@@ -992,6 +1236,58 @@ func decodeTimeCursor(raw string) (*repository.TimeCursor, error) {
 	return &repository.TimeCursor{SortAt: ts, ID: id}, nil
 }
 
+func parseBoolOrDefault(raw string, def bool) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no":
+		return false
+	default:
+		return def
+	}
+}
+
+func parseScheduledItemRequest(w http.ResponseWriter, userID, petID uuid.UUID, req createOrUpdateScheduledItemRequest) (service.CreateScheduledItemParams, bool) {
+	startsAt, err := parseOptionalRFC3339(req.StartsAt)
+	if err != nil || startsAt == nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid starts_at")
+		return service.CreateScheduledItemParams{}, false
+	}
+	var sourceID *uuid.UUID
+	if req.SourceID != nil && strings.TrimSpace(*req.SourceID) != "" {
+		parsed, err := uuid.Parse(strings.TrimSpace(*req.SourceID))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid source_id")
+			return service.CreateScheduledItemParams{}, false
+		}
+		sourceID = &parsed
+	}
+	var recurrenceRule *string
+	var recurrenceInterval *int
+	var recurrenceUntil *time.Time
+	if req.Recurrence != nil {
+		recurrenceRule = req.Recurrence.Rule
+		recurrenceInterval = req.Recurrence.Interval
+		recurrenceUntil, err = parseOptionalRFC3339(req.Recurrence.Until)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid recurrence.until")
+			return service.CreateScheduledItemParams{}, false
+		}
+	}
+	return service.CreateScheduledItemParams{
+		UserID:             userID,
+		PetID:              petID,
+		SourceType:         req.SourceType,
+		SourceID:           sourceID,
+		Title:              req.Title,
+		Note:               req.Note,
+		StartsAt:           *startsAt,
+		RecurrenceRule:     recurrenceRule,
+		RecurrenceInterval: recurrenceInterval,
+		RecurrenceUntil:    recurrenceUntil,
+	}, true
+}
+
 func healthBootstrapToDTO(item *model.HealthBootstrap) map[string]any {
 	return map[string]any{
 		"permissions": map[string]any{"health_read": item.Permissions.HealthRead, "health_write": item.Permissions.HealthWrite, "log_read": item.Permissions.LogRead},
@@ -1139,11 +1435,61 @@ func relatedLogToDTO(item model.RelatedLog) map[string]any {
 	return map[string]any{"id": item.ID.String(), "occurred_at": item.OccurredAt.UTC().Format(time.RFC3339), "log_type_name": strOrNil(item.LogTypeName), "description_preview": strOrNil(item.DescriptionPreview), "source": item.Source}
 }
 
-func calendarDayItemToDTO(item model.CalendarDayItem) map[string]any {
+func scheduledItemListItemToDTO(item model.ScheduledItemListItem) map[string]any {
 	return map[string]any{
-		"item_type": item.ItemType, "entity_id": item.EntityID.String(), "title": item.Title, "subtitle": strOrNil(item.Subtitle),
-		"scheduled_for": item.ScheduledFor.UTC().Format(time.RFC3339), "status": item.Status,
-		"source": map[string]any{"visit_id": uuidOrNil(item.VisitID), "vaccination_id": uuidOrNil(item.VaccinationID), "procedure_id": uuidOrNil(item.ProcedureID)},
+		"id":                 item.ID.String(),
+		"pet_id":             item.PetID.String(),
+		"source_type":        item.SourceType,
+		"source_id":          uuidOrNil(item.SourceID),
+		"title":              item.Title,
+		"note_preview":       strOrNil(item.NotePreview),
+		"starts_at":          item.StartsAt.UTC().Format(time.RFC3339),
+		"recurrence":         recurrenceToDTO(item.RecurrenceRule, item.RecurrenceInterval, item.RecurrenceUntil),
+		"row_version":        item.RowVersion,
+		"created_at":         item.CreatedAt.UTC().Format(time.RFC3339),
+		"created_by_user_id": item.CreatedByUserID.String(),
+		"updated_at":         item.UpdatedAt.UTC().Format(time.RFC3339),
+		"updated_by_user_id": item.UpdatedByUserID.String(),
+	}
+}
+
+func scheduledItemToDTO(item *model.ScheduledItem) map[string]any {
+	return map[string]any{
+		"id":                 item.ID.String(),
+		"pet_id":             item.PetID.String(),
+		"source_type":        item.SourceType,
+		"source_id":          uuidOrNil(item.SourceID),
+		"title":              item.Title,
+		"note":               strOrNil(item.Note),
+		"starts_at":          item.StartsAt.UTC().Format(time.RFC3339),
+		"recurrence":         recurrenceToDTO(item.RecurrenceRule, item.RecurrenceInterval, item.RecurrenceUntil),
+		"row_version":        item.RowVersion,
+		"created_at":         item.CreatedAt.UTC().Format(time.RFC3339),
+		"created_by_user_id": item.CreatedByUserID.String(),
+		"updated_at":         item.UpdatedAt.UTC().Format(time.RFC3339),
+		"updated_by_user_id": item.UpdatedByUserID.String(),
+	}
+}
+
+func scheduledOccurrenceToDTO(item model.ScheduledItemOccurrenceListItem) map[string]any {
+	return map[string]any{
+		"id":                item.ID.String(),
+		"scheduled_item_id": item.ScheduledItemID.String(),
+		"pet_id":            item.PetID.String(),
+		"scheduled_for":     item.ScheduledFor.UTC().Format(time.RFC3339),
+		"created_at":        item.CreatedAt.UTC().Format(time.RFC3339),
+		"rule":              scheduledItemToDTO(&item.Rule),
+	}
+}
+
+func recurrenceToDTO(rule *string, interval *int, until *time.Time) any {
+	if rule == nil {
+		return nil
+	}
+	return map[string]any{
+		"rule":     *rule,
+		"interval": interval,
+		"until":    timeOrNil(until),
 	}
 }
 

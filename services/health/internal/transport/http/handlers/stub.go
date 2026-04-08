@@ -866,6 +866,15 @@ func (h *Handlers) getUserAndPet(w http.ResponseWriter, r *http.Request) (uuid.U
 	return userID, petID, true
 }
 
+func (h *Handlers) getUserID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	userID, ok := appmw.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
+		return uuid.Nil, false
+	}
+	return userID, true
+}
+
 func writeServiceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrInvalidInput):

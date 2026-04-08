@@ -26,8 +26,16 @@ func (a *App) setupRoutes() http.Handler {
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID(a.cfg.JWTSecret, a.cfg.JWTIssuer))
+		r.Get("/v1/health/day", h.GetGlobalHealthDay)
 		r.Get("/v1/pets/{pet_id}/health/bootstrap", h.GetHealthBootstrap)
 		r.Get("/v1/pets/{pet_id}/health/day", h.GetHealthDay)
+		r.Get("/v1/pets/{pet_id}/scheduled-items", h.GetScheduledItems)
+		r.Post("/v1/pets/{pet_id}/scheduled-items", h.CreateScheduledItem)
+		r.Get("/v1/pets/{pet_id}/scheduled-items/{item_id}", h.GetScheduledItem)
+		r.Patch("/v1/pets/{pet_id}/scheduled-items/{item_id}", h.UpdateScheduledItem)
+		r.Delete("/v1/pets/{pet_id}/scheduled-items/{item_id}", h.DeleteScheduledItem)
+		r.Get("/v1/pets/{pet_id}/scheduled-item-occurrences", h.GetScheduledItemOccurrences)
+		r.Get("/v1/pets/{pet_id}/scheduled-item-occurrences/{occurrence_id}", h.GetScheduledItemOccurrence)
 		r.Get("/v1/pets/{pet_id}/documents", h.GetPetDocuments)
 		r.Post("/v1/pets/{pet_id}/attachments:init-upload", h.InitAttachmentUpload)
 		r.Post("/v1/pets/{pet_id}/attachments:confirm-upload", h.ConfirmAttachmentUpload)

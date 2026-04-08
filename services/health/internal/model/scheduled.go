@@ -16,12 +16,6 @@ const (
 )
 
 const (
-	ScheduledItemStatusActive    = "ACTIVE"
-	ScheduledItemStatusDone      = "DONE"
-	ScheduledItemStatusCancelled = "CANCELLED"
-)
-
-const (
 	RecurrenceRuleDaily   = "DAILY"
 	RecurrenceRuleWeekly  = "WEEKLY"
 	RecurrenceRuleMonthly = "MONTHLY"
@@ -35,11 +29,10 @@ type ScheduledItem struct {
 	SourceID           *uuid.UUID
 	Title              string
 	Note               *string
-	ScheduledFor       time.Time
+	StartsAt           time.Time
 	RecurrenceRule     *string
 	RecurrenceInterval *int
 	RecurrenceUntil    *time.Time
-	Status             string
 	RowVersion         int
 	CreatedAt          time.Time
 	CreatedByUserID    uuid.UUID
@@ -56,11 +49,10 @@ type ScheduledItemListItem struct {
 	SourceID           *uuid.UUID
 	Title              string
 	NotePreview        *string
-	ScheduledFor       time.Time
+	StartsAt           time.Time
 	RecurrenceRule     *string
 	RecurrenceInterval *int
 	RecurrenceUntil    *time.Time
-	Status             string
 	RowVersion         int
 	CreatedAt          time.Time
 	CreatedByUserID    uuid.UUID
@@ -68,11 +60,28 @@ type ScheduledItemListItem struct {
 	UpdatedByUserID    uuid.UUID
 }
 
-type ScheduledItemDispatch struct {
+type ScheduledItemOccurrence struct {
 	ID              uuid.UUID
 	ScheduledItemID uuid.UUID
-	DispatchKey     string
+	PetID           uuid.UUID
+	ScheduledFor    time.Time
 	CreatedAt       time.Time
+}
+
+type ScheduledItemOccurrenceListItem struct {
+	ID              uuid.UUID
+	ScheduledItemID uuid.UUID
+	PetID           uuid.UUID
+	ScheduledFor    time.Time
+	CreatedAt       time.Time
+	Rule            ScheduledItem
+}
+
+type ScheduledItemDispatch struct {
+	ID                        uuid.UUID
+	ScheduledItemOccurrenceID uuid.UUID
+	DispatchKey               string
+	CreatedAt                 time.Time
 }
 
 type CalendarPetInfo struct {
@@ -81,7 +90,8 @@ type CalendarPetInfo struct {
 	PetAvatarURL *string
 }
 
-type CalendarScheduledItem struct {
-	ScheduledItem
-	Pet CalendarPetInfo
+type CalendarScheduledOccurrence struct {
+	Occurrence ScheduledItemOccurrence
+	Rule       ScheduledItem
+	Pet        CalendarPetInfo
 }

@@ -8,15 +8,12 @@ CREATE TABLE scheduled_items (
     source_id UUID NULL,
     title TEXT NOT NULL,
     note TEXT NULL,
-    scheduled_for TIMESTAMPTZ NOT NULL,
+    starts_at TIMESTAMPTZ NOT NULL,
     recurrence_rule TEXT NULL CHECK (
         recurrence_rule IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY')
     ),
     recurrence_interval INT NULL,
     recurrence_until TIMESTAMPTZ NULL,
-    status TEXT NOT NULL CHECK (
-        status IN ('ACTIVE', 'DONE', 'CANCELLED')
-    ),
     row_version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by_user_id UUID NOT NULL,
@@ -34,10 +31,7 @@ CREATE TABLE scheduled_items (
     )
 );
 
-CREATE INDEX idx_scheduled_items_pet_scheduled_active ON scheduled_items (pet_id, scheduled_for ASC, id ASC)
-WHERE deleted_at IS NULL;
-
-CREATE INDEX idx_scheduled_items_pet_status_scheduled_active ON scheduled_items (pet_id, status, scheduled_for ASC, id ASC)
+CREATE INDEX idx_scheduled_items_pet_starts_active ON scheduled_items (pet_id, starts_at ASC, id ASC)
 WHERE deleted_at IS NULL;
 
 CREATE INDEX idx_scheduled_items_source_active ON scheduled_items (source_type, source_id)
@@ -49,16 +43,32 @@ WHERE deleted_at IS NULL
   AND source_id IS NOT NULL
   AND source_type IN ('VET_VISIT', 'VACCINATION', 'PROCEDURE');
 
-CREATE TABLE scheduled_item_push_dispatches (
+CREATE TABLE scheduled_item_occurrences (
     id UUID PRIMARY KEY,
-    scheduled_item_id UUID NOT NULL REFERENCES scheduled_items(id) ON DELETE CASCADE,
-    dispatch_key TEXT NOT NULL,
+    scheduled_item_id UUID NOT NULL REFERENCES scheduled_items(id),
+    pet_id UUID NOT NULL,
+    scheduled_for TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (scheduled_item_id, dispatch_key)
+    UNIQUE (scheduled_item_id, scheduled_for)
 );
 
-CREATE INDEX idx_scheduled_item_push_dispatches_item_created ON scheduled_item_push_dispatches (scheduled_item_id, created_at DESC);
+CREATE INDEX idx_scheduled_item_occurrences_pet_day
+ON scheduled_item_occurrences (pet_id, scheduled_for ASC, id ASC);
+
+CREATE INDEX idx_scheduled_item_occurrences_item_scheduled
+ON scheduled_item_occurrences (scheduled_item_id, scheduled_for ASC, id ASC);
+
+CREATE TABLE scheduled_item_push_dispatches (
+    id UUID PRIMARY KEY,
+    scheduled_item_occurrence_id UUID NOT NULL REFERENCES scheduled_item_occurrences(id),
+    dispatch_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (scheduled_item_occurrence_id, dispatch_key)
+);
+
+CREATE INDEX idx_scheduled_item_push_dispatches_occurrence_created ON scheduled_item_push_dispatches (scheduled_item_occurrence_id, created_at DESC);
 
 -- +goose Down
 DROP TABLE IF EXISTS scheduled_item_push_dispatches;
+DROP TABLE IF EXISTS scheduled_item_occurrences;
 DROP TABLE IF EXISTS scheduled_items;

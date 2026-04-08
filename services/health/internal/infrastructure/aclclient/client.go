@@ -53,6 +53,33 @@ func (c *Client) Check(ctx context.Context, petID, userID uuid.UUID, action stri
 	return resp.GetAllowed(), nil
 }
 
+func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	resp, err := c.client.ListPetsForUser(ctx, &aclpb.ListPetsForUserRequest{
+		UserId: userID.String(),
+	})
+	if err != nil {
+		return nil, mapErr(err)
+	}
+
+	petIDs := make([]uuid.UUID, 0, len(resp.GetMemberships()))
+	seen := make(map[uuid.UUID]struct{}, len(resp.GetMemberships()))
+	for _, membership := range resp.GetMemberships() {
+		if membership == nil || membership.GetPolicy() == nil || !membership.GetPolicy().GetHealthRead() {
+			continue
+		}
+		petID, err := uuid.Parse(strings.TrimSpace(membership.GetPetId()))
+		if err != nil || petID == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[petID]; ok {
+			continue
+		}
+		seen[petID] = struct{}{}
+		petIDs = append(petIDs, petID)
+	}
+	return petIDs, nil
+}
+
 func mapAction(action string) aclpb.Action {
 	switch action {
 	case service.ActionLogRead:

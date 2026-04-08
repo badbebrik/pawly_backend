@@ -360,6 +360,9 @@ func (s *Service) CreateVetVisit(ctx context.Context, p CreateVetVisitParams) (*
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VET_VISIT", item.ID, sync); err != nil {
 		return nil, err
 	}
+	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVetVisit, item.ID, "Прием у ветеринара", vetVisitScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
 	s.enrichHealthAttachmentURLs(ctx, item.Attachments)
 	return item, nil
 }
@@ -400,6 +403,9 @@ func (s *Service) UpdateVetVisit(ctx context.Context, p UpdateVetVisitParams) (*
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VET_VISIT", item.ID, sync); err != nil {
 		return nil, err
 	}
+	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVetVisit, item.ID, "Прием у ветеринара", vetVisitScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
 	s.enrichHealthAttachmentURLs(ctx, item.Attachments)
 	return item, nil
 }
@@ -416,6 +422,14 @@ func (s *Service) DeleteVetVisit(ctx context.Context, p DeleteVetVisitParams) er
 		return mapRepoErr(err)
 	}
 	if err := s.repo.DeleteVetVisit(ctx, repository.DeleteVetVisitInput{ID: p.VisitID, PetID: p.PetID, RowVersion: p.RowVersion, DeletedBy: p.UserID}); err != nil {
+		return mapRepoErr(err)
+	}
+	if err := s.repo.DeleteHealthScheduledItem(ctx, repository.DeleteHealthScheduledItemInput{
+		PetID:           p.PetID,
+		SourceType:      model.ScheduledItemSourceTypeVetVisit,
+		SourceID:        p.VisitID,
+		DeletedByUserID: p.UserID,
+	}); err != nil {
 		return mapRepoErr(err)
 	}
 	fileIDs := healthAttachmentFileIDs(current.Attachments)
@@ -551,6 +565,9 @@ func (s *Service) CreateVaccination(ctx context.Context, p CreateVaccinationPara
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VACCINATION", item.ID, sync); err != nil {
 		return nil, err
 	}
+	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVaccination, item.ID, item.VaccineName, vaccinationScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
 	if err := s.syncVaccinationAutolog(ctx, item, p.UserID); err != nil {
 		return nil, err
 	}
@@ -610,6 +627,9 @@ func (s *Service) UpdateVaccination(ctx context.Context, p UpdateVaccinationPara
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VACCINATION", item.ID, sync); err != nil {
 		return nil, err
 	}
+	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVaccination, item.ID, item.VaccineName, vaccinationScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
 	if err := s.syncVaccinationAutologTransition(ctx, current, item, p.UserID); err != nil {
 		return nil, err
 	}
@@ -632,6 +652,14 @@ func (s *Service) DeleteVaccination(ctx context.Context, p DeleteVaccinationPara
 		return mapRepoErr(err)
 	}
 	if err := s.repo.DeleteVaccination(ctx, repository.DeleteVaccinationInput{ID: p.VaccinationID, PetID: p.PetID, RowVersion: p.RowVersion, DeletedBy: p.UserID}); err != nil {
+		return mapRepoErr(err)
+	}
+	if err := s.repo.DeleteHealthScheduledItem(ctx, repository.DeleteHealthScheduledItemInput{
+		PetID:           p.PetID,
+		SourceType:      model.ScheduledItemSourceTypeVaccination,
+		SourceID:        p.VaccinationID,
+		DeletedByUserID: p.UserID,
+	}); err != nil {
 		return mapRepoErr(err)
 	}
 	fileIDs := healthAttachmentFileIDs(current.Attachments)
@@ -737,6 +765,9 @@ func (s *Service) CreateProcedure(ctx context.Context, p CreateProcedureParams) 
 	if err := s.syncHealthAttachments(ctx, p.PetID, "PROCEDURE", item.ID, sync); err != nil {
 		return nil, err
 	}
+	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeProcedure, item.ID, item.Title, procedureScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
 	if err := s.syncProcedureAutolog(ctx, item, p.UserID); err != nil {
 		return nil, err
 	}
@@ -801,6 +832,9 @@ func (s *Service) UpdateProcedure(ctx context.Context, p UpdateProcedureParams) 
 	if err := s.syncHealthAttachments(ctx, p.PetID, "PROCEDURE", item.ID, sync); err != nil {
 		return nil, err
 	}
+	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeProcedure, item.ID, item.Title, procedureScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
 	if err := s.syncProcedureAutologTransition(ctx, current, item, p.UserID); err != nil {
 		return nil, err
 	}
@@ -823,6 +857,14 @@ func (s *Service) DeleteProcedure(ctx context.Context, p DeleteProcedureParams) 
 		return mapRepoErr(err)
 	}
 	if err := s.repo.DeleteProcedure(ctx, repository.DeleteProcedureInput{ID: p.ProcedureID, PetID: p.PetID, RowVersion: p.RowVersion, DeletedBy: p.UserID}); err != nil {
+		return mapRepoErr(err)
+	}
+	if err := s.repo.DeleteHealthScheduledItem(ctx, repository.DeleteHealthScheduledItemInput{
+		PetID:           p.PetID,
+		SourceType:      model.ScheduledItemSourceTypeProcedure,
+		SourceID:        p.ProcedureID,
+		DeletedByUserID: p.UserID,
+	}); err != nil {
 		return mapRepoErr(err)
 	}
 	fileIDs := healthAttachmentFileIDs(current.Attachments)
@@ -972,7 +1014,7 @@ func (s *Service) DeleteMedicalRecord(ctx context.Context, p DeleteMedicalRecord
 	return nil
 }
 
-func (s *Service) GetHealthDay(ctx context.Context, userID, petID uuid.UUID, day time.Time) ([]model.CalendarDayItem, error) {
+func (s *Service) GetHealthDay(ctx context.Context, userID, petID uuid.UUID, day time.Time) ([]model.ScheduledItemOccurrenceListItem, error) {
 	if userID == uuid.Nil || petID == uuid.Nil || day.IsZero() {
 		return nil, ErrInvalidInput
 	}
@@ -981,7 +1023,7 @@ func (s *Service) GetHealthDay(ctx context.Context, userID, petID uuid.UUID, day
 	}
 	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
 	dayEnd := dayStart.Add(24*time.Hour - time.Nanosecond)
-	items, err := s.repo.ListCalendarDayItems(ctx, petID, dayStart, dayEnd)
+	items, err := s.repo.ListCalendarDayScheduledOccurrences(ctx, petID, dayStart, dayEnd)
 	if err != nil {
 		return nil, mapRepoErr(err)
 	}
@@ -989,10 +1031,42 @@ func (s *Service) GetHealthDay(ctx context.Context, userID, petID uuid.UUID, day
 		if !items[i].ScheduledFor.Equal(items[j].ScheduledFor) {
 			return items[i].ScheduledFor.Before(items[j].ScheduledFor)
 		}
-		if items[i].ItemType != items[j].ItemType {
-			return items[i].ItemType < items[j].ItemType
+		if items[i].Rule.SourceType != items[j].Rule.SourceType {
+			return items[i].Rule.SourceType < items[j].Rule.SourceType
 		}
-		return items[i].EntityID.String() < items[j].EntityID.String()
+		return items[i].ID.String() < items[j].ID.String()
+	})
+	return items, nil
+}
+
+func (s *Service) GetGlobalHealthDay(ctx context.Context, userID uuid.UUID, day time.Time) ([]model.ScheduledItemOccurrenceListItem, error) {
+	if userID == uuid.Nil || day.IsZero() {
+		return nil, ErrInvalidInput
+	}
+	petIDs, err := s.acl.ListPetsForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(petIDs) == 0 {
+		return []model.ScheduledItemOccurrenceListItem{}, nil
+	}
+	dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
+	dayEnd := dayStart.Add(24*time.Hour - time.Nanosecond)
+	items, err := s.repo.ListCalendarDayScheduledOccurrencesForPets(ctx, petIDs, dayStart, dayEnd)
+	if err != nil {
+		return nil, mapRepoErr(err)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if !items[i].ScheduledFor.Equal(items[j].ScheduledFor) {
+			return items[i].ScheduledFor.Before(items[j].ScheduledFor)
+		}
+		if items[i].PetID != items[j].PetID {
+			return items[i].PetID.String() < items[j].PetID.String()
+		}
+		if items[i].Rule.SourceType != items[j].Rule.SourceType {
+			return items[i].Rule.SourceType < items[j].Rule.SourceType
+		}
+		return items[i].ID.String() < items[j].ID.String()
 	})
 	return items, nil
 }
@@ -1314,6 +1388,43 @@ func procedureAutologDescription(item *model.Procedure) string {
 		return "Проведена процедура"
 	}
 	return "Проведена процедура: " + title
+}
+
+func vetVisitScheduledNote(item *model.VetVisit) *string {
+	if item == nil {
+		return nil
+	}
+	parts := make([]string, 0, 2)
+	if item.ClinicName != nil && strings.TrimSpace(*item.ClinicName) != "" {
+		parts = append(parts, strings.TrimSpace(*item.ClinicName))
+	}
+	if item.VetName != nil && strings.TrimSpace(*item.VetName) != "" {
+		parts = append(parts, strings.TrimSpace(*item.VetName))
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	note := strings.Join(parts, ", ")
+	return &note
+}
+
+func vaccinationScheduledNote(item *model.Vaccination) *string {
+	if item == nil {
+		return nil
+	}
+	note := "Вакцинация"
+	return &note
+}
+
+func procedureScheduledNote(item *model.Procedure) *string {
+	if item == nil {
+		return nil
+	}
+	if item.ProductName != nil && strings.TrimSpace(*item.ProductName) != "" {
+		product := strings.TrimSpace(*item.ProductName)
+		return &product
+	}
+	return nil
 }
 
 func (s *Service) ensureNextVaccination(ctx context.Context, petID uuid.UUID, previousStatus string, current *model.Vaccination, userID uuid.UUID) error {

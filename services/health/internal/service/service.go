@@ -20,6 +20,7 @@ const (
 
 type ACLClient interface {
 	Check(ctx context.Context, petID, userID uuid.UUID, action string) (bool, error)
+	ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
 
 type FileClient interface {
@@ -250,16 +251,16 @@ func (s *Service) CreateLog(ctx context.Context, p CreateLogParams) (*model.Log,
 
 	id := uuid.New()
 	item, err := s.repo.CreateLog(ctx, repository.CreateLogInput{
-		ID:                id,
-		PetID:             p.PetID,
-		OccurredAt:        p.OccurredAt,
-		LogTypeID:         logTypeID,
-		Description:       description,
-		Source:            "USER",
-		CreatedByUserID:   p.UserID,
-		UpdatedByUserID:   p.UserID,
-		MetricValues:      cleanMetricValues,
-		Attachments:       cleanAttachments,
+		ID:              id,
+		PetID:           p.PetID,
+		OccurredAt:      p.OccurredAt,
+		LogTypeID:       logTypeID,
+		Description:     description,
+		Source:          "USER",
+		CreatedByUserID: p.UserID,
+		UpdatedByUserID: p.UserID,
+		MetricValues:    cleanMetricValues,
+		Attachments:     cleanAttachments,
 	})
 	if err != nil {
 		return nil, mapRepoErr(err)
@@ -298,15 +299,15 @@ func (s *Service) UpdateLog(ctx context.Context, p UpdateLogParams) (*model.Log,
 	}
 
 	item, err := s.repo.UpdateLog(ctx, repository.UpdateLogInput{
-		ID:                p.LogID,
-		PetID:             p.PetID,
-		RowVersion:        p.RowVersion,
-		OccurredAt:        p.OccurredAt,
-		LogTypeID:         logTypeID,
-		Description:       description,
-		UpdatedByUserID:   p.UserID,
-		MetricValues:      cleanMetricValues,
-		Attachments:       cleanAttachments,
+		ID:              p.LogID,
+		PetID:           p.PetID,
+		RowVersion:      p.RowVersion,
+		OccurredAt:      p.OccurredAt,
+		LogTypeID:       logTypeID,
+		Description:     description,
+		UpdatedByUserID: p.UserID,
+		MetricValues:    cleanMetricValues,
+		Attachments:     cleanAttachments,
 	})
 	if err != nil {
 		return nil, mapRepoErr(err)

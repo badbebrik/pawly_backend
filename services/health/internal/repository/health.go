@@ -267,7 +267,6 @@ type ListScheduledItemsInput struct {
 	PetID       uuid.UUID
 	Cursor      *TimeCursor
 	Limit       int
-	Status      *string
 	SourceType  *string
 	DateFrom    *time.Time
 	DateTo      *time.Time
@@ -286,11 +285,10 @@ type CreateScheduledItemInput struct {
 	SourceID           *uuid.UUID
 	Title              string
 	Note               *string
-	ScheduledFor       time.Time
+	StartsAt           time.Time
 	RecurrenceRule     *string
 	RecurrenceInterval *int
 	RecurrenceUntil    *time.Time
-	Status             string
 	CreatedBy          uuid.UUID
 	UpdatedBy          uuid.UUID
 }
@@ -301,19 +299,11 @@ type UpdateScheduledItemInput struct {
 	RowVersion         int
 	Title              string
 	Note               *string
-	ScheduledFor       time.Time
+	StartsAt           time.Time
 	RecurrenceRule     *string
 	RecurrenceInterval *int
 	RecurrenceUntil    *time.Time
-	Status             string
 	UpdatedBy          uuid.UUID
-}
-
-type CompleteScheduledItemInput struct {
-	ID         uuid.UUID
-	PetID      uuid.UUID
-	RowVersion int
-	UpdatedBy  uuid.UUID
 }
 
 type DeleteScheduledItemInput struct {
@@ -324,21 +314,13 @@ type DeleteScheduledItemInput struct {
 }
 
 type UpsertHealthScheduledItemInput struct {
-	PetID              uuid.UUID
-	SourceType         string
-	SourceID           uuid.UUID
-	Title              string
-	Note               *string
-	ScheduledFor       time.Time
-	Status             string
-	CreatedByUserID    uuid.UUID
-	UpdatedByUserID    uuid.UUID
-}
-
-type CancelHealthScheduledItemInput struct {
 	PetID           uuid.UUID
 	SourceType      string
 	SourceID        uuid.UUID
+	Title           string
+	Note            *string
+	StartsAt        time.Time
+	CreatedByUserID uuid.UUID
 	UpdatedByUserID uuid.UUID
 }
 
@@ -350,9 +332,35 @@ type DeleteHealthScheduledItemInput struct {
 }
 
 type CreateScheduledItemDispatchInput struct {
+	ID                        uuid.UUID
+	ScheduledItemOccurrenceID uuid.UUID
+	DispatchKey               string
+}
+
+type ListScheduledItemOccurrencesInput struct {
+	PetID      uuid.UUID
+	Cursor     *TimeCursor
+	Limit      int
+	DateFrom   *time.Time
+	DateTo     *time.Time
+	SourceType *string
+}
+
+type ListScheduledItemOccurrencesOutput struct {
+	Items      []model.ScheduledItemOccurrenceListItem
+	NextCursor *TimeCursor
+}
+
+type CreateScheduledItemOccurrenceInput struct {
 	ID              uuid.UUID
 	ScheduledItemID uuid.UUID
-	DispatchKey     string
+	PetID           uuid.UUID
+	ScheduledFor    time.Time
+}
+
+type DeleteScheduledItemOccurrencesFromInput struct {
+	ScheduledItemID uuid.UUID
+	From            time.Time
 }
 
 type HealthRepository interface {
@@ -387,16 +395,18 @@ type HealthRepository interface {
 	ListScheduledItems(ctx context.Context, in ListScheduledItemsInput) (ListScheduledItemsOutput, error)
 	CreateScheduledItem(ctx context.Context, in CreateScheduledItemInput) (*model.ScheduledItem, error)
 	UpdateScheduledItem(ctx context.Context, in UpdateScheduledItemInput) (*model.ScheduledItem, error)
-	CompleteScheduledItem(ctx context.Context, in CompleteScheduledItemInput) (*model.ScheduledItem, error)
 	DeleteScheduledItem(ctx context.Context, in DeleteScheduledItemInput) error
 	UpsertHealthScheduledItem(ctx context.Context, in UpsertHealthScheduledItemInput) (*model.ScheduledItem, error)
-	CancelHealthScheduledItem(ctx context.Context, in CancelHealthScheduledItemInput) error
 	DeleteHealthScheduledItem(ctx context.Context, in DeleteHealthScheduledItemInput) error
+	GetScheduledItemOccurrence(ctx context.Context, petID, occurrenceID uuid.UUID) (*model.ScheduledItemOccurrenceListItem, error)
+	ListScheduledItemOccurrences(ctx context.Context, in ListScheduledItemOccurrencesInput) (ListScheduledItemOccurrencesOutput, error)
+	CreateScheduledItemOccurrence(ctx context.Context, in CreateScheduledItemOccurrenceInput) (*model.ScheduledItemOccurrence, error)
+	DeleteScheduledItemOccurrencesFrom(ctx context.Context, in DeleteScheduledItemOccurrencesFromInput) error
 	CreateScheduledItemDispatch(ctx context.Context, in CreateScheduledItemDispatchInput) error
 
 	ListCalendarDayItems(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.CalendarDayItem, error)
-	ListCalendarDayScheduledItems(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItem, error)
-	ListCalendarDayScheduledItemsForPets(ctx context.Context, petIDs []uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItem, error)
+	ListCalendarDayScheduledOccurrences(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItemOccurrenceListItem, error)
+	ListCalendarDayScheduledOccurrencesForPets(ctx context.Context, petIDs []uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItemOccurrenceListItem, error)
 }
 
 type Repository interface {

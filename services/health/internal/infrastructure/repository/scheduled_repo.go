@@ -604,6 +604,90 @@ func (r *ScheduledRepository) CreateScheduledItemDispatch(ctx context.Context, i
 	return nil
 }
 
+func (r *ScheduledRepository) ListDueScheduledItemOccurrences(ctx context.Context, in repo.ListDueScheduledItemOccurrencesInput) ([]model.ScheduledItemOccurrenceListItem, error) {
+	if in.Limit <= 0 {
+		in.Limit = 100
+	}
+
+	const query = `
+		SELECT
+			o.id,
+			o.scheduled_item_id,
+			o.pet_id,
+			o.scheduled_for,
+			o.created_at,
+			si.id,
+			si.pet_id,
+			si.source_type,
+			si.source_id,
+			si.title,
+			si.note,
+			si.starts_at,
+			si.recurrence_rule,
+			si.recurrence_interval,
+			si.recurrence_until,
+			si.row_version,
+			si.created_at,
+			si.created_by_user_id,
+			si.updated_at,
+			si.updated_by_user_id,
+			si.deleted_at,
+			si.deleted_by_user_id
+		FROM scheduled_item_occurrences o
+		JOIN scheduled_items si ON si.id = o.scheduled_item_id
+		LEFT JOIN scheduled_item_push_dispatches d
+			ON d.scheduled_item_occurrence_id = o.id
+		   AND d.dispatch_key = $2
+		WHERE si.deleted_at IS NULL
+		  AND o.scheduled_for <= $1
+		  AND d.id IS NULL
+		ORDER BY o.scheduled_for ASC, o.id ASC
+		LIMIT $3
+	`
+
+	rows, err := r.db.Query(ctx, query, in.Before, in.DispatchKey, in.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.ScheduledItemOccurrenceListItem, 0, in.Limit)
+	for rows.Next() {
+		var item model.ScheduledItemOccurrenceListItem
+		if err := rows.Scan(
+			&item.ID,
+			&item.ScheduledItemID,
+			&item.PetID,
+			&item.ScheduledFor,
+			&item.CreatedAt,
+			&item.Rule.ID,
+			&item.Rule.PetID,
+			&item.Rule.SourceType,
+			&item.Rule.SourceID,
+			&item.Rule.Title,
+			&item.Rule.Note,
+			&item.Rule.StartsAt,
+			&item.Rule.RecurrenceRule,
+			&item.Rule.RecurrenceInterval,
+			&item.Rule.RecurrenceUntil,
+			&item.Rule.RowVersion,
+			&item.Rule.CreatedAt,
+			&item.Rule.CreatedByUserID,
+			&item.Rule.UpdatedAt,
+			&item.Rule.UpdatedByUserID,
+			&item.Rule.DeletedAt,
+			&item.Rule.DeletedByUserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *ScheduledRepository) ListCalendarDayScheduledOccurrences(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItemOccurrenceListItem, error) {
 	return r.listCalendarDayScheduledOccurrences(ctx, []uuid.UUID{petID}, dayStart, dayEnd)
 }

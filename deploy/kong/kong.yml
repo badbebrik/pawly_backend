@@ -97,6 +97,17 @@ services:
           - /v1/chat
         strip_path: false
 
+  - name: push-service
+    url: http://push:8090
+    routes:
+      - name: push-routes
+        paths:
+          - /v1/push/devices
+          - ~/v1/push/devices/.+$
+          - ~/v1/pets/.+/push-settings$
+        regex_priority: 200
+        strip_path: false
+
   - name: notification-service
     url: http://notification:8083
     routes:
@@ -157,6 +168,13 @@ plugins:
         - exp
       secret_is_base64: false
   - name: jwt
+    route: push-routes
+    config:
+      key_claim_name: iss
+      claims_to_verify:
+        - exp
+      secret_is_base64: false
+  - name: jwt
     route: notification-routes
     config:
       key_claim_name: iss
@@ -210,6 +228,15 @@ plugins:
           end
   - name: pre-function
     route: chat-routes
+    config:
+      access:
+        - |
+          local jwt = ngx.ctx.authenticated_jwt_token
+          if jwt and jwt.sub then
+            ngx.req.set_header("X-User-ID", jwt.sub)
+          end
+  - name: pre-function
+    route: push-routes
     config:
       access:
         - |

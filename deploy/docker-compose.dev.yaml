@@ -399,9 +399,18 @@ services:
       POSTGRES_HOST: health_postgres
       POSTGRES_PORT: "5432"
       ACL_GRPC_ADDR: acl:50057
+      ACL_HTTP_BASE_URL: http://acl:8087
       FILE_GRPC_ADDR: file:50056
       JWT_SECRET: local_dev_jwt_secret
       JWT_ISSUER: pawly
+      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: auth_user
+      RABBITMQ_PASSWORD: supersecret
+      RABBITMQ_PUSH_JOBS_QUEUE: push.jobs
+      SCHEDULED_DISPATCH_INTERVAL_SEC: "60"
+      SCHEDULED_DISPATCH_BATCH_SIZE: "100"
     depends_on:
       health_postgres:
         condition: service_healthy
@@ -409,6 +418,8 @@ services:
         condition: service_started
       file:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8088/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -420,6 +431,8 @@ services:
       context: ../services/push
     container_name: pawly_push
     restart: unless-stopped
+    volumes:
+      - ./secrets/pawly-6e5c5-60de53ef1b33.json:/run/secrets/firebase-service-account.json:ro
     environment:
       APP_PORT: "8090"
       POSTGRES_USER: push_user
@@ -427,8 +440,17 @@ services:
       POSTGRES_DB: push_db
       POSTGRES_HOST: push_postgres
       POSTGRES_PORT: "5432"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: auth_user
+      RABBITMQ_PASSWORD: supersecret
+      RABBITMQ_PUSH_JOBS_QUEUE: push.jobs
+      FCM_PROJECT_ID: "pawly-6e5c5"
+      FCM_CREDENTIALS_FILE: /run/secrets/firebase-service-account.json
     depends_on:
       push_postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8090/health >/dev/null 2>&1 || exit 1"]

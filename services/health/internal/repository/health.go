@@ -337,6 +337,12 @@ type CreateScheduledItemDispatchInput struct {
 	DispatchKey               string
 }
 
+type ListDueScheduledItemOccurrencesInput struct {
+	Before      time.Time
+	Limit       int
+	DispatchKey string
+}
+
 type ListScheduledItemOccurrencesInput struct {
 	PetID      uuid.UUID
 	Cursor     *TimeCursor
@@ -403,6 +409,7 @@ type HealthRepository interface {
 	CreateScheduledItemOccurrence(ctx context.Context, in CreateScheduledItemOccurrenceInput) (*model.ScheduledItemOccurrence, error)
 	DeleteScheduledItemOccurrencesFrom(ctx context.Context, in DeleteScheduledItemOccurrencesFromInput) error
 	CreateScheduledItemDispatch(ctx context.Context, in CreateScheduledItemDispatchInput) error
+	ListDueScheduledItemOccurrences(ctx context.Context, in ListDueScheduledItemOccurrencesInput) ([]model.ScheduledItemOccurrenceListItem, error)
 
 	ListCalendarDayItems(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.CalendarDayItem, error)
 	ListCalendarDayScheduledOccurrences(ctx context.Context, petID uuid.UUID, dayStart, dayEnd time.Time) ([]model.ScheduledItemOccurrenceListItem, error)

@@ -104,3 +104,6 @@ fabric.properties
 *.pdf
 services/docs/
 docs/
+deploy/secrets/
+deploy/env/
+

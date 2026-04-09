@@ -202,6 +202,13 @@ func (s *ACLService) ListPetMembershipsForUser(ctx context.Context, userID uuid.
 	return s.memberships.ListActiveViewsByUser(ctx, userID)
 }
 
+func (s *ACLService) ListActiveMembersForPet(ctx context.Context, petID uuid.UUID) ([]repository.MemberView, error) {
+	if petID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	return s.memberships.ListActiveViewsByPet(ctx, petID)
+}
+
 func (s *ACLService) CreateOwnerMembership(ctx context.Context, petID, ownerUserID uuid.UUID) (*repository.MemberView, error) {
 	if petID == uuid.Nil || ownerUserID == uuid.Nil {
 		return nil, ErrInvalidInput

@@ -57,6 +57,7 @@ func (a *App) setupRoutes() http.Handler {
 		r.Post("/internal/v1/acl/get-policy", internal.GetPolicy)
 		r.Post("/internal/v1/acl/check", internal.Check)
 		r.Post("/internal/v1/acl/list-pets-for-user", internal.ListPetsForUser)
+		r.Post("/internal/v1/acl/list-members-for-pet", internal.ListMembersForPet)
 		r.Post("/internal/v1/acl/transfer-ownership", internal.TransferOwnership)
 	})
 

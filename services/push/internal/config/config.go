@@ -10,6 +10,15 @@ type Config struct {
 	PostgresDB       string
 	PostgresHost     string
 	PostgresPort     string
+
+	RabbitHost          string
+	RabbitPort          string
+	RabbitUser          string
+	RabbitPassword      string
+	RabbitPushJobsQueue string
+
+	FCMProjectID       string
+	FCMCredentialsFile string
 }
 
 func Load() *Config {
@@ -21,6 +30,15 @@ func Load() *Config {
 		PostgresDB:       getEnv("POSTGRES_DB", ""),
 		PostgresHost:     getEnv("POSTGRES_HOST", ""),
 		PostgresPort:     getEnv("POSTGRES_PORT", ""),
+
+		RabbitHost:          getEnv("RABBITMQ_HOST", ""),
+		RabbitPort:          getEnv("RABBITMQ_PORT", ""),
+		RabbitUser:          getEnv("RABBITMQ_USER", ""),
+		RabbitPassword:      getEnv("RABBITMQ_PASSWORD", ""),
+		RabbitPushJobsQueue: getEnv("RABBITMQ_PUSH_JOBS_QUEUE", "push.jobs"),
+
+		FCMProjectID:       getEnv("FCM_PROJECT_ID", ""),
+		FCMCredentialsFile: getEnv("FCM_CREDENTIALS_FILE", ""),
 	}
 }
 

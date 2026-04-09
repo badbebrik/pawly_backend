@@ -32,6 +32,10 @@ type listPetsForUserRequest struct {
 	UserID string `json:"user_id"`
 }
 
+type listMembersForPetRequest struct {
+	PetID string `json:"pet_id"`
+}
+
 type transferOwnershipRequest struct {
 	PetID           string `json:"pet_id"`
 	RequesterUserID string `json:"requester_user_id"`
@@ -139,6 +143,38 @@ func (h *InternalHandlers) ListPetsForUser(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pet_ids":     petIDs,
 		"memberships": membershipItems,
+	})
+}
+
+func (h *InternalHandlers) ListMembersForPet(w http.ResponseWriter, r *http.Request) {
+	var req listMembersForPetRequest
+	if !decodeInternalBody(w, r, &req) {
+		return
+	}
+
+	petID, err := uuid.Parse(req.PetID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid pet_id")
+		return
+	}
+
+	members, err := h.svc.ListActiveMembersForPet(r.Context(), petID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	userIDs := make([]string, 0, len(members))
+	memberItems := make([]any, 0, len(members))
+	for i := range members {
+		m := members[i]
+		userIDs = append(userIDs, m.UserID.String())
+		memberItems = append(memberItems, memberToDTO(&m, nil))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user_ids": userIDs,
+		"members":  memberItems,
 	})
 }
 

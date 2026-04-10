@@ -445,6 +445,8 @@ services:
       RABBITMQ_USER: auth_user
       RABBITMQ_PASSWORD: supersecret
       RABBITMQ_PUSH_JOBS_QUEUE: push.jobs
+      JWT_SECRET: local_dev_jwt_secret
+      JWT_ISSUER: pawly
       FCM_PROJECT_ID: "pawly-6e5c5"
       FCM_CREDENTIALS_FILE: /run/secrets/firebase-service-account.json
     depends_on:

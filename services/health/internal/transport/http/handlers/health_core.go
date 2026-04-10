@@ -95,13 +95,21 @@ type recurrenceDTORequest struct {
 }
 
 type createOrUpdateScheduledItemRequest struct {
-	SourceType string                `json:"source_type"`
-	SourceID   *string               `json:"source_id"`
-	Title      string                `json:"title"`
-	Note       *string               `json:"note"`
-	StartsAt   *string               `json:"starts_at"`
-	Recurrence *recurrenceDTORequest `json:"recurrence"`
-	RowVersion int                   `json:"row_version"`
+	SourceType          string                `json:"source_type"`
+	SourceID            *string               `json:"source_id"`
+	Title               string                `json:"title"`
+	Note                *string               `json:"note"`
+	StartsAt            *string               `json:"starts_at"`
+	PushEnabled         *bool                 `json:"push_enabled"`
+	RemindOffsetMinutes *int                  `json:"remind_offset_minutes"`
+	Recurrence          *recurrenceDTORequest `json:"recurrence"`
+	RowVersion          int                   `json:"row_version"`
+}
+
+type updateScheduledItemReminderSettingsRequest struct {
+	PushEnabled         bool `json:"push_enabled"`
+	RemindOffsetMinutes *int `json:"remind_offset_minutes"`
+	RowVersion          int  `json:"row_version"`
 }
 
 func (h *Handlers) GetHealthBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -270,16 +278,18 @@ func (h *Handlers) UpdateScheduledItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := h.svc.UpdateScheduledItem(r.Context(), service.UpdateScheduledItemParams{
-		UserID:             params.UserID,
-		PetID:              params.PetID,
-		ItemID:             itemID,
-		RowVersion:         req.RowVersion,
-		Title:              params.Title,
-		Note:               params.Note,
-		StartsAt:           params.StartsAt,
-		RecurrenceRule:     params.RecurrenceRule,
-		RecurrenceInterval: params.RecurrenceInterval,
-		RecurrenceUntil:    params.RecurrenceUntil,
+		UserID:              params.UserID,
+		PetID:               params.PetID,
+		ItemID:              itemID,
+		RowVersion:          req.RowVersion,
+		Title:               params.Title,
+		Note:                params.Note,
+		StartsAt:            params.StartsAt,
+		PushEnabled:         params.PushEnabled,
+		RemindOffsetMinutes: params.RemindOffsetMinutes,
+		RecurrenceRule:      params.RecurrenceRule,
+		RecurrenceInterval:  params.RecurrenceInterval,
+		RecurrenceUntil:     params.RecurrenceUntil,
 	})
 	if err != nil {
 		writeServiceError(w, err)
@@ -312,6 +322,39 @@ func (h *Handlers) DeleteScheduledItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) UpdateScheduledItemReminderSettings(w http.ResponseWriter, r *http.Request) {
+	userID, petID, ok := h.getUserAndPet(w, r)
+	if !ok {
+		return
+	}
+	itemID, err := uuid.Parse(chi.URLParam(r, "item_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid item_id")
+		return
+	}
+	var req updateScheduledItemReminderSettingsRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if req.RowVersion <= 0 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "row_version is required")
+		return
+	}
+	item, err := h.svc.UpdateScheduledItemReminderSettings(r.Context(), service.UpdateScheduledItemReminderSettingsParams{
+		UserID:              userID,
+		PetID:               petID,
+		ItemID:              itemID,
+		RowVersion:          req.RowVersion,
+		PushEnabled:         req.PushEnabled,
+		RemindOffsetMinutes: req.RemindOffsetMinutes,
+	})
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, scheduledItemToDTO(item))
 }
 
 func (h *Handlers) GetScheduledItemOccurrences(w http.ResponseWriter, r *http.Request) {
@@ -1275,16 +1318,18 @@ func parseScheduledItemRequest(w http.ResponseWriter, userID, petID uuid.UUID, r
 		}
 	}
 	return service.CreateScheduledItemParams{
-		UserID:             userID,
-		PetID:              petID,
-		SourceType:         req.SourceType,
-		SourceID:           sourceID,
-		Title:              req.Title,
-		Note:               req.Note,
-		StartsAt:           *startsAt,
-		RecurrenceRule:     recurrenceRule,
-		RecurrenceInterval: recurrenceInterval,
-		RecurrenceUntil:    recurrenceUntil,
+		UserID:              userID,
+		PetID:               petID,
+		SourceType:          req.SourceType,
+		SourceID:            sourceID,
+		Title:               req.Title,
+		Note:                req.Note,
+		StartsAt:            *startsAt,
+		PushEnabled:         req.PushEnabled,
+		RemindOffsetMinutes: req.RemindOffsetMinutes,
+		RecurrenceRule:      recurrenceRule,
+		RecurrenceInterval:  recurrenceInterval,
+		RecurrenceUntil:     recurrenceUntil,
 	}, true
 }
 
@@ -1437,37 +1482,41 @@ func relatedLogToDTO(item model.RelatedLog) map[string]any {
 
 func scheduledItemListItemToDTO(item model.ScheduledItemListItem) map[string]any {
 	return map[string]any{
-		"id":                 item.ID.String(),
-		"pet_id":             item.PetID.String(),
-		"source_type":        item.SourceType,
-		"source_id":          uuidOrNil(item.SourceID),
-		"title":              item.Title,
-		"note_preview":       strOrNil(item.NotePreview),
-		"starts_at":          item.StartsAt.UTC().Format(time.RFC3339),
-		"recurrence":         recurrenceToDTO(item.RecurrenceRule, item.RecurrenceInterval, item.RecurrenceUntil),
-		"row_version":        item.RowVersion,
-		"created_at":         item.CreatedAt.UTC().Format(time.RFC3339),
-		"created_by_user_id": item.CreatedByUserID.String(),
-		"updated_at":         item.UpdatedAt.UTC().Format(time.RFC3339),
-		"updated_by_user_id": item.UpdatedByUserID.String(),
+		"id":                    item.ID.String(),
+		"pet_id":                item.PetID.String(),
+		"source_type":           item.SourceType,
+		"source_id":             uuidOrNil(item.SourceID),
+		"title":                 item.Title,
+		"note_preview":          strOrNil(item.NotePreview),
+		"starts_at":             item.StartsAt.UTC().Format(time.RFC3339),
+		"push_enabled":          item.PushEnabled,
+		"remind_offset_minutes": item.RemindOffsetMinutes,
+		"recurrence":            recurrenceToDTO(item.RecurrenceRule, item.RecurrenceInterval, item.RecurrenceUntil),
+		"row_version":           item.RowVersion,
+		"created_at":            item.CreatedAt.UTC().Format(time.RFC3339),
+		"created_by_user_id":    item.CreatedByUserID.String(),
+		"updated_at":            item.UpdatedAt.UTC().Format(time.RFC3339),
+		"updated_by_user_id":    item.UpdatedByUserID.String(),
 	}
 }
 
 func scheduledItemToDTO(item *model.ScheduledItem) map[string]any {
 	return map[string]any{
-		"id":                 item.ID.String(),
-		"pet_id":             item.PetID.String(),
-		"source_type":        item.SourceType,
-		"source_id":          uuidOrNil(item.SourceID),
-		"title":              item.Title,
-		"note":               strOrNil(item.Note),
-		"starts_at":          item.StartsAt.UTC().Format(time.RFC3339),
-		"recurrence":         recurrenceToDTO(item.RecurrenceRule, item.RecurrenceInterval, item.RecurrenceUntil),
-		"row_version":        item.RowVersion,
-		"created_at":         item.CreatedAt.UTC().Format(time.RFC3339),
-		"created_by_user_id": item.CreatedByUserID.String(),
-		"updated_at":         item.UpdatedAt.UTC().Format(time.RFC3339),
-		"updated_by_user_id": item.UpdatedByUserID.String(),
+		"id":                    item.ID.String(),
+		"pet_id":                item.PetID.String(),
+		"source_type":           item.SourceType,
+		"source_id":             uuidOrNil(item.SourceID),
+		"title":                 item.Title,
+		"note":                  strOrNil(item.Note),
+		"starts_at":             item.StartsAt.UTC().Format(time.RFC3339),
+		"push_enabled":          item.PushEnabled,
+		"remind_offset_minutes": item.RemindOffsetMinutes,
+		"recurrence":            recurrenceToDTO(item.RecurrenceRule, item.RecurrenceInterval, item.RecurrenceUntil),
+		"row_version":           item.RowVersion,
+		"created_at":            item.CreatedAt.UTC().Format(time.RFC3339),
+		"created_by_user_id":    item.CreatedByUserID.String(),
+		"updated_at":            item.UpdatedAt.UTC().Format(time.RFC3339),
+		"updated_by_user_id":    item.UpdatedByUserID.String(),
 	}
 }
 

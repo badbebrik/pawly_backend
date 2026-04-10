@@ -24,29 +24,42 @@ type ListScheduledItemsParams struct {
 }
 
 type CreateScheduledItemParams struct {
-	UserID             uuid.UUID
-	PetID              uuid.UUID
-	SourceType         string
-	SourceID           *uuid.UUID
-	Title              string
-	Note               *string
-	StartsAt           time.Time
-	RecurrenceRule     *string
-	RecurrenceInterval *int
-	RecurrenceUntil    *time.Time
+	UserID              uuid.UUID
+	PetID               uuid.UUID
+	SourceType          string
+	SourceID            *uuid.UUID
+	Title               string
+	Note                *string
+	StartsAt            time.Time
+	PushEnabled         *bool
+	RemindOffsetMinutes *int
+	RecurrenceRule      *string
+	RecurrenceInterval  *int
+	RecurrenceUntil     *time.Time
 }
 
 type UpdateScheduledItemParams struct {
-	UserID             uuid.UUID
-	PetID              uuid.UUID
-	ItemID             uuid.UUID
-	RowVersion         int
-	Title              string
-	Note               *string
-	StartsAt           time.Time
-	RecurrenceRule     *string
-	RecurrenceInterval *int
-	RecurrenceUntil    *time.Time
+	UserID              uuid.UUID
+	PetID               uuid.UUID
+	ItemID              uuid.UUID
+	RowVersion          int
+	Title               string
+	Note                *string
+	StartsAt            time.Time
+	PushEnabled         *bool
+	RemindOffsetMinutes *int
+	RecurrenceRule      *string
+	RecurrenceInterval  *int
+	RecurrenceUntil     *time.Time
+}
+
+type UpdateScheduledItemReminderSettingsParams struct {
+	UserID              uuid.UUID
+	PetID               uuid.UUID
+	ItemID              uuid.UUID
+	RowVersion          int
+	PushEnabled         bool
+	RemindOffsetMinutes *int
 }
 
 type DeleteScheduledItemParams struct {
@@ -137,19 +150,25 @@ func (s *Service) CreateScheduledItem(ctx context.Context, p CreateScheduledItem
 	if err != nil {
 		return nil, err
 	}
+	pushEnabled, remindOffsetMinutes, err := validateScheduledReminderSettings(p.PushEnabled, p.RemindOffsetMinutes)
+	if err != nil {
+		return nil, err
+	}
 	item, err := s.repo.CreateScheduledItem(ctx, repository.CreateScheduledItemInput{
-		ID:                 uuid.New(),
-		PetID:              p.PetID,
-		SourceType:         sourceType,
-		SourceID:           sourceID,
-		Title:              title,
-		Note:               note,
-		StartsAt:           p.StartsAt.UTC(),
-		RecurrenceRule:     recurrenceRule,
-		RecurrenceInterval: recurrenceInterval,
-		RecurrenceUntil:    recurrenceUntil,
-		CreatedBy:          p.UserID,
-		UpdatedBy:          p.UserID,
+		ID:                  uuid.New(),
+		PetID:               p.PetID,
+		SourceType:          sourceType,
+		SourceID:            sourceID,
+		Title:               title,
+		Note:                note,
+		StartsAt:            p.StartsAt.UTC(),
+		PushEnabled:         pushEnabled,
+		RemindOffsetMinutes: remindOffsetMinutes,
+		RecurrenceRule:      recurrenceRule,
+		RecurrenceInterval:  recurrenceInterval,
+		RecurrenceUntil:     recurrenceUntil,
+		CreatedBy:           p.UserID,
+		UpdatedBy:           p.UserID,
 	})
 	if err != nil {
 		return nil, mapRepoErr(err)
@@ -183,17 +202,23 @@ func (s *Service) UpdateScheduledItem(ctx context.Context, p UpdateScheduledItem
 	if err != nil {
 		return nil, err
 	}
+	pushEnabled, remindOffsetMinutes, err := validateScheduledReminderSettings(p.PushEnabled, p.RemindOffsetMinutes)
+	if err != nil {
+		return nil, err
+	}
 	item, err := s.repo.UpdateScheduledItem(ctx, repository.UpdateScheduledItemInput{
-		ID:                 p.ItemID,
-		PetID:              p.PetID,
-		RowVersion:         p.RowVersion,
-		Title:              title,
-		Note:               note,
-		StartsAt:           p.StartsAt.UTC(),
-		RecurrenceRule:     recurrenceRule,
-		RecurrenceInterval: recurrenceInterval,
-		RecurrenceUntil:    recurrenceUntil,
-		UpdatedBy:          p.UserID,
+		ID:                  p.ItemID,
+		PetID:               p.PetID,
+		RowVersion:          p.RowVersion,
+		Title:               title,
+		Note:                note,
+		StartsAt:            p.StartsAt.UTC(),
+		PushEnabled:         pushEnabled,
+		RemindOffsetMinutes: remindOffsetMinutes,
+		RecurrenceRule:      recurrenceRule,
+		RecurrenceInterval:  recurrenceInterval,
+		RecurrenceUntil:     recurrenceUntil,
+		UpdatedBy:           p.UserID,
 	})
 	if err != nil {
 		return nil, mapRepoErr(err)
@@ -224,6 +249,35 @@ func (s *Service) DeleteScheduledItem(ctx context.Context, p DeleteScheduledItem
 		RowVersion: p.RowVersion,
 		DeletedBy:  p.UserID,
 	}))
+}
+
+func (s *Service) UpdateScheduledItemReminderSettings(ctx context.Context, p UpdateScheduledItemReminderSettingsParams) (*model.ScheduledItem, error) {
+	if p.UserID == uuid.Nil || p.PetID == uuid.Nil || p.ItemID == uuid.Nil || p.RowVersion <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if err := s.requireHealthWrite(ctx, p.PetID, p.UserID); err != nil {
+		return nil, err
+	}
+	_, err := s.repo.GetScheduledItem(ctx, p.PetID, p.ItemID)
+	if err != nil {
+		return nil, mapRepoErr(err)
+	}
+	remindOffsetMinutes, err := validateReminderOffset(p.RemindOffsetMinutes)
+	if err != nil {
+		return nil, err
+	}
+	item, err := s.repo.UpdateScheduledItemReminderSettings(ctx, repository.UpdateScheduledItemReminderSettingsInput{
+		ID:                  p.ItemID,
+		PetID:               p.PetID,
+		RowVersion:          p.RowVersion,
+		PushEnabled:         p.PushEnabled,
+		RemindOffsetMinutes: remindOffsetMinutes,
+		UpdatedBy:           p.UserID,
+	})
+	if err != nil {
+		return nil, mapRepoErr(err)
+	}
+	return item, nil
 }
 
 func (s *Service) GetScheduledItemOccurrence(ctx context.Context, userID, petID, occurrenceID uuid.UUID) (*model.ScheduledItemOccurrenceListItem, error) {
@@ -336,6 +390,33 @@ func validateScheduledRecurrence(rule *string, interval *int, until *time.Time) 
 	return &ruleCopy, &intervalCopy, untilCopy, nil
 }
 
+func validateScheduledReminderSettings(pushEnabled *bool, remindOffsetMinutes *int) (bool, *int, error) {
+	offset, err := validateReminderOffset(remindOffsetMinutes)
+	if err != nil {
+		return false, nil, err
+	}
+	enabled := true
+	if pushEnabled != nil {
+		enabled = *pushEnabled
+	}
+	if offset == nil {
+		zero := 0
+		offset = &zero
+	}
+	return enabled, offset, nil
+}
+
+func validateReminderOffset(remindOffsetMinutes *int) (*int, error) {
+	if remindOffsetMinutes == nil {
+		return nil, nil
+	}
+	if *remindOffsetMinutes < 0 {
+		return nil, ErrInvalidInput
+	}
+	offset := *remindOffsetMinutes
+	return &offset, nil
+}
+
 func isScheduledItemDirectlyWritable(sourceType string) bool {
 	switch strings.ToUpper(strings.TrimSpace(sourceType)) {
 	case model.ScheduledItemSourceTypeManual, model.ScheduledItemSourceTypeLogType, model.ScheduledItemSourceTypePetEvent:
@@ -443,14 +524,16 @@ func (s *Service) syncSystemOneShotScheduledItem(ctx context.Context, petID uuid
 		}))
 	}
 	item, err := s.repo.UpsertHealthScheduledItem(ctx, repository.UpsertHealthScheduledItemInput{
-		PetID:           petID,
-		SourceType:      sourceType,
-		SourceID:        sourceID,
-		Title:           strings.TrimSpace(title),
-		Note:            trimOrNil(note),
-		StartsAt:        startsAt.UTC(),
-		CreatedByUserID: userID,
-		UpdatedByUserID: userID,
+		PetID:               petID,
+		SourceType:          sourceType,
+		SourceID:            sourceID,
+		Title:               strings.TrimSpace(title),
+		Note:                trimOrNil(note),
+		StartsAt:            startsAt.UTC(),
+		PushEnabled:         false,
+		RemindOffsetMinutes: nil,
+		CreatedByUserID:     userID,
+		UpdatedByUserID:     userID,
 	})
 	if err != nil {
 		return mapRepoErr(err)

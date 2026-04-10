@@ -23,41 +23,45 @@ const (
 )
 
 type ScheduledItem struct {
-	ID                 uuid.UUID
-	PetID              uuid.UUID
-	SourceType         string
-	SourceID           *uuid.UUID
-	Title              string
-	Note               *string
-	StartsAt           time.Time
-	RecurrenceRule     *string
-	RecurrenceInterval *int
-	RecurrenceUntil    *time.Time
-	RowVersion         int
-	CreatedAt          time.Time
-	CreatedByUserID    uuid.UUID
-	UpdatedAt          time.Time
-	UpdatedByUserID    uuid.UUID
-	DeletedAt          *time.Time
-	DeletedByUserID    *uuid.UUID
+	ID                  uuid.UUID
+	PetID               uuid.UUID
+	SourceType          string
+	SourceID            *uuid.UUID
+	Title               string
+	Note                *string
+	StartsAt            time.Time
+	PushEnabled         bool
+	RemindOffsetMinutes *int
+	RecurrenceRule      *string
+	RecurrenceInterval  *int
+	RecurrenceUntil     *time.Time
+	RowVersion          int
+	CreatedAt           time.Time
+	CreatedByUserID     uuid.UUID
+	UpdatedAt           time.Time
+	UpdatedByUserID     uuid.UUID
+	DeletedAt           *time.Time
+	DeletedByUserID     *uuid.UUID
 }
 
 type ScheduledItemListItem struct {
-	ID                 uuid.UUID
-	PetID              uuid.UUID
-	SourceType         string
-	SourceID           *uuid.UUID
-	Title              string
-	NotePreview        *string
-	StartsAt           time.Time
-	RecurrenceRule     *string
-	RecurrenceInterval *int
-	RecurrenceUntil    *time.Time
-	RowVersion         int
-	CreatedAt          time.Time
-	CreatedByUserID    uuid.UUID
-	UpdatedAt          time.Time
-	UpdatedByUserID    uuid.UUID
+	ID                  uuid.UUID
+	PetID               uuid.UUID
+	SourceType          string
+	SourceID            *uuid.UUID
+	Title               string
+	NotePreview         *string
+	StartsAt            time.Time
+	PushEnabled         bool
+	RemindOffsetMinutes *int
+	RecurrenceRule      *string
+	RecurrenceInterval  *int
+	RecurrenceUntil     *time.Time
+	RowVersion          int
+	CreatedAt           time.Time
+	CreatedByUserID     uuid.UUID
+	UpdatedAt           time.Time
+	UpdatedByUserID     uuid.UUID
 }
 
 type ScheduledItemOccurrence struct {

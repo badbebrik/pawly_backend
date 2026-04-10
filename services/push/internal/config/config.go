@@ -17,6 +17,9 @@ type Config struct {
 	RabbitPassword      string
 	RabbitPushJobsQueue string
 
+	JWTSecret string
+	JWTIssuer string
+
 	FCMProjectID       string
 	FCMCredentialsFile string
 }
@@ -36,6 +39,9 @@ func Load() *Config {
 		RabbitUser:          getEnv("RABBITMQ_USER", ""),
 		RabbitPassword:      getEnv("RABBITMQ_PASSWORD", ""),
 		RabbitPushJobsQueue: getEnv("RABBITMQ_PUSH_JOBS_QUEUE", "push.jobs"),
+
+		JWTSecret: getEnv("JWT_SECRET", "local_dev_jwt_secret"),
+		JWTIssuer: getEnv("JWT_ISSUER", "pawly"),
 
 		FCMProjectID:       getEnv("FCM_PROJECT_ID", ""),
 		FCMCredentialsFile: getEnv("FCM_CREDENTIALS_FILE", ""),

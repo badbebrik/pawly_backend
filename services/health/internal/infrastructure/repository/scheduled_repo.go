@@ -32,6 +32,8 @@ func (r *ScheduledRepository) GetScheduledItem(ctx context.Context, petID, itemI
 			title,
 			note,
 			starts_at,
+			push_enabled,
+			remind_offset_minutes,
 			recurrence_rule,
 			recurrence_interval,
 			recurrence_until,
@@ -54,6 +56,8 @@ func (r *ScheduledRepository) GetScheduledItem(ctx context.Context, petID, itemI
 		&item.Title,
 		&item.Note,
 		&item.StartsAt,
+		&item.PushEnabled,
+		&item.RemindOffsetMinutes,
 		&item.RecurrenceRule,
 		&item.RecurrenceInterval,
 		&item.RecurrenceUntil,
@@ -119,6 +123,8 @@ func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.Li
 				ELSE left(note, 140)
 			END AS note_preview,
 			starts_at,
+			push_enabled,
+			remind_offset_minutes,
 			recurrence_rule,
 			recurrence_interval,
 			recurrence_until,
@@ -151,6 +157,8 @@ func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.Li
 			&item.Title,
 			&item.NotePreview,
 			&item.StartsAt,
+			&item.PushEnabled,
+			&item.RemindOffsetMinutes,
 			&item.RecurrenceRule,
 			&item.RecurrenceInterval,
 			&item.RecurrenceUntil,
@@ -187,6 +195,8 @@ func (r *ScheduledRepository) CreateScheduledItem(ctx context.Context, in repo.C
 			title,
 			note,
 			starts_at,
+			push_enabled,
+			remind_offset_minutes,
 			recurrence_rule,
 			recurrence_interval,
 			recurrence_until,
@@ -196,7 +206,7 @@ func (r *ScheduledRepository) CreateScheduledItem(ctx context.Context, in repo.C
 			updated_at,
 			updated_by_user_id
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,NOW(),$11,NOW(),$12
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,NOW(),$13,NOW(),$14
 		)
 	`
 	_, err := r.db.Exec(ctx, query,
@@ -207,6 +217,8 @@ func (r *ScheduledRepository) CreateScheduledItem(ctx context.Context, in repo.C
 		in.Title,
 		in.Note,
 		in.StartsAt,
+		in.PushEnabled,
+		in.RemindOffsetMinutes,
 		in.RecurrenceRule,
 		in.RecurrenceInterval,
 		in.RecurrenceUntil,
@@ -229,11 +241,13 @@ func (r *ScheduledRepository) UpdateScheduledItem(ctx context.Context, in repo.U
 			title = $4,
 			note = $5,
 			starts_at = $6,
-			recurrence_rule = $7,
-			recurrence_interval = $8,
-			recurrence_until = $9,
+			push_enabled = $7,
+			remind_offset_minutes = $8,
+			recurrence_rule = $9,
+			recurrence_interval = $10,
+			recurrence_until = $11,
 			updated_at = NOW(),
-			updated_by_user_id = $10,
+			updated_by_user_id = $12,
 			row_version = row_version + 1
 		WHERE id = $1 AND pet_id = $2 AND row_version = $3 AND deleted_at IS NULL
 	`
@@ -244,6 +258,8 @@ func (r *ScheduledRepository) UpdateScheduledItem(ctx context.Context, in repo.U
 		in.Title,
 		in.Note,
 		in.StartsAt,
+		in.PushEnabled,
+		in.RemindOffsetMinutes,
 		in.RecurrenceRule,
 		in.RecurrenceInterval,
 		in.RecurrenceUntil,
@@ -253,6 +269,40 @@ func (r *ScheduledRepository) UpdateScheduledItem(ctx context.Context, in repo.U
 		if isUniqueViolation(err) {
 			return nil, repo.ErrConflict
 		}
+		return nil, err
+	}
+	if cmd.RowsAffected() == 0 {
+		if _, err := r.GetScheduledItem(ctx, in.PetID, in.ID); err != nil {
+			if errors.Is(err, repo.ErrNotFound) {
+				return nil, repo.ErrNotFound
+			}
+			return nil, err
+		}
+		return nil, repo.ErrConflict
+	}
+	return r.GetScheduledItem(ctx, in.PetID, in.ID)
+}
+
+func (r *ScheduledRepository) UpdateScheduledItemReminderSettings(ctx context.Context, in repo.UpdateScheduledItemReminderSettingsInput) (*model.ScheduledItem, error) {
+	const query = `
+		UPDATE scheduled_items
+		SET
+			push_enabled = $4,
+			remind_offset_minutes = $5,
+			updated_at = NOW(),
+			updated_by_user_id = $6,
+			row_version = row_version + 1
+		WHERE id = $1 AND pet_id = $2 AND row_version = $3 AND deleted_at IS NULL
+	`
+	cmd, err := r.db.Exec(ctx, query,
+		in.ID,
+		in.PetID,
+		in.RowVersion,
+		in.PushEnabled,
+		in.RemindOffsetMinutes,
+		in.UpdatedBy,
+	)
+	if err != nil {
 		return nil, err
 	}
 	if cmd.RowsAffected() == 0 {
@@ -337,6 +387,8 @@ func (r *ScheduledRepository) UpsertHealthScheduledItem(ctx context.Context, in 
 				title,
 				note,
 				starts_at,
+				push_enabled,
+				remind_offset_minutes,
 				recurrence_rule,
 				recurrence_interval,
 				recurrence_until,
@@ -346,10 +398,10 @@ func (r *ScheduledRepository) UpsertHealthScheduledItem(ctx context.Context, in 
 				updated_at,
 				updated_by_user_id
 			) VALUES (
-				$1,$2,$3,$4,$5,$6,$7,NULL,NULL,NULL,1,NOW(),$8,NOW(),$9
+				$1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,NULL,NULL,1,NOW(),$10,NOW(),$11
 			)
 		`
-		if _, err := tx.Exec(ctx, insertQuery, itemID, in.PetID, in.SourceType, in.SourceID, in.Title, in.Note, in.StartsAt, in.CreatedByUserID, in.UpdatedByUserID); err != nil {
+		if _, err := tx.Exec(ctx, insertQuery, itemID, in.PetID, in.SourceType, in.SourceID, in.Title, in.Note, in.StartsAt, in.PushEnabled, in.RemindOffsetMinutes, in.CreatedByUserID, in.UpdatedByUserID); err != nil {
 			if isUniqueViolation(err) {
 				return nil, repo.ErrConflict
 			}
@@ -422,6 +474,8 @@ func (r *ScheduledRepository) ListScheduledItemOccurrences(ctx context.Context, 
 			si.title,
 			si.note,
 			si.starts_at,
+			si.push_enabled,
+			si.remind_offset_minutes,
 			si.recurrence_rule,
 			si.recurrence_interval,
 			si.recurrence_until,
@@ -462,6 +516,8 @@ func (r *ScheduledRepository) ListScheduledItemOccurrences(ctx context.Context, 
 			&item.Rule.Title,
 			&item.Rule.Note,
 			&item.Rule.StartsAt,
+			&item.Rule.PushEnabled,
+			&item.Rule.RemindOffsetMinutes,
 			&item.Rule.RecurrenceRule,
 			&item.Rule.RecurrenceInterval,
 			&item.Rule.RecurrenceUntil,
@@ -505,6 +561,8 @@ func (r *ScheduledRepository) GetScheduledItemOccurrence(ctx context.Context, pe
 			si.title,
 			si.note,
 			si.starts_at,
+			si.push_enabled,
+			si.remind_offset_minutes,
 			si.recurrence_rule,
 			si.recurrence_interval,
 			si.recurrence_until,
@@ -533,6 +591,8 @@ func (r *ScheduledRepository) GetScheduledItemOccurrence(ctx context.Context, pe
 		&item.Rule.Title,
 		&item.Rule.Note,
 		&item.Rule.StartsAt,
+		&item.Rule.PushEnabled,
+		&item.Rule.RemindOffsetMinutes,
 		&item.Rule.RecurrenceRule,
 		&item.Rule.RecurrenceInterval,
 		&item.Rule.RecurrenceUntil,
@@ -623,6 +683,8 @@ func (r *ScheduledRepository) ListDueScheduledItemOccurrences(ctx context.Contex
 			si.title,
 			si.note,
 			si.starts_at,
+			si.push_enabled,
+			si.remind_offset_minutes,
 			si.recurrence_rule,
 			si.recurrence_interval,
 			si.recurrence_until,
@@ -639,7 +701,8 @@ func (r *ScheduledRepository) ListDueScheduledItemOccurrences(ctx context.Contex
 			ON d.scheduled_item_occurrence_id = o.id
 		   AND d.dispatch_key = $2
 		WHERE si.deleted_at IS NULL
-		  AND o.scheduled_for <= $1
+		  AND si.push_enabled = TRUE
+		  AND (o.scheduled_for - make_interval(mins => COALESCE(si.remind_offset_minutes, 0))) <= $1
 		  AND d.id IS NULL
 		ORDER BY o.scheduled_for ASC, o.id ASC
 		LIMIT $3
@@ -667,6 +730,8 @@ func (r *ScheduledRepository) ListDueScheduledItemOccurrences(ctx context.Contex
 			&item.Rule.Title,
 			&item.Rule.Note,
 			&item.Rule.StartsAt,
+			&item.Rule.PushEnabled,
+			&item.Rule.RemindOffsetMinutes,
 			&item.Rule.RecurrenceRule,
 			&item.Rule.RecurrenceInterval,
 			&item.Rule.RecurrenceUntil,
@@ -714,6 +779,8 @@ func (r *ScheduledRepository) listCalendarDayScheduledOccurrences(ctx context.Co
 			si.title,
 			si.note,
 			si.starts_at,
+			si.push_enabled,
+			si.remind_offset_minutes,
 			si.recurrence_rule,
 			si.recurrence_interval,
 			si.recurrence_until,
@@ -754,6 +821,8 @@ func (r *ScheduledRepository) listCalendarDayScheduledOccurrences(ctx context.Co
 			&item.Rule.Title,
 			&item.Rule.Note,
 			&item.Rule.StartsAt,
+			&item.Rule.PushEnabled,
+			&item.Rule.RemindOffsetMinutes,
 			&item.Rule.RecurrenceRule,
 			&item.Rule.RecurrenceInterval,
 			&item.Rule.RecurrenceUntil,

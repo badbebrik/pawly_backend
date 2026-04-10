@@ -44,7 +44,7 @@ func (a *App) handleDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := getUserID(r)
+	userID, ok := a.getUserID(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
 		return
@@ -89,7 +89,7 @@ func (a *App) handleDeviceByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := getUserID(r)
+	userID, ok := a.getUserID(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
 		return
@@ -118,7 +118,7 @@ func (a *App) handlePetPushSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := getUserID(r)
+	userID, ok := a.getUserID(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing user id")
 		return

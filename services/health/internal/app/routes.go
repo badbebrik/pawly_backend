@@ -33,6 +33,7 @@ func (a *App) setupRoutes() http.Handler {
 		r.Post("/v1/pets/{pet_id}/scheduled-items", h.CreateScheduledItem)
 		r.Get("/v1/pets/{pet_id}/scheduled-items/{item_id}", h.GetScheduledItem)
 		r.Patch("/v1/pets/{pet_id}/scheduled-items/{item_id}", h.UpdateScheduledItem)
+		r.Patch("/v1/pets/{pet_id}/scheduled-items/{item_id}/reminder-settings", h.UpdateScheduledItemReminderSettings)
 		r.Delete("/v1/pets/{pet_id}/scheduled-items/{item_id}", h.DeleteScheduledItem)
 		r.Get("/v1/pets/{pet_id}/scheduled-item-occurrences", h.GetScheduledItemOccurrences)
 		r.Get("/v1/pets/{pet_id}/scheduled-item-occurrences/{occurrence_id}", h.GetScheduledItemOccurrence)

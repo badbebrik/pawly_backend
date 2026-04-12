@@ -188,7 +188,8 @@ services:
 
   acl:
     build:
-      context: ../services/acl
+      context: ../services
+      dockerfile: acl/Dockerfile
     container_name: pawly_acl
     restart: unless-stopped
     environment:
@@ -428,7 +429,8 @@ services:
 
   push:
     build:
-      context: ../services/push
+      context: ../services
+      dockerfile: push/Dockerfile
     container_name: pawly_push
     restart: unless-stopped
     volumes:

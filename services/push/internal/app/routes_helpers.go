@@ -8,8 +8,8 @@ import (
 
 	"push/internal/service"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"pawly/pkg/gatewayauth"
 )
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -43,49 +43,7 @@ func writeServiceError(w http.ResponseWriter, err error) {
 }
 
 func (a *App) getUserID(r *http.Request) (uuid.UUID, bool) {
-	raw := strings.TrimSpace(r.Header.Get("X-User-ID"))
-	if raw != "" {
-		id, err := uuid.Parse(raw)
-		if err == nil && id != uuid.Nil {
-			return id, true
-		}
-	}
-
-	auth := strings.TrimSpace(r.Header.Get("Authorization"))
-	if auth == "" {
-		return uuid.Nil, false
-	}
-	const bearerPrefix = "Bearer "
-	if !strings.HasPrefix(auth, bearerPrefix) {
-		return uuid.Nil, false
-	}
-
-	tokenStr := strings.TrimSpace(strings.TrimPrefix(auth, bearerPrefix))
-	if tokenStr == "" {
-		return uuid.Nil, false
-	}
-
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrTokenSignatureInvalid
-		}
-		return []byte(a.cfg.JWTSecret), nil
-	})
-	if err != nil {
-		return uuid.Nil, false
-	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return uuid.Nil, false
-	}
-	if iss, ok := claims["iss"].(string); !ok || strings.TrimSpace(iss) != a.cfg.JWTIssuer {
-		return uuid.Nil, false
-	}
-	sub, ok := claims["sub"].(string)
-	if !ok {
-		return uuid.Nil, false
-	}
-	id, err := uuid.Parse(strings.TrimSpace(sub))
+	id, err := gatewayauth.UserIDFromRequestHeader(r)
 	if err != nil || id == uuid.Nil {
 		return uuid.Nil, false
 	}

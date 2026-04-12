@@ -18,17 +18,23 @@ type deleteRowVersionRequest struct {
 	RowVersion int `json:"row_version"`
 }
 
+type medicalEntityReminderRequest struct {
+	PushEnabled         bool `json:"push_enabled"`
+	RemindOffsetMinutes *int `json:"remind_offset_minutes"`
+}
+
 type createOrUpdateVetVisitRequest struct {
-	Status            string   `json:"status"`
-	VisitType         string   `json:"visit_type"`
-	ScheduledAt       *string  `json:"scheduled_at"`
-	CompletedAt       *string  `json:"completed_at"`
-	ReasonText        *string  `json:"reason_text"`
-	ResultText        *string  `json:"result_text"`
-	ClinicName        *string  `json:"clinic_name"`
-	VetName           *string  `json:"vet_name"`
-	AttachmentFileIDs []string `json:"attachment_file_ids"`
-	RowVersion        int      `json:"row_version"`
+	Status            string                        `json:"status"`
+	VisitType         string                        `json:"visit_type"`
+	ScheduledAt       *string                       `json:"scheduled_at"`
+	Reminder          *medicalEntityReminderRequest `json:"reminder"`
+	CompletedAt       *string                       `json:"completed_at"`
+	ReasonText        *string                       `json:"reason_text"`
+	ResultText        *string                       `json:"result_text"`
+	ClinicName        *string                       `json:"clinic_name"`
+	VetName           *string                       `json:"vet_name"`
+	AttachmentFileIDs []string                      `json:"attachment_file_ids"`
+	RowVersion        int                           `json:"row_version"`
 }
 
 type linkVetVisitLogRequest struct {
@@ -36,34 +42,36 @@ type linkVetVisitLogRequest struct {
 }
 
 type createOrUpdateVaccinationRequest struct {
-	Status              string   `json:"status"`
-	VaccineName         string   `json:"vaccine_name"`
-	CatalogMedicationID *string  `json:"catalog_medication_id"`
-	ScheduledAt         *string  `json:"scheduled_at"`
-	AdministeredAt      *string  `json:"administered_at"`
-	NextDueAt           *string  `json:"next_due_at"`
-	VetVisitID          *string  `json:"vet_visit_id"`
-	ClinicName          *string  `json:"clinic_name"`
-	VetName             *string  `json:"vet_name"`
-	Notes               *string  `json:"notes"`
-	AttachmentFileIDs   []string `json:"attachment_file_ids"`
-	RowVersion          int      `json:"row_version"`
+	Status              string                        `json:"status"`
+	VaccineName         string                        `json:"vaccine_name"`
+	CatalogMedicationID *string                       `json:"catalog_medication_id"`
+	ScheduledAt         *string                       `json:"scheduled_at"`
+	Reminder            *medicalEntityReminderRequest `json:"reminder"`
+	AdministeredAt      *string                       `json:"administered_at"`
+	NextDueAt           *string                       `json:"next_due_at"`
+	VetVisitID          *string                       `json:"vet_visit_id"`
+	ClinicName          *string                       `json:"clinic_name"`
+	VetName             *string                       `json:"vet_name"`
+	Notes               *string                       `json:"notes"`
+	AttachmentFileIDs   []string                      `json:"attachment_file_ids"`
+	RowVersion          int                           `json:"row_version"`
 }
 
 type createOrUpdateProcedureRequest struct {
-	Status              string   `json:"status"`
-	ProcedureType       string   `json:"procedure_type"`
-	Title               string   `json:"title"`
-	Description         *string  `json:"description"`
-	CatalogMedicationID *string  `json:"catalog_medication_id"`
-	ProductName         *string  `json:"product_name"`
-	ScheduledAt         *string  `json:"scheduled_at"`
-	PerformedAt         *string  `json:"performed_at"`
-	NextDueAt           *string  `json:"next_due_at"`
-	VetVisitID          *string  `json:"vet_visit_id"`
-	Notes               *string  `json:"notes"`
-	AttachmentFileIDs   []string `json:"attachment_file_ids"`
-	RowVersion          int      `json:"row_version"`
+	Status              string                        `json:"status"`
+	ProcedureType       string                        `json:"procedure_type"`
+	Title               string                        `json:"title"`
+	Description         *string                       `json:"description"`
+	CatalogMedicationID *string                       `json:"catalog_medication_id"`
+	ProductName         *string                       `json:"product_name"`
+	ScheduledAt         *string                       `json:"scheduled_at"`
+	Reminder            *medicalEntityReminderRequest `json:"reminder"`
+	PerformedAt         *string                       `json:"performed_at"`
+	NextDueAt           *string                       `json:"next_due_at"`
+	VetVisitID          *string                       `json:"vet_visit_id"`
+	Notes               *string                       `json:"notes"`
+	AttachmentFileIDs   []string                      `json:"attachment_file_ids"`
+	RowVersion          int                           `json:"row_version"`
 }
 
 type createOrUpdateMedicalRecordRequest struct {
@@ -602,7 +610,7 @@ func (h *Handlers) CreateVetVisit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid attachment_file_ids")
 		return
 	}
-	item, err := h.svc.CreateVetVisit(r.Context(), service.CreateVetVisitParams{UserID: userID, PetID: petID, Status: req.Status, VisitType: req.VisitType, ScheduledAt: scheduledAt, CompletedAt: completedAt, ReasonText: req.ReasonText, ResultText: req.ResultText, ClinicName: req.ClinicName, VetName: req.VetName, AttachmentFileIDs: attachmentIDs})
+	item, err := h.svc.CreateVetVisit(r.Context(), service.CreateVetVisitParams{UserID: userID, PetID: petID, Status: req.Status, VisitType: req.VisitType, ScheduledAt: scheduledAt, Reminder: medicalEntityReminderToParams(req.Reminder), CompletedAt: completedAt, ReasonText: req.ReasonText, ResultText: req.ResultText, ClinicName: req.ClinicName, VetName: req.VetName, AttachmentFileIDs: attachmentIDs})
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -643,7 +651,7 @@ func (h *Handlers) UpdateVetVisit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid attachment_file_ids")
 		return
 	}
-	item, err := h.svc.UpdateVetVisit(r.Context(), service.UpdateVetVisitParams{UserID: userID, PetID: petID, VisitID: visitID, RowVersion: req.RowVersion, Status: req.Status, VisitType: req.VisitType, ScheduledAt: scheduledAt, CompletedAt: completedAt, ReasonText: req.ReasonText, ResultText: req.ResultText, ClinicName: req.ClinicName, VetName: req.VetName, AttachmentFileIDs: attachmentIDs})
+	item, err := h.svc.UpdateVetVisit(r.Context(), service.UpdateVetVisitParams{UserID: userID, PetID: petID, VisitID: visitID, RowVersion: req.RowVersion, Status: req.Status, VisitType: req.VisitType, ScheduledAt: scheduledAt, Reminder: medicalEntityReminderToParams(req.Reminder), CompletedAt: completedAt, ReasonText: req.ReasonText, ResultText: req.ResultText, ClinicName: req.ClinicName, VetName: req.VetName, AttachmentFileIDs: attachmentIDs})
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -1095,7 +1103,7 @@ func (h *Handlers) createOrUpdateVaccination(r *http.Request, userID, petID, vac
 		return nil, service.ErrInvalidInput
 	}
 	if vaccinationID == uuid.Nil {
-		return h.svc.CreateVaccination(r.Context(), service.CreateVaccinationParams{UserID: userID, PetID: petID, Status: req.Status, VaccineName: req.VaccineName, CatalogMedicationID: catalogMedicationID, ScheduledAt: scheduledAt, AdministeredAt: administeredAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, ClinicName: req.ClinicName, VetName: req.VetName, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
+		return h.svc.CreateVaccination(r.Context(), service.CreateVaccinationParams{UserID: userID, PetID: petID, Status: req.Status, VaccineName: req.VaccineName, CatalogMedicationID: catalogMedicationID, ScheduledAt: scheduledAt, Reminder: medicalEntityReminderToParams(req.Reminder), AdministeredAt: administeredAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, ClinicName: req.ClinicName, VetName: req.VetName, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
 	}
 	return nil, service.ErrInvalidInput
 }
@@ -1125,7 +1133,7 @@ func (h *Handlers) updateVaccination(r *http.Request, userID, petID, vaccination
 	if err != nil {
 		return nil, service.ErrInvalidInput
 	}
-	return h.svc.UpdateVaccination(r.Context(), service.UpdateVaccinationParams{UserID: userID, PetID: petID, VaccinationID: vaccinationID, RowVersion: req.RowVersion, Status: req.Status, VaccineName: req.VaccineName, CatalogMedicationID: catalogMedicationID, ScheduledAt: scheduledAt, AdministeredAt: administeredAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, ClinicName: req.ClinicName, VetName: req.VetName, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
+	return h.svc.UpdateVaccination(r.Context(), service.UpdateVaccinationParams{UserID: userID, PetID: petID, VaccinationID: vaccinationID, RowVersion: req.RowVersion, Status: req.Status, VaccineName: req.VaccineName, CatalogMedicationID: catalogMedicationID, ScheduledAt: scheduledAt, Reminder: medicalEntityReminderToParams(req.Reminder), AdministeredAt: administeredAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, ClinicName: req.ClinicName, VetName: req.VetName, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
 }
 
 func (h *Handlers) createOrUpdateProcedure(r *http.Request, userID, petID, procedureID uuid.UUID, req createOrUpdateProcedureRequest) (*model.Procedure, error) {
@@ -1154,7 +1162,7 @@ func (h *Handlers) createOrUpdateProcedure(r *http.Request, userID, petID, proce
 		return nil, service.ErrInvalidInput
 	}
 	if procedureID == uuid.Nil {
-		return h.svc.CreateProcedure(r.Context(), service.CreateProcedureParams{UserID: userID, PetID: petID, Status: req.Status, ProcedureType: req.ProcedureType, Title: req.Title, Description: req.Description, CatalogMedicationID: catalogMedicationID, ProductName: req.ProductName, ScheduledAt: scheduledAt, PerformedAt: performedAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
+		return h.svc.CreateProcedure(r.Context(), service.CreateProcedureParams{UserID: userID, PetID: petID, Status: req.Status, ProcedureType: req.ProcedureType, Title: req.Title, Description: req.Description, CatalogMedicationID: catalogMedicationID, ProductName: req.ProductName, ScheduledAt: scheduledAt, Reminder: medicalEntityReminderToParams(req.Reminder), PerformedAt: performedAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
 	}
 	return nil, service.ErrInvalidInput
 }
@@ -1184,7 +1192,7 @@ func (h *Handlers) updateProcedure(r *http.Request, userID, petID, procedureID u
 	if err != nil {
 		return nil, service.ErrInvalidInput
 	}
-	return h.svc.UpdateProcedure(r.Context(), service.UpdateProcedureParams{UserID: userID, PetID: petID, ProcedureID: procedureID, RowVersion: req.RowVersion, Status: req.Status, ProcedureType: req.ProcedureType, Title: req.Title, Description: req.Description, CatalogMedicationID: catalogMedicationID, ProductName: req.ProductName, ScheduledAt: scheduledAt, PerformedAt: performedAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
+	return h.svc.UpdateProcedure(r.Context(), service.UpdateProcedureParams{UserID: userID, PetID: petID, ProcedureID: procedureID, RowVersion: req.RowVersion, Status: req.Status, ProcedureType: req.ProcedureType, Title: req.Title, Description: req.Description, CatalogMedicationID: catalogMedicationID, ProductName: req.ProductName, ScheduledAt: scheduledAt, Reminder: medicalEntityReminderToParams(req.Reminder), PerformedAt: performedAt, NextDueAt: nextDueAt, VetVisitID: vetVisitID, Notes: req.Notes, AttachmentFileIDs: attachmentIDs})
 }
 
 func (h *Handlers) createOrUpdateMedicalRecord(r *http.Request, userID, petID, recordID uuid.UUID, req createOrUpdateMedicalRecordRequest) (*model.MedicalRecord, error) {
@@ -1331,6 +1339,16 @@ func parseScheduledItemRequest(w http.ResponseWriter, userID, petID uuid.UUID, r
 		RecurrenceInterval:  recurrenceInterval,
 		RecurrenceUntil:     recurrenceUntil,
 	}, true
+}
+
+func medicalEntityReminderToParams(req *medicalEntityReminderRequest) *service.MedicalEntityReminderParams {
+	if req == nil {
+		return nil
+	}
+	return &service.MedicalEntityReminderParams{
+		PushEnabled:         req.PushEnabled,
+		RemindOffsetMinutes: req.RemindOffsetMinutes,
+	}
 }
 
 func healthBootstrapToDTO(item *model.HealthBootstrap) map[string]any {

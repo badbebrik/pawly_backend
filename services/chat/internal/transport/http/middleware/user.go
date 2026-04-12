@@ -5,32 +5,13 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"pawly/pkg/gatewayauth"
 )
 
-type ctxKey string
-
-const userIDKey ctxKey = "user_id"
-
 func WithUserID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw := r.Header.Get("X-User-ID")
-		if raw == "" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		userID, err := uuid.Parse(raw)
-		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	return gatewayauth.WithUserID(next)
 }
 
 func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
-	userID, ok := ctx.Value(userIDKey).(uuid.UUID)
-	return userID, ok
+	return gatewayauth.UserIDFromContext(ctx)
 }

@@ -413,6 +413,7 @@ type HealthRepository interface {
 	ListPetDocuments(ctx context.Context, in ListPetDocumentsInput) (ListPetDocumentsOutput, error)
 
 	GetScheduledItem(ctx context.Context, petID, itemID uuid.UUID) (*model.ScheduledItem, error)
+	GetScheduledItemBySource(ctx context.Context, petID uuid.UUID, sourceType string, sourceID uuid.UUID) (*model.ScheduledItem, error)
 	ListScheduledItems(ctx context.Context, in ListScheduledItemsInput) (ListScheduledItemsOutput, error)
 	CreateScheduledItem(ctx context.Context, in CreateScheduledItemInput) (*model.ScheduledItem, error)
 	UpdateScheduledItem(ctx context.Context, in UpdateScheduledItemInput) (*model.ScheduledItem, error)

@@ -78,6 +78,62 @@ func (r *ScheduledRepository) GetScheduledItem(ctx context.Context, petID, itemI
 	return &item, nil
 }
 
+func (r *ScheduledRepository) GetScheduledItemBySource(ctx context.Context, petID uuid.UUID, sourceType string, sourceID uuid.UUID) (*model.ScheduledItem, error) {
+	const query = `
+		SELECT
+			id,
+			pet_id,
+			source_type,
+			source_id,
+			title,
+			note,
+			starts_at,
+			push_enabled,
+			remind_offset_minutes,
+			recurrence_rule,
+			recurrence_interval,
+			recurrence_until,
+			row_version,
+			created_at,
+			created_by_user_id,
+			updated_at,
+			updated_by_user_id,
+			deleted_at,
+			deleted_by_user_id
+		FROM scheduled_items
+		WHERE pet_id = $1 AND source_type = $2 AND source_id = $3 AND deleted_at IS NULL
+	`
+	var item model.ScheduledItem
+	err := r.db.QueryRow(ctx, query, petID, sourceType, sourceID).Scan(
+		&item.ID,
+		&item.PetID,
+		&item.SourceType,
+		&item.SourceID,
+		&item.Title,
+		&item.Note,
+		&item.StartsAt,
+		&item.PushEnabled,
+		&item.RemindOffsetMinutes,
+		&item.RecurrenceRule,
+		&item.RecurrenceInterval,
+		&item.RecurrenceUntil,
+		&item.RowVersion,
+		&item.CreatedAt,
+		&item.CreatedByUserID,
+		&item.UpdatedAt,
+		&item.UpdatedByUserID,
+		&item.DeletedAt,
+		&item.DeletedByUserID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, repo.ErrNotFound
+		}
+		return nil, err
+	}
+	return &item, nil
+}
+
 func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.ListScheduledItemsInput) (repo.ListScheduledItemsOutput, error) {
 	if in.Limit <= 0 {
 		in.Limit = 20

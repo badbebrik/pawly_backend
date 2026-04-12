@@ -181,77 +181,245 @@ plugins:
       claims_to_verify:
         - exp
       secret_is_base64: false
-  - name: pre-function
+  - name: post-function
     route: auth-protected-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
-  - name: pre-function
+  - name: post-function
     route: profile-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
-  - name: pre-function
+  - name: post-function
     route: acl-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
-  - name: pre-function
+  - name: post-function
     route: pet-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
-  - name: pre-function
+  - name: post-function
     route: health-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
-  - name: pre-function
+  - name: post-function
     route: chat-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
-  - name: pre-function
+  - name: post-function
     route: push-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
-  - name: pre-function
+  - name: post-function
     route: notification-routes
     config:
       access:
         - |
-          local jwt = ngx.ctx.authenticated_jwt_token
-          if jwt and jwt.sub then
-            ngx.req.set_header("X-User-ID", jwt.sub)
+          kong.service.request.clear_header("X-User-ID")
+          local token = kong.ctx.shared.authenticated_jwt_token
+          if type(token) == "string" then
+            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
+            if payload then
+              payload = payload:gsub("-", "+"):gsub("_", "/")
+              local rem = #payload % 4
+              if rem == 2 then
+                payload = payload .. "=="
+              elseif rem == 3 then
+                payload = payload .. "="
+              elseif rem == 1 then
+                payload = nil
+              end
+            end
+            if payload then
+              local decoded = ngx.decode_base64(payload)
+              if decoded then
+                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
+                if sub and sub ~= "" then
+                  kong.service.request.set_header("X-User-ID", sub)
+                end
+              end
+            end
           end
 
 consumers:

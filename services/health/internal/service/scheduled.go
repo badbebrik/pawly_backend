@@ -514,9 +514,9 @@ func derefRecurrenceInterval(v *int) int {
 	return *v
 }
 
-func (s *Service) syncSystemOneShotScheduledItem(ctx context.Context, petID uuid.UUID, sourceType string, sourceID uuid.UUID, title string, note *string, startsAt *time.Time, shouldExist bool, userID uuid.UUID) error {
+func (s *Service) syncSystemOneShotScheduledItem(ctx context.Context, petID uuid.UUID, sourceType string, sourceID uuid.UUID, title string, note *string, startsAt *time.Time, shouldExist bool, userID uuid.UUID) (*model.ScheduledItem, error) {
 	if !shouldExist || startsAt == nil || startsAt.IsZero() {
-		return mapRepoErr(s.repo.DeleteHealthScheduledItem(ctx, repository.DeleteHealthScheduledItemInput{
+		return nil, mapRepoErr(s.repo.DeleteHealthScheduledItem(ctx, repository.DeleteHealthScheduledItemInput{
 			PetID:           petID,
 			SourceType:      sourceType,
 			SourceID:        sourceID,
@@ -536,7 +536,37 @@ func (s *Service) syncSystemOneShotScheduledItem(ctx context.Context, petID uuid
 		UpdatedByUserID:     userID,
 	})
 	if err != nil {
+		return nil, mapRepoErr(err)
+	}
+	if err := s.regenerateScheduledItemOccurrences(ctx, item, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func (s *Service) applyMedicalEntityReminderSettings(ctx context.Context, petID uuid.UUID, reminder *MedicalEntityReminderParams, sourceType string, sourceID uuid.UUID, canExist bool, userID uuid.UUID) error {
+	if reminder == nil {
+		return nil
+	}
+	if !canExist {
+		return ErrInvalidInput
+	}
+	item, err := s.repo.GetScheduledItemBySource(ctx, petID, sourceType, sourceID)
+	if err != nil {
 		return mapRepoErr(err)
 	}
-	return s.regenerateScheduledItemOccurrences(ctx, item, time.Now().UTC())
+
+	remindOffsetMinutes, err := validateReminderOffset(reminder.RemindOffsetMinutes)
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.UpdateScheduledItemReminderSettings(ctx, repository.UpdateScheduledItemReminderSettingsInput{
+		ID:                  item.ID,
+		PetID:               petID,
+		RowVersion:          item.RowVersion,
+		PushEnabled:         reminder.PushEnabled,
+		RemindOffsetMinutes: remindOffsetMinutes,
+		UpdatedBy:           userID,
+	})
+	return mapRepoErr(err)
 }

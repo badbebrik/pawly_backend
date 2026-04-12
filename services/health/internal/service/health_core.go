@@ -43,6 +43,7 @@ type CreateVetVisitParams struct {
 	Status            string
 	VisitType         string
 	ScheduledAt       *time.Time
+	Reminder          *MedicalEntityReminderParams
 	CompletedAt       *time.Time
 	ReasonText        *string
 	ResultText        *string
@@ -59,6 +60,7 @@ type UpdateVetVisitParams struct {
 	Status            string
 	VisitType         string
 	ScheduledAt       *time.Time
+	Reminder          *MedicalEntityReminderParams
 	CompletedAt       *time.Time
 	ReasonText        *string
 	ResultText        *string
@@ -93,6 +95,7 @@ type CreateVaccinationParams struct {
 	VaccineName         string
 	CatalogMedicationID *uuid.UUID
 	ScheduledAt         *time.Time
+	Reminder            *MedicalEntityReminderParams
 	AdministeredAt      *time.Time
 	NextDueAt           *time.Time
 	VetVisitID          *uuid.UUID
@@ -111,6 +114,7 @@ type UpdateVaccinationParams struct {
 	VaccineName         string
 	CatalogMedicationID *uuid.UUID
 	ScheduledAt         *time.Time
+	Reminder            *MedicalEntityReminderParams
 	AdministeredAt      *time.Time
 	NextDueAt           *time.Time
 	VetVisitID          *uuid.UUID
@@ -150,6 +154,7 @@ type CreateProcedureParams struct {
 	CatalogMedicationID *uuid.UUID
 	ProductName         *string
 	ScheduledAt         *time.Time
+	Reminder            *MedicalEntityReminderParams
 	PerformedAt         *time.Time
 	NextDueAt           *time.Time
 	VetVisitID          *uuid.UUID
@@ -169,6 +174,7 @@ type UpdateProcedureParams struct {
 	CatalogMedicationID *uuid.UUID
 	ProductName         *string
 	ScheduledAt         *time.Time
+	Reminder            *MedicalEntityReminderParams
 	PerformedAt         *time.Time
 	NextDueAt           *time.Time
 	VetVisitID          *uuid.UUID
@@ -181,6 +187,11 @@ type DeleteProcedureParams struct {
 	PetID       uuid.UUID
 	ProcedureID uuid.UUID
 	RowVersion  int
+}
+
+type MedicalEntityReminderParams struct {
+	PushEnabled         bool
+	RemindOffsetMinutes *int
 }
 
 type ListMedicalRecordsParams struct {
@@ -360,7 +371,10 @@ func (s *Service) CreateVetVisit(ctx context.Context, p CreateVetVisitParams) (*
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VET_VISIT", item.ID, sync); err != nil {
 		return nil, err
 	}
-	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVetVisit, item.ID, "Прием у ветеринара", vetVisitScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+	if _, err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVetVisit, item.ID, "Прием у ветеринара", vetVisitScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
+	if err := s.applyMedicalEntityReminderSettings(ctx, p.PetID, p.Reminder, model.ScheduledItemSourceTypeVetVisit, item.ID, item.Status == "PLANNED" && item.ScheduledAt != nil, p.UserID); err != nil {
 		return nil, err
 	}
 	s.enrichHealthAttachmentURLs(ctx, item.Attachments)
@@ -403,7 +417,10 @@ func (s *Service) UpdateVetVisit(ctx context.Context, p UpdateVetVisitParams) (*
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VET_VISIT", item.ID, sync); err != nil {
 		return nil, err
 	}
-	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVetVisit, item.ID, "Прием у ветеринара", vetVisitScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+	if _, err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVetVisit, item.ID, "Прием у ветеринара", vetVisitScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
+	if err := s.applyMedicalEntityReminderSettings(ctx, p.PetID, p.Reminder, model.ScheduledItemSourceTypeVetVisit, item.ID, item.Status == "PLANNED" && item.ScheduledAt != nil, p.UserID); err != nil {
 		return nil, err
 	}
 	s.enrichHealthAttachmentURLs(ctx, item.Attachments)
@@ -565,7 +582,10 @@ func (s *Service) CreateVaccination(ctx context.Context, p CreateVaccinationPara
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VACCINATION", item.ID, sync); err != nil {
 		return nil, err
 	}
-	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVaccination, item.ID, item.VaccineName, vaccinationScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+	if _, err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVaccination, item.ID, item.VaccineName, vaccinationScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
+	if err := s.applyMedicalEntityReminderSettings(ctx, p.PetID, p.Reminder, model.ScheduledItemSourceTypeVaccination, item.ID, item.Status == "PLANNED" && item.ScheduledAt != nil, p.UserID); err != nil {
 		return nil, err
 	}
 	if err := s.syncVaccinationAutolog(ctx, item, p.UserID); err != nil {
@@ -627,7 +647,10 @@ func (s *Service) UpdateVaccination(ctx context.Context, p UpdateVaccinationPara
 	if err := s.syncHealthAttachments(ctx, p.PetID, "VACCINATION", item.ID, sync); err != nil {
 		return nil, err
 	}
-	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVaccination, item.ID, item.VaccineName, vaccinationScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+	if _, err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeVaccination, item.ID, item.VaccineName, vaccinationScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
+	if err := s.applyMedicalEntityReminderSettings(ctx, p.PetID, p.Reminder, model.ScheduledItemSourceTypeVaccination, item.ID, item.Status == "PLANNED" && item.ScheduledAt != nil, p.UserID); err != nil {
 		return nil, err
 	}
 	if err := s.syncVaccinationAutologTransition(ctx, current, item, p.UserID); err != nil {
@@ -765,7 +788,10 @@ func (s *Service) CreateProcedure(ctx context.Context, p CreateProcedureParams) 
 	if err := s.syncHealthAttachments(ctx, p.PetID, "PROCEDURE", item.ID, sync); err != nil {
 		return nil, err
 	}
-	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeProcedure, item.ID, item.Title, procedureScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+	if _, err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeProcedure, item.ID, item.Title, procedureScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
+	if err := s.applyMedicalEntityReminderSettings(ctx, p.PetID, p.Reminder, model.ScheduledItemSourceTypeProcedure, item.ID, item.Status == "PLANNED" && item.ScheduledAt != nil, p.UserID); err != nil {
 		return nil, err
 	}
 	if err := s.syncProcedureAutolog(ctx, item, p.UserID); err != nil {
@@ -832,7 +858,10 @@ func (s *Service) UpdateProcedure(ctx context.Context, p UpdateProcedureParams) 
 	if err := s.syncHealthAttachments(ctx, p.PetID, "PROCEDURE", item.ID, sync); err != nil {
 		return nil, err
 	}
-	if err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeProcedure, item.ID, item.Title, procedureScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+	if _, err := s.syncSystemOneShotScheduledItem(ctx, p.PetID, model.ScheduledItemSourceTypeProcedure, item.ID, item.Title, procedureScheduledNote(item), item.ScheduledAt, item.Status == "PLANNED", p.UserID); err != nil {
+		return nil, err
+	}
+	if err := s.applyMedicalEntityReminderSettings(ctx, p.PetID, p.Reminder, model.ScheduledItemSourceTypeProcedure, item.ID, item.Status == "PLANNED" && item.ScheduledAt != nil, p.UserID); err != nil {
 		return nil, err
 	}
 	if err := s.syncProcedureAutologTransition(ctx, current, item, p.UserID); err != nil {

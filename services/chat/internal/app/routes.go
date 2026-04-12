@@ -37,7 +37,6 @@ func (a *App) setupRoutes() http.Handler {
 		a.presence,
 		time.Duration(a.cfg.PresenceTTL)*time.Second,
 		time.Duration(a.cfg.PresenceHeartbeat)*time.Second,
-		a.cfg.JWTSecret,
 		a.useCases.SendMessage,
 		a.useCases.MarkRead,
 		a.useCases.GetConversation,
@@ -46,7 +45,7 @@ func (a *App) setupRoutes() http.Handler {
 
 	withUser := appmw.WithUserID
 
-	r.Get("/v1/chat/ws", wsHandler.ServeHTTP)
+	r.With(withUser).Get("/v1/chat/ws", wsHandler.ServeHTTP)
 
 	r.Group(func(r chi.Router) {
 		r.Use(withUser)

@@ -2,12 +2,8 @@ services:
   postgres:
     image: postgres:16
     container_name: auth_postgres
-    environment:
-      POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: auth_db
-    ports:
-      - "5432:5432"
+    env_file:
+      - ../services/auth/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,12 +15,8 @@ services:
   file_postgres:
     image: postgres:16
     container_name: file_postgres
-    environment:
-      POSTGRES_USER: file_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: file_db
-    ports:
-      - "5433:5432"
+    env_file:
+      - ../services/file/.env
     volumes:
       - file_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -36,12 +28,8 @@ services:
   acl_postgres:
     image: postgres:16
     container_name: acl_postgres
-    environment:
-      POSTGRES_USER: acl_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: acl_db
-    ports:
-      - "5434:5432"
+    env_file:
+      - ../services/acl/.env
     volumes:
       - acl_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -53,12 +41,8 @@ services:
   profile_postgres:
     image: postgres:16
     container_name: profile_postgres
-    environment:
-      POSTGRES_USER: profile_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: profile_db
-    ports:
-      - "5438:5432"
+    env_file:
+      - ../services/profile/.env
     volumes:
       - profile_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -70,12 +54,8 @@ services:
   pet_postgres:
     image: postgres:16
     container_name: pet_postgres
-    environment:
-      POSTGRES_USER: pet_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: pet_db
-    ports:
-      - "5435:5432"
+    env_file:
+      - ../services/pet/.env
     volumes:
       - pet_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -87,12 +67,8 @@ services:
   health_postgres:
     image: postgres:16
     container_name: health_postgres
-    environment:
-      POSTGRES_USER: health_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: health_db
-    ports:
-      - "5437:5432"
+    env_file:
+      - ../services/health/.env
     volumes:
       - health_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -104,12 +80,8 @@ services:
   push_postgres:
     image: postgres:16
     container_name: push_postgres
-    environment:
-      POSTGRES_USER: push_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: push_db
-    ports:
-      - "5440:5432"
+    env_file:
+      - ../services/push/.env
     volumes:
       - push_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -123,8 +95,6 @@ services:
     container_name: chat_postgres
     env_file:
       - ../services/chat/.env.docker
-    ports:
-      - "5439:5432"
     volumes:
       - chat_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -147,8 +117,6 @@ services:
   redis:
     image: redis:7
     container_name: auth_redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -160,12 +128,8 @@ services:
   rabbitmq:
     image: rabbitmq:3.12-management
     container_name: auth_rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: auth_user
-      RABBITMQ_DEFAULT_PASS: supersecret
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    env_file:
+      - ./env/rabbitmq.dev.env
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -192,18 +156,12 @@ services:
       dockerfile: acl/Dockerfile
     container_name: pawly_acl
     restart: unless-stopped
+    env_file:
+      - ../services/acl/.env
     environment:
-      APP_HTTP_PORT: "8087"
-      APP_GRPC_PORT: "50057"
-      POSTGRES_USER: acl_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: acl_db
       POSTGRES_HOST: acl_postgres
       POSTGRES_PORT: "5432"
-      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
       PROFILE_SERVICE_GRPC_ADDR: profile:50058
-      INVITE_TTL_MINUTES: "10080"
-      INVITE_DEEPLINK_BASE: myapp://invite?token=
     depends_on:
       acl_postgres:
         condition: service_healthy
@@ -219,18 +177,12 @@ services:
       dockerfile: profile/Dockerfile
     container_name: pawly_profile
     restart: unless-stopped
+    env_file:
+      - ../services/profile/.env
     environment:
-      APP_PORT: "8086"
-      APP_GRPC_PORT: "50058"
-      POSTGRES_USER: profile_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: profile_db
       POSTGRES_HOST: profile_postgres
       POSTGRES_PORT: "5432"
-      PROFILE_DEFAULT_LOCALE: ru
-      PROFILE_DEFAULT_TIMEZONE: Europe/Moscow
       FILE_SERVICE_GRPC_ADDR: file:50056
-      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
     depends_on:
       profile_postgres:
         condition: service_healthy
@@ -294,15 +246,11 @@ services:
       context: ../services/notification
     container_name: pawly_notification
     restart: unless-stopped
+    env_file:
+      - ../services/notification/.env
     environment:
-      APP_PORT: "8083"
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
-      RABBITMQ_USER: auth_user
-      RABBITMQ_PASSWORD: supersecret
-      RABBITMQ_EVENTS_QUEUE: notifications.events
-      RABBITMQ_EMAIL_JOBS_QUEUE: email.jobs
-      RABBITMQ_PUSH_JOBS_QUEUE: push.jobs
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -336,17 +284,12 @@ services:
       context: ../services/email
     container_name: pawly_email
     restart: unless-stopped
-    volumes:
-      - ../services/email/.env:/app/.env:ro
+    env_file:
+      - ../services/email/.env
     environment:
-      APP_PORT: "8084"
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
-      RABBITMQ_USER: auth_user
-      RABBITMQ_PASSWORD: supersecret
-      RABBITMQ_EMAIL_JOBS_QUEUE: email.jobs
       TEMPLATE_DIR: /app/templates
-      DEFAULT_LOCALE: ru
       REQUEUE_ON_FAIL: "false"
     depends_on:
       rabbitmq:
@@ -363,12 +306,9 @@ services:
       dockerfile: pet/Dockerfile
     container_name: pawly_pet
     restart: unless-stopped
+    env_file:
+      - ../services/pet/.env
     environment:
-      APP_PORT: "8085"
-      APP_GRPC_PORT: "50059"
-      POSTGRES_USER: pet_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: pet_db
       POSTGRES_HOST: pet_postgres
       POSTGRES_PORT: "5432"
       ACL_GRPC_ADDR: acl:50057
@@ -392,24 +332,16 @@ services:
       dockerfile: health/Dockerfile
     container_name: pawly_health
     restart: unless-stopped
+    env_file:
+      - ../services/health/.env
     environment:
-      APP_PORT: "8088"
-      POSTGRES_USER: health_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: health_db
       POSTGRES_HOST: health_postgres
       POSTGRES_PORT: "5432"
       ACL_GRPC_ADDR: acl:50057
       ACL_HTTP_BASE_URL: http://acl:8087
       FILE_GRPC_ADDR: file:50056
-      JWT_SECRET: local_dev_jwt_secret
-      JWT_ISSUER: pawly
-      INTERNAL_SERVICE_TOKEN: pawly_internal_dev_token
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
-      RABBITMQ_USER: auth_user
-      RABBITMQ_PASSWORD: supersecret
-      RABBITMQ_PUSH_JOBS_QUEUE: push.jobs
       SCHEDULED_DISPATCH_INTERVAL_SEC: "60"
       SCHEDULED_DISPATCH_BATCH_SIZE: "100"
     depends_on:
@@ -433,23 +365,15 @@ services:
       dockerfile: push/Dockerfile
     container_name: pawly_push
     restart: unless-stopped
+    env_file:
+      - ../services/push/.env
     volumes:
       - ./secrets/pawly-6e5c5-60de53ef1b33.json:/run/secrets/firebase-service-account.json:ro
     environment:
-      APP_PORT: "8090"
-      POSTGRES_USER: push_user
-      POSTGRES_PASSWORD: supersecret
-      POSTGRES_DB: push_db
       POSTGRES_HOST: push_postgres
       POSTGRES_PORT: "5432"
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
-      RABBITMQ_USER: auth_user
-      RABBITMQ_PASSWORD: supersecret
-      RABBITMQ_PUSH_JOBS_QUEUE: push.jobs
-      JWT_SECRET: local_dev_jwt_secret
-      JWT_ISSUER: pawly
-      FCM_PROJECT_ID: "pawly-6e5c5"
       FCM_CREDENTIALS_FILE: /run/secrets/firebase-service-account.json
     depends_on:
       push_postgres:
@@ -465,14 +389,10 @@ services:
   kong:
     image: kong:3.6
     container_name: pawly_kong
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /opt/kong/kong.yml
-      KONG_PROXY_LISTEN: "0.0.0.0:8000"
-      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    env_file:
+      - ./env/kong.dev.env
     ports:
       - "8000:8000"
-      - "8001:8001"
     volumes:
       - ./kong/kong.yml:/opt/kong/kong.yml:ro
     depends_on:
@@ -489,6 +409,32 @@ services:
       notification:
         condition: service_healthy
       push:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/migrate/Dockerfile
+    profiles:
+      - tools
+    volumes:
+      - ..:/work:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      file_postgres:
+        condition: service_healthy
+      acl_postgres:
+        condition: service_healthy
+      profile_postgres:
+        condition: service_healthy
+      pet_postgres:
+        condition: service_healthy
+      health_postgres:
+        condition: service_healthy
+      push_postgres:
+        condition: service_healthy
+      chat_postgres:
         condition: service_healthy
 
 volumes:

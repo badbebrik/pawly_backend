@@ -69,6 +69,8 @@ services:
     container_name: health_postgres
     env_file:
       - ../services/health/.env
+    ports:
+      - "5437:5432"
     volumes:
       - health_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -95,6 +97,8 @@ services:
     container_name: chat_postgres
     env_file:
       - ../services/chat/.env.docker
+    ports:
+      - "5439:5432"
     volumes:
       - chat_postgres_data:/var/lib/postgresql/data
     healthcheck:

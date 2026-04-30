@@ -12,24 +12,24 @@ import (
 
 var verificationCodeRe = regexp.MustCompile(`^\d{6}$`)
 
-type VerifyEmailUseCase struct {
+type VerifyEmail struct {
 	deps *dependencies
 }
 
-type VerifyEmailInput struct {
+type VerifyEmailParams struct {
 	Email  string
 	Code   string
 	Locale string
 }
 
-type VerifyEmailOutput struct {
+type VerifyEmailResult struct {
 	UserID       uuid.UUID
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int
 }
 
-func (uc *VerifyEmailUseCase) Execute(ctx context.Context, in VerifyEmailInput) (*VerifyEmailOutput, error) {
+func (uc *VerifyEmail) Execute(ctx context.Context, in VerifyEmailParams) (*VerifyEmailResult, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) || !verificationCodeRe.MatchString(in.Code) {
 		return nil, ErrIncorrectFormat
@@ -82,7 +82,7 @@ func (uc *VerifyEmailUseCase) Execute(ctx context.Context, in VerifyEmailInput) 
 		return nil, err
 	}
 
-	return &VerifyEmailOutput{
+	return &VerifyEmailResult{
 		UserID:       user.ID,
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,

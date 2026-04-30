@@ -1,6 +1,6 @@
 package config
 
-import "os"
+import "pawly/pkg/configenv"
 
 type Config struct {
 	AppPort     string
@@ -19,25 +19,18 @@ type Config struct {
 	InternalServiceToken string
 }
 
-func Load() *Config {
+func Load() (*Config, error) {
 	return &Config{
-		AppPort:              getEnv("APP_PORT", "8086"),
-		AppGRPCPort:          getEnv("APP_GRPC_PORT", "50058"),
-		PostgresUser:         getEnv("POSTGRES_USER", ""),
-		PostgresPassword:     getEnv("POSTGRES_PASSWORD", ""),
-		PostgresDB:           getEnv("POSTGRES_DB", ""),
-		PostgresHost:         getEnv("POSTGRES_HOST", ""),
-		PostgresPort:         getEnv("POSTGRES_PORT", ""),
-		DefaultLocale:        getEnv("PROFILE_DEFAULT_LOCALE", "ru"),
-		DefaultTimezone:      getEnv("PROFILE_DEFAULT_TIMEZONE", "UTC"),
-		FileServiceGRPCAddr:  getEnv("FILE_SERVICE_GRPC_ADDR", ""),
-		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
-	}
-}
-
-func getEnv(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		return v
-	}
-	return fallback
+		AppPort:              configenv.String("APP_PORT", "8086"),
+		AppGRPCPort:          configenv.String("APP_GRPC_PORT", "50058"),
+		PostgresUser:         configenv.String("POSTGRES_USER", ""),
+		PostgresPassword:     configenv.String("POSTGRES_PASSWORD", ""),
+		PostgresDB:           configenv.String("POSTGRES_DB", ""),
+		PostgresHost:         configenv.String("POSTGRES_HOST", ""),
+		PostgresPort:         configenv.String("POSTGRES_PORT", ""),
+		DefaultLocale:        configenv.String("PROFILE_DEFAULT_LOCALE", "ru"),
+		DefaultTimezone:      configenv.String("PROFILE_DEFAULT_TIMEZONE", "UTC"),
+		FileServiceGRPCAddr:  configenv.String("FILE_SERVICE_GRPC_ADDR", ""),
+		InternalServiceToken: configenv.String("INTERNAL_SERVICE_TOKEN", ""),
+	}, nil
 }

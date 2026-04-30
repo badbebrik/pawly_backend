@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	profilepb "profile/proto"
+	profilepb "pawly/pkg/profilepb"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"

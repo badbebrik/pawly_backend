@@ -1,0 +1,25 @@
+package ports
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type UploadInfo struct {
+	Method    string
+	URL       string
+	Headers   map[string]string
+	ExpiresAt time.Time
+}
+
+type FileClient interface {
+	InitUpload(ctx context.Context, mimeType string, expectedSize int64, userID uuid.UUID) (uuid.UUID, UploadInfo, error)
+	ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) error
+	GetDownloadURL(ctx context.Context, fileID uuid.UUID) (string, time.Time, error)
+	BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]string, error)
+	LinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.UUID) error
+	UnlinkAvatar(ctx context.Context, fileID uuid.UUID, userID uuid.UUID) error
+	DeleteFileIfUnlinked(ctx context.Context, fileID uuid.UUID) error
+}

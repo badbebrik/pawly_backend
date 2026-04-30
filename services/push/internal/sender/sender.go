@@ -3,7 +3,7 @@ package sender
 import (
 	"context"
 
-	"push/internal/model"
+	"push/internal/domain/model"
 )
 
 type Sender interface {

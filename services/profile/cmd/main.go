@@ -13,8 +13,10 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	_ = godotenv.Load()
 
-	cfg := config.Load()
-	_ = cfg
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load config")
+	}
 
 	a, err := app.New(cfg)
 	if err != nil {

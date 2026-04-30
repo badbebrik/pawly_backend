@@ -3,7 +3,7 @@ package sender
 import (
 	"context"
 
-	"push/internal/model"
+	"push/internal/domain/model"
 
 	"github.com/rs/zerolog/log"
 )

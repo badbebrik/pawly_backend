@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
-	"pet/internal/model"
-	repo "pet/internal/repository"
+	"pet/internal/application/ports"
+	"pet/internal/domain/model"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,7 +21,7 @@ func NewPetRepository(db *pgxpool.Pool) *PetRepository {
 	return &PetRepository{db: db}
 }
 
-func (r *PetRepository) Create(ctx context.Context, in repo.CreatePetInput) (*model.Pet, error) {
+func (r *PetRepository) Create(ctx context.Context, in ports.CreatePetInput) (*model.Pet, error) {
 	p := in.Pet
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -31,7 +31,7 @@ func (r *PetRepository) Create(ctx context.Context, in repo.CreatePetInput) (*mo
 
 	const query = `
 		INSERT INTO pets (
-			id, owner_user_id, name, species_id, sex, birth_date,
+			id, owner_user_id, name, species_id, custom_species_name, sex, birth_date,
 			breed_id, custom_breed_name,
 			pattern_id, custom_pattern_name,
 			is_neutered, is_outdoor, profile_photo_file_id,
@@ -39,17 +39,17 @@ func (r *PetRepository) Create(ctx context.Context, in repo.CreatePetInput) (*mo
 			status, missing_since, archived_at,
 			created_at, updated_at, row_version
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,
-			$7,$8,
-			$9,$10,
-			$11,$12,$13,
-			$14,$15,
-			$16,$17,$18,
+			$1,$2,$3,$4,$5,$6,$7,
+			$8,$9,
+			$10,$11,
+			$12,$13,$14,
+			$15,$16,
+			$17,$18,$19,
 			NOW(),NOW(),1
 		)
 	`
 	_, err = tx.Exec(ctx, query,
-		p.ID, p.OwnerUserID, p.Name, p.SpeciesID, p.Sex, p.BirthDate,
+		p.ID, p.OwnerUserID, p.Name, p.SpeciesID, p.CustomSpeciesName, p.Sex, p.BirthDate,
 		p.BreedID, p.CustomBreedName,
 		p.PatternID, p.CustomPatternName,
 		p.IsNeutered, p.IsOutdoor, p.ProfilePhotoFileID,
@@ -58,7 +58,7 @@ func (r *PetRepository) Create(ctx context.Context, in repo.CreatePetInput) (*mo
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (r *PetRepository) DeleteByID(ctx context.Context, petID uuid.UUID) error {
 func (r *PetRepository) GetByID(ctx context.Context, petID uuid.UUID) (*model.Pet, error) {
 	const query = `
 		SELECT
-			id, owner_user_id, row_version, name, species_id, sex, birth_date,
+			id, owner_user_id, row_version, name, species_id, custom_species_name, sex, birth_date,
 			breed_id, custom_breed_name,
 			pattern_id, custom_pattern_name,
 			is_neutered, is_outdoor, profile_photo_file_id,
@@ -95,7 +95,7 @@ func (r *PetRepository) GetByID(ctx context.Context, petID uuid.UUID) (*model.Pe
 	pet, err := scanPet(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (r *PetRepository) GetByID(ctx context.Context, petID uuid.UUID) (*model.Pe
 
 func (r *PetRepository) ListSpecies(ctx context.Context) ([]model.Species, error) {
 	const query = `
-		SELECT id, code, name_ru, name_en, icon_key, sort_order, is_active, created_at, updated_at
+		SELECT id, code, name, icon_key, sort_order, is_active, created_at, updated_at
 		FROM species
 		WHERE is_active = TRUE
 		ORDER BY sort_order ASC, id ASC
@@ -126,8 +126,7 @@ func (r *PetRepository) ListSpecies(ctx context.Context) ([]model.Species, error
 		if err := rows.Scan(
 			&item.ID,
 			&item.Code,
-			&item.NameRu,
-			&item.NameEn,
+			&item.Name,
 			&item.IconKey,
 			&item.SortOrder,
 			&item.IsActive,
@@ -146,7 +145,7 @@ func (r *PetRepository) ListSpecies(ctx context.Context) ([]model.Species, error
 
 func (r *PetRepository) ListBreeds(ctx context.Context) ([]model.Breed, error) {
 	const query = `
-		SELECT id, species_id, name_ru, name_en, sort_order, is_active, created_at, updated_at
+		SELECT id, species_id, name, sort_order, is_active, created_at, updated_at
 		FROM breeds
 		WHERE is_active = TRUE
 		ORDER BY species_id ASC, sort_order ASC, id ASC
@@ -163,8 +162,7 @@ func (r *PetRepository) ListBreeds(ctx context.Context) ([]model.Breed, error) {
 		if err := rows.Scan(
 			&item.ID,
 			&item.SpeciesID,
-			&item.NameRu,
-			&item.NameEn,
+			&item.Name,
 			&item.SortOrder,
 			&item.IsActive,
 			&item.CreatedAt,
@@ -182,7 +180,7 @@ func (r *PetRepository) ListBreeds(ctx context.Context) ([]model.Breed, error) {
 
 func (r *PetRepository) ListPatterns(ctx context.Context) ([]model.Pattern, error) {
 	const query = `
-		SELECT id, species_id, name_ru, name_en, icon_key, sort_order, is_active, created_at, updated_at
+		SELECT id, species_id, name, icon_key, sort_order, is_active, created_at, updated_at
 		FROM patterns
 		WHERE is_active = TRUE
 		ORDER BY species_id ASC NULLS FIRST, sort_order ASC, id ASC
@@ -199,8 +197,7 @@ func (r *PetRepository) ListPatterns(ctx context.Context) ([]model.Pattern, erro
 		if err := rows.Scan(
 			&item.ID,
 			&item.SpeciesID,
-			&item.NameRu,
-			&item.NameEn,
+			&item.Name,
 			&item.IconKey,
 			&item.SortOrder,
 			&item.IsActive,
@@ -219,7 +216,7 @@ func (r *PetRepository) ListPatterns(ctx context.Context) ([]model.Pattern, erro
 
 func (r *PetRepository) ListColorPresets(ctx context.Context) ([]model.ColorPreset, error) {
 	const query = `
-		SELECT id, name_ru, name_en, hex, sort_order, is_active, created_at, updated_at
+		SELECT id, name, hex, sort_order, is_active, created_at, updated_at
 		FROM color_presets
 		WHERE is_active = TRUE
 		ORDER BY sort_order ASC, id ASC
@@ -235,8 +232,7 @@ func (r *PetRepository) ListColorPresets(ctx context.Context) ([]model.ColorPres
 		var item model.ColorPreset
 		if err := rows.Scan(
 			&item.ID,
-			&item.NameRu,
-			&item.NameEn,
+			&item.Name,
 			&item.Hex,
 			&item.SortOrder,
 			&item.IsActive,
@@ -270,7 +266,7 @@ func (r *PetRepository) ListByIDs(ctx context.Context, ids []uuid.UUID, includeA
 
 	listQuery := `
 		SELECT
-			id, owner_user_id, row_version, name, species_id, sex, birth_date,
+			id, owner_user_id, row_version, name, species_id, custom_species_name, sex, birth_date,
 			breed_id, custom_breed_name,
 			pattern_id, custom_pattern_name,
 			is_neutered, is_outdoor, profile_photo_file_id,
@@ -324,17 +320,18 @@ func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion 
 		UPDATE pets
 		SET name = $3,
 		    species_id = $4,
-		    sex = $5,
-		    birth_date = $6,
-		    breed_id = $7,
-		    custom_breed_name = $8,
-		    pattern_id = $9,
-		    custom_pattern_name = $10,
-		    is_neutered = $11,
-		    is_outdoor = $12,
-		    profile_photo_file_id = $13,
-		    microchip_id = $14,
-		    microchip_installed_at = $15,
+		    custom_species_name = $5,
+		    sex = $6,
+		    birth_date = $7,
+		    breed_id = $8,
+		    custom_breed_name = $9,
+		    pattern_id = $10,
+		    custom_pattern_name = $11,
+		    is_neutered = $12,
+		    is_outdoor = $13,
+		    profile_photo_file_id = $14,
+		    microchip_id = $15,
+		    microchip_installed_at = $16,
 		    updated_at = NOW(),
 		    row_version = row_version + 1
 		WHERE id = $1
@@ -345,6 +342,7 @@ func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion 
 		petID, rowVersion,
 		pet.Name,
 		pet.SpeciesID,
+		pet.CustomSpeciesName,
 		pet.Sex,
 		pet.BirthDate,
 		pet.BreedID,
@@ -359,7 +357,7 @@ func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion 
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -370,9 +368,9 @@ func (r *PetRepository) Update(ctx context.Context, petID uuid.UUID, rowVersion 
 			return nil, err
 		}
 		if !exists {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 
 	if err := syncPetColors(ctx, tx, petID, pet.Colors); err != nil {
@@ -397,7 +395,7 @@ func (r *PetRepository) UpdateOwner(ctx context.Context, petID uuid.UUID, rowVer
 	cmd, err := r.db.Exec(ctx, query, petID, rowVersion, ownerUserID)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -408,9 +406,9 @@ func (r *PetRepository) UpdateOwner(ctx context.Context, petID uuid.UUID, rowVer
 			return nil, err
 		}
 		if !exists {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 
 	return r.GetByID(ctx, petID)
@@ -428,7 +426,7 @@ func (r *PetRepository) UpdatePhoto(ctx context.Context, petID uuid.UUID, rowVer
 	cmd, err := r.db.Exec(ctx, query, petID, rowVersion, fileID)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -439,9 +437,9 @@ func (r *PetRepository) UpdatePhoto(ctx context.Context, petID uuid.UUID, rowVer
 			return nil, err
 		}
 		if !exists {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 
 	return r.GetByID(ctx, petID)
@@ -461,7 +459,7 @@ func (r *PetRepository) UpdateStatus(ctx context.Context, petID uuid.UUID, rowVe
 	cmd, err := r.db.Exec(ctx, query, petID, rowVersion, status, missingSince, archivedAt)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -472,9 +470,9 @@ func (r *PetRepository) UpdateStatus(ctx context.Context, petID uuid.UUID, rowVe
 			return nil, err
 		}
 		if !exists {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 
 	return r.GetByID(ctx, petID)
@@ -488,7 +486,7 @@ func scanPet(s scanner) (*model.Pet, error) {
 	var pet model.Pet
 
 	err := s.Scan(
-		&pet.ID, &pet.OwnerUserID, &pet.RowVersion, &pet.Name, &pet.SpeciesID, &pet.Sex, &pet.BirthDate,
+		&pet.ID, &pet.OwnerUserID, &pet.RowVersion, &pet.Name, &pet.SpeciesID, &pet.CustomSpeciesName, &pet.Sex, &pet.BirthDate,
 		&pet.BreedID, &pet.CustomBreedName,
 		&pet.PatternID, &pet.CustomPatternName,
 		&pet.IsNeutered, &pet.IsOutdoor, &pet.ProfilePhotoFileID,
@@ -603,7 +601,7 @@ func syncPetColors(ctx context.Context, q colorQueryer, petID uuid.UUID, colors 
 			colors[i].CustomHex,
 		); err != nil {
 			if isUniqueViolation(err) {
-				return repo.ErrConflict
+				return ports.ErrConflict
 			}
 			return err
 		}
@@ -611,4 +609,4 @@ func syncPetColors(ctx context.Context, q colorQueryer, petID uuid.UUID, colors 
 	return nil
 }
 
-var _ repo.PetRepository = (*PetRepository)(nil)
+var _ ports.PetRepository = (*PetRepository)(nil)

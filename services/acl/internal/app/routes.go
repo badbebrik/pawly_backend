@@ -4,6 +4,7 @@ import (
 	"acl/internal/transport/http/handlers"
 	appmw "acl/internal/transport/http/middleware"
 	"net/http"
+	"pawly/pkg/httpjson"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -17,48 +18,44 @@ func (a *App) setupRoutes() http.Handler {
 	r.Use(middleware.Recoverer)
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		httpjson.Write(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	pub := handlers.NewPublicHandlers(a.aclSvc, a.profile, a.cfg.InviteDeeplinkBase)
-	internal := handlers.NewInternalHandlers(a.aclSvc)
+	publicHandlers := handlers.NewPublic(a.useCases, a.profile, a.pet, a.cfg.InviteDeeplinkBase)
+	internalHandlers := handlers.NewInternal(a.useCases)
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID)
 
-		r.Get("/v1/pets/{pet_id}/acl/roles", pub.ListRoles)
-		r.Post("/v1/pets/{pet_id}/acl/roles", pub.CreateCustomRole)
-		r.Delete("/v1/pets/{pet_id}/acl/roles/{role_id}", pub.DeleteCustomRole)
+		r.Get("/v1/pets/{pet_id}/acl/roles", publicHandlers.ListRoles)
+		r.Post("/v1/pets/{pet_id}/acl/roles", publicHandlers.CreateCustomRole)
+		r.Patch("/v1/pets/{pet_id}/acl/roles/{role_id}", publicHandlers.UpdateCustomRole)
+		r.Delete("/v1/pets/{pet_id}/acl/roles/{role_id}", publicHandlers.DeleteCustomRole)
 
-		r.Get("/v1/acl/presets", pub.ListPresets)
+		r.Get("/v1/pets/{pet_id}/acl/members", publicHandlers.ListMembers)
+		r.Get("/v1/pets/{pet_id}/acl/me", publicHandlers.GetMyAccess)
+		r.Delete("/v1/pets/{pet_id}/acl/me", publicHandlers.LeavePet)
+		r.Get("/v1/pets/{pet_id}/acl/bootstrap", publicHandlers.GetBootstrap)
+		r.Patch("/v1/pets/{pet_id}/acl/members/{member_id}", publicHandlers.UpdateMemberPermissions)
+		r.Delete("/v1/pets/{pet_id}/acl/members/{member_id}", publicHandlers.RemoveMember)
 
-		r.Get("/v1/pets/{pet_id}/acl/members", pub.ListMembers)
-		r.Get("/v1/pets/{pet_id}/acl/me", pub.GetMyAccess)
-		r.Delete("/v1/pets/{pet_id}/acl/me", pub.LeavePet)
-		r.Get("/v1/pets/{pet_id}/acl/bootstrap", pub.GetBootstrap)
-		r.Patch("/v1/pets/{pet_id}/acl/members/{member_id}", pub.UpdateMemberPermissions)
-		r.Delete("/v1/pets/{pet_id}/acl/members/{member_id}", pub.RemoveMember)
-
-		r.Post("/v1/pets/{pet_id}/acl/invites", pub.CreateInvite)
-		r.Get("/v1/pets/{pet_id}/acl/invites", pub.ListInvites)
-		r.Post("/v1/pets/{pet_id}/acl/invites/{invite_id}/regenerate-link", pub.RegenerateInviteLink)
-		r.Delete("/v1/pets/{pet_id}/acl/invites/{invite_id}", pub.RevokeInvite)
-		r.Post("/v1/acl/invites/accept-by-code", pub.AcceptInviteByCode)
-		r.Post("/v1/acl/invites/accept-by-token", pub.AcceptInviteByToken)
+		r.Post("/v1/pets/{pet_id}/acl/invites", publicHandlers.CreateInvite)
+		r.Get("/v1/pets/{pet_id}/acl/invites", publicHandlers.ListInvites)
+		r.Post("/v1/pets/{pet_id}/acl/invites/{invite_id}:regenerate-link", publicHandlers.RegenerateInviteLink)
+		r.Delete("/v1/pets/{pet_id}/acl/invites/{invite_id}", publicHandlers.RevokeInvite)
+		r.Post("/v1/acl/invites:accept-by-code", publicHandlers.AcceptInviteByCode)
+		r.Post("/v1/acl/invites:accept-by-token", publicHandlers.AcceptInviteByToken)
+		r.Post("/v1/acl/invites:preview-by-token", publicHandlers.PreviewInviteByToken)
 	})
-
-	r.Post("/v1/acl/invites/preview-by-token", pub.PreviewInviteByToken)
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithInternalToken(a.cfg.InternalServiceToken))
-		r.Post("/internal/v1/acl/is-member", internal.IsMember)
-		r.Post("/internal/v1/acl/get-policy", internal.GetPolicy)
-		r.Post("/internal/v1/acl/check", internal.Check)
-		r.Post("/internal/v1/acl/list-pets-for-user", internal.ListPetsForUser)
-		r.Post("/internal/v1/acl/list-members-for-pet", internal.ListMembersForPet)
-		r.Post("/internal/v1/acl/transfer-ownership", internal.TransferOwnership)
+		r.Post("/internal/v1/acl:is-member", internalHandlers.IsMember)
+		r.Post("/internal/v1/acl:get-policy", internalHandlers.GetPolicy)
+		r.Post("/internal/v1/acl:check", internalHandlers.Check)
+		r.Post("/internal/v1/acl:list-pets-for-user", internalHandlers.ListPetsForUser)
+		r.Post("/internal/v1/acl:list-members-for-pet", internalHandlers.ListMembersForPet)
+		r.Post("/internal/v1/acl:transfer-ownership", internalHandlers.TransferOwnership)
 	})
 
 	return r

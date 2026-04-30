@@ -10,16 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
-type PasswordResetConfirmUseCase struct {
+type PasswordResetConfirm struct {
 	deps *dependencies
 }
 
-type PasswordResetConfirmInput struct {
+type PasswordResetConfirmParams struct {
 	ResetToken  string
 	NewPassword string
 }
 
-func (uc *PasswordResetConfirmUseCase) Execute(ctx context.Context, in PasswordResetConfirmInput) error {
+func (uc *PasswordResetConfirm) Execute(ctx context.Context, in PasswordResetConfirmParams) error {
 	if in.ResetToken == "" || !security.ValidatePassword(in.NewPassword) {
 		return ErrIncorrectFormat
 	}

@@ -3,14 +3,14 @@ package repository
 import (
 	"context"
 	"fmt"
-	"health/internal/model"
-	repo "health/internal/repository"
+	"health/internal/application/ports"
+	"health/internal/domain/model"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
-func (r *LogRepository) ListAnalyticsMetrics(ctx context.Context, in repo.ListAnalyticsMetricsInput) ([]model.AnalyticsMetricSummary, error) {
+func (r *LogRepository) ListAnalyticsMetrics(ctx context.Context, in ports.ListAnalyticsMetricsInput) ([]model.AnalyticsMetricSummary, error) {
 	if in.Limit <= 0 {
 		in.Limit = 100
 	}
@@ -21,10 +21,6 @@ func (r *LogRepository) ListAnalyticsMetrics(ctx context.Context, in repo.ListAn
 	args := []any{in.PetID}
 	pointWhere := []string{"l.pet_id = $1", "l.deleted_at IS NULL"}
 
-	if in.Source != nil {
-		args = append(args, *in.Source)
-		pointWhere = append(pointWhere, fmt.Sprintf("l.source = $%d", len(args)))
-	}
 	if in.DateFrom != nil {
 		args = append(args, *in.DateFrom)
 		pointWhere = append(pointWhere, fmt.Sprintf("l.occurred_at >= $%d", len(args)))
@@ -180,7 +176,7 @@ func (r *LogRepository) loadUsedLogTypes(ctx context.Context, petID uuid.UUID, m
 	return result, nil
 }
 
-func (r *LogRepository) ListMetricSeries(ctx context.Context, in repo.ListMetricSeriesInput) ([]model.MetricSeriesPoint, *model.MetricSeriesSummary, error) {
+func (r *LogRepository) ListMetricSeries(ctx context.Context, in ports.ListMetricSeriesInput) ([]model.MetricSeriesPoint, *model.MetricSeriesSummary, error) {
 	sort := strings.ToLower(strings.TrimSpace(in.Sort))
 	if sort != "occurred_at_desc" {
 		sort = "occurred_at_asc"
@@ -195,10 +191,6 @@ func (r *LogRepository) ListMetricSeries(ctx context.Context, in repo.ListMetric
 		"l.pet_id = $1",
 		"mv.metric_id = $2",
 		"l.deleted_at IS NULL",
-	}
-	if in.Source != nil {
-		args = append(args, *in.Source)
-		where = append(where, fmt.Sprintf("l.source = $%d", len(args)))
 	}
 	if in.DateFrom != nil {
 		args = append(args, *in.DateFrom)
@@ -219,8 +211,7 @@ func (r *LogRepository) ListMetricSeries(ctx context.Context, in repo.ListMetric
 			mv.value_num,
 			l.id,
 			l.log_type_id,
-			lt.name,
-			l.source
+			lt.name
 		FROM metric_values mv
 		JOIN logs l ON l.id = mv.log_id
 		LEFT JOIN log_types lt ON lt.id = l.log_type_id
@@ -243,7 +234,6 @@ func (r *LogRepository) ListMetricSeries(ctx context.Context, in repo.ListMetric
 			&p.LogID,
 			&p.LogTypeID,
 			&p.LogTypeName,
-			&p.Source,
 		); err != nil {
 			return nil, nil, err
 		}
@@ -296,4 +286,4 @@ func buildMetricSeriesSummary(points []model.MetricSeriesPoint, sort string) *mo
 	return summary
 }
 
-var _ repo.LogRepository = (*LogRepository)(nil)
+var _ ports.LogsRepository = (*LogRepository)(nil)

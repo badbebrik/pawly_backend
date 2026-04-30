@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	petpb "pet/proto/petpb"
+	petpb "pawly/pkg/petpb"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"

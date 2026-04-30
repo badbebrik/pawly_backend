@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"health/internal/model"
-	repo "health/internal/repository"
+	"health/internal/application/ports"
+	"health/internal/domain/model"
 	"strings"
 
 	"github.com/google/uuid"
@@ -16,7 +16,7 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
-func (r *LogRepository) ListLogTypes(ctx context.Context, in repo.ListLogTypesInput) ([]model.LogType, error) {
+func (r *LogRepository) ListLogTypes(ctx context.Context, in ports.ListLogTypesInput) ([]model.LogType, error) {
 	args := []any{in.PetID}
 	where := []string{"(lt.scope = 'SYSTEM' OR lt.pet_id = $1)"}
 
@@ -86,7 +86,7 @@ func (r *LogRepository) ListLogTypes(ctx context.Context, in repo.ListLogTypesIn
 	return items, nil
 }
 
-func (r *LogRepository) CreateLogType(ctx context.Context, in repo.CreateLogTypeInput) (*model.LogType, error) {
+func (r *LogRepository) CreateLogType(ctx context.Context, in ports.CreateLogTypeInput) (*model.LogType, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (r *LogRepository) CreateLogType(ctx context.Context, in repo.CreateLogType
 	_, err = tx.Exec(ctx, query, in.ID, in.PetID, in.Name, in.CreatedByUserID, in.UpdatedByUserID)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (r *LogRepository) CreateLogType(ctx context.Context, in repo.CreateLogType
 	return r.GetLogTypeByID(ctx, in.PetID, in.ID)
 }
 
-func (r *LogRepository) UpdateLogType(ctx context.Context, in repo.UpdateLogTypeInput) (*model.LogType, error) {
+func (r *LogRepository) UpdateLogType(ctx context.Context, in ports.UpdateLogTypeInput) (*model.LogType, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (r *LogRepository) UpdateLogType(ctx context.Context, in repo.UpdateLogType
 	cmd, err := tx.Exec(ctx, query, in.ID, in.PetID, in.RowVersion, in.Name, in.UpdatedByUserID)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -153,12 +153,12 @@ func (r *LogRepository) UpdateLogType(ctx context.Context, in repo.UpdateLogType
 			return nil, err
 		}
 		if !exists {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		if !isCustom {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 	if err := r.replaceLogTypeRequirementsTx(ctx, tx, in.ID, in.MetricRequirements); err != nil {
 		return nil, err
@@ -169,7 +169,7 @@ func (r *LogRepository) UpdateLogType(ctx context.Context, in repo.UpdateLogType
 	return r.GetLogTypeByID(ctx, in.PetID, in.ID)
 }
 
-func (r *LogRepository) ArchiveLogType(ctx context.Context, in repo.ArchiveLogTypeInput) error {
+func (r *LogRepository) ArchiveLogType(ctx context.Context, in ports.ArchiveLogTypeInput) error {
 	const query = `
 		UPDATE log_types
 		SET deleted_at = NOW(),
@@ -193,25 +193,22 @@ func (r *LogRepository) ArchiveLogType(ctx context.Context, in repo.ArchiveLogTy
 			return err
 		}
 		if !exists {
-			return repo.ErrNotFound
+			return ports.ErrNotFound
 		}
 		if !isCustom {
-			return repo.ErrConflict
+			return ports.ErrConflict
 		}
-		return repo.ErrConflict
+		return ports.ErrConflict
 	}
 	return nil
 }
 
-func (r *LogRepository) ListRecentLogTypes(ctx context.Context, petID uuid.UUID, includeHealth bool, limit int) ([]model.LogType, error) {
+func (r *LogRepository) ListRecentLogTypes(ctx context.Context, petID uuid.UUID, limit int) ([]model.LogType, error) {
 	if limit <= 0 {
 		limit = 5
 	}
 	args := []any{petID, limit}
 	where := []string{"l.pet_id = $1", "l.deleted_at IS NULL", "l.log_type_id IS NOT NULL"}
-	if !includeHealth {
-		where = append(where, "l.source = 'USER'")
-	}
 
 	query := fmt.Sprintf(`
 		SELECT
@@ -269,7 +266,7 @@ func (r *LogRepository) ListRecentLogTypes(ctx context.Context, petID uuid.UUID,
 	return items, nil
 }
 
-func (r *LogRepository) ListMetrics(ctx context.Context, in repo.ListMetricsInput) ([]model.Metric, error) {
+func (r *LogRepository) ListMetrics(ctx context.Context, in ports.ListMetricsInput) ([]model.Metric, error) {
 	args := []any{in.PetID}
 	where := []string{"(m.scope = 'SYSTEM' OR m.pet_id = $1)"}
 
@@ -419,14 +416,14 @@ func (r *LogRepository) GetMetricByID(ctx context.Context, petID, metricID uuid.
 	item, err := scanMetric(r.db.QueryRow(ctx, query, metricID, petID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
 	return item, nil
 }
 
-func (r *LogRepository) CreateMetric(ctx context.Context, in repo.CreateMetricInput) (*model.Metric, error) {
+func (r *LogRepository) CreateMetric(ctx context.Context, in ports.CreateMetricInput) (*model.Metric, error) {
 	const query = `
 		INSERT INTO metrics (
 			id, scope, pet_id, code, name, input_kind, unit, min_value, max_value,
@@ -452,14 +449,14 @@ func (r *LogRepository) CreateMetric(ctx context.Context, in repo.CreateMetricIn
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
 	return r.GetMetricByID(ctx, in.PetID, in.ID)
 }
 
-func (r *LogRepository) UpdateMetric(ctx context.Context, in repo.UpdateMetricInput) (*model.Metric, error) {
+func (r *LogRepository) UpdateMetric(ctx context.Context, in ports.UpdateMetricInput) (*model.Metric, error) {
 	const query = `
 		UPDATE metrics
 		SET name = $4,
@@ -489,7 +486,7 @@ func (r *LogRepository) UpdateMetric(ctx context.Context, in repo.UpdateMetricIn
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -499,17 +496,17 @@ func (r *LogRepository) UpdateMetric(ctx context.Context, in repo.UpdateMetricIn
 			return nil, err
 		}
 		if !exists {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		if !isCustom {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 	return r.GetMetricByID(ctx, in.PetID, in.ID)
 }
 
-func (r *LogRepository) ArchiveMetric(ctx context.Context, in repo.ArchiveMetricInput) error {
+func (r *LogRepository) ArchiveMetric(ctx context.Context, in ports.ArchiveMetricInput) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
@@ -521,17 +518,17 @@ func (r *LogRepository) ArchiveMetric(ctx context.Context, in repo.ArchiveMetric
 		return err
 	}
 	if !exists {
-		return repo.ErrNotFound
+		return ports.ErrNotFound
 	}
 	if !isCustom {
-		return repo.ErrConflict
+		return ports.ErrConflict
 	}
 	inUse, err := r.metricUsedInLogTypesTx(ctx, tx, in.PetID, in.ID)
 	if err != nil {
 		return err
 	}
 	if inUse {
-		return repo.ErrConflict
+		return ports.ErrConflict
 	}
 
 	const query = `
@@ -557,12 +554,12 @@ func (r *LogRepository) ArchiveMetric(ctx context.Context, in repo.ArchiveMetric
 			return err
 		}
 		if !exists {
-			return repo.ErrNotFound
+			return ports.ErrNotFound
 		}
 		if !isCustom {
-			return repo.ErrConflict
+			return ports.ErrConflict
 		}
-		return repo.ErrConflict
+		return ports.ErrConflict
 	}
 	return tx.Commit(ctx)
 }
@@ -664,7 +661,7 @@ func (r *LogRepository) loadLogTypeRequirements(ctx context.Context, logTypeIDs 
 	return result, nil
 }
 
-func (r *LogRepository) replaceLogTypeRequirementsTx(ctx context.Context, tx pgx.Tx, logTypeID uuid.UUID, requirements []repo.LogTypeMetricRequirementInput) error {
+func (r *LogRepository) replaceLogTypeRequirementsTx(ctx context.Context, tx pgx.Tx, logTypeID uuid.UUID, requirements []ports.LogTypeMetricRequirementInput) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM log_type_metric_requirements WHERE log_type_id = $1`, logTypeID); err != nil {
 		return err
 	}
@@ -675,7 +672,7 @@ func (r *LogRepository) replaceLogTypeRequirementsTx(ctx context.Context, tx pgx
 		`, logTypeID, requirements[i].MetricID, requirements[i].IsRequired, i)
 		if err != nil {
 			if isUniqueViolation(err) {
-				return repo.ErrConflict
+				return ports.ErrConflict
 			}
 			return err
 		}

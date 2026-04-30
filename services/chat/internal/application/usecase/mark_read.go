@@ -1,8 +1,8 @@
 package usecase
 
 import (
-	"chat/internal/application/ports"
 	"bytes"
+	"chat/internal/application/ports"
 	"context"
 	"errors"
 	"time"
@@ -12,10 +12,10 @@ import (
 
 type MarkRead struct {
 	conversations ports.ConversationRepository
-	participants ports.ParticipantRepository
-	messages     ports.MessageRepository
-	tx           ports.TxManager
-	realtime     ports.RealtimePublisher
+	participants  ports.ParticipantRepository
+	messages      ports.MessageRepository
+	tx            ports.TxManager
+	realtime      ports.RealtimePublisher
 }
 
 func NewMarkRead(
@@ -27,10 +27,10 @@ func NewMarkRead(
 ) *MarkRead {
 	return &MarkRead{
 		conversations: conversations,
-		participants: participants,
+		participants:  participants,
 		messages:      messages,
-		tx:           tx,
-		realtime:     realtime,
+		tx:            tx,
+		realtime:      realtime,
 	}
 }
 
@@ -51,6 +51,7 @@ func (uc *MarkRead) Execute(ctx context.Context, params MarkReadParams) (MarkRea
 	}
 
 	var result MarkReadResult
+	changed := false
 	err := uc.tx.WithinTransaction(ctx, func(txCtx context.Context) error {
 		conversation, err := uc.conversations.GetByID(txCtx, params.ConversationID)
 		if err != nil {
@@ -102,6 +103,7 @@ func (uc *MarkRead) Execute(ctx context.Context, params MarkReadParams) (MarkRea
 		); err != nil {
 			return err
 		}
+		changed = true
 
 		result = MarkReadResult{
 			ConversationID:    params.ConversationID,
@@ -111,6 +113,14 @@ func (uc *MarkRead) Execute(ctx context.Context, params MarkReadParams) (MarkRea
 	})
 	if err != nil {
 		return MarkReadResult{}, err
+	}
+
+	if changed && uc.realtime != nil {
+		_ = uc.realtime.PublishReadUpdated(ctx, ports.ReadUpdatedEvent{
+			ConversationID:    result.ConversationID,
+			UserID:            params.CurrentUserID,
+			LastReadMessageID: result.LastReadMessageID,
+		})
 	}
 
 	return result, nil

@@ -1,7 +1,7 @@
 package pgrepo
 
 import (
-	"acl/internal/repository"
+	"acl/internal/application/ports"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,7 +21,7 @@ func NewInviteRepository(db *pgxpool.Pool) *InviteRepository {
 	return &InviteRepository{db: db}
 }
 
-func (r *InviteRepository) Create(ctx context.Context, in repository.InviteCreateInput) (*repository.InviteView, error) {
+func (r *InviteRepository) Create(ctx context.Context, in ports.InviteCreateInput) (*ports.InviteView, error) {
 	policyRaw, err := json.Marshal(in.Policy)
 	if err != nil {
 		return nil, err
@@ -29,12 +29,12 @@ func (r *InviteRepository) Create(ctx context.Context, in repository.InviteCreat
 
 	const insertQ = `
 		INSERT INTO pet_invites (
-			id, pet_id, created_by_user_id, status, token_hash,
-			token_value, code, expires_at, role_id, policy, base_preset_id,
+			id, pet_id, created_by_user_id, status, token,
+			code, expires_at, role_id, policy,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9, $10, $11,
+			$6, $7, $8, $9,
 			NOW(), NOW()
 		)
 	`
@@ -44,18 +44,16 @@ func (r *InviteRepository) Create(ctx context.Context, in repository.InviteCreat
 		in.PetID,
 		in.CreatedByUserID,
 		in.Status,
-		in.TokenHash,
-		in.TokenValue,
+		in.Token,
 		in.Code,
 		in.ExpiresAt,
 		in.RoleID,
 		policyRaw,
-		in.BasePresetID,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, repository.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -63,13 +61,13 @@ func (r *InviteRepository) Create(ctx context.Context, in repository.InviteCreat
 	return r.getByID(ctx, in.ID)
 }
 
-func (r *InviteRepository) ListActiveByPet(ctx context.Context, petID uuid.UUID) ([]repository.InviteView, error) {
+func (r *InviteRepository) ListActiveByPet(ctx context.Context, petID uuid.UUID) ([]ports.InviteView, error) {
 	const query = `
 		SELECT
-			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
-			i.base_preset_id, i.created_by_user_id, i.created_at,
+			i.id, i.pet_id, i.status, i.token, i.code, i.expires_at,
+			i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
-			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.policy, r.created_by_user_id
 		FROM pet_invites i
 		JOIN roles r ON r.id = i.role_id
 		WHERE i.pet_id = $1
@@ -84,7 +82,7 @@ func (r *InviteRepository) ListActiveByPet(ctx context.Context, petID uuid.UUID)
 	}
 	defer rows.Close()
 
-	items := make([]repository.InviteView, 0)
+	items := make([]ports.InviteView, 0)
 	for rows.Next() {
 		inv, err := scanInviteRow(rows)
 		if err != nil {
@@ -99,39 +97,39 @@ func (r *InviteRepository) ListActiveByPet(ctx context.Context, petID uuid.UUID)
 	return items, nil
 }
 
-func (r *InviteRepository) GetActiveByTokenHash(ctx context.Context, tokenHash string) (*repository.InviteView, error) {
+func (r *InviteRepository) GetActiveByToken(ctx context.Context, token string) (*ports.InviteView, error) {
 	const query = `
 		SELECT
-			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
-			i.base_preset_id, i.created_by_user_id, i.created_at,
+			i.id, i.pet_id, i.status, i.token, i.code, i.expires_at,
+			i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
-			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.policy, r.created_by_user_id
 		FROM pet_invites i
 		JOIN roles r ON r.id = i.role_id
 		WHERE i.status = 'ACTIVE'
 		  AND i.expires_at > NOW()
-		  AND i.token_hash = $1
+		  AND i.token = $1
 		LIMIT 1
 	`
 
-	row := r.db.QueryRow(ctx, query, tokenHash)
+	row := r.db.QueryRow(ctx, query, token)
 	invite, err := scanInviteRow(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
 	return invite, nil
 }
 
-func (r *InviteRepository) getByID(ctx context.Context, id uuid.UUID) (*repository.InviteView, error) {
+func (r *InviteRepository) getByID(ctx context.Context, id uuid.UUID) (*ports.InviteView, error) {
 	const query = `
 		SELECT
-			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
-			i.base_preset_id, i.created_by_user_id, i.created_at,
+			i.id, i.pet_id, i.status, i.token, i.code, i.expires_at,
+			i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
-			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.policy, r.created_by_user_id
 		FROM pet_invites i
 		JOIN roles r ON r.id = i.role_id
 		WHERE i.id = $1
@@ -141,12 +139,12 @@ func (r *InviteRepository) getByID(ctx context.Context, id uuid.UUID) (*reposito
 	return scanInviteRow(row)
 }
 
-func (r *InviteRepository) AcceptByCode(ctx context.Context, code string, acceptedByUserID uuid.UUID) (*repository.MemberView, uuid.UUID, error) {
+func (r *InviteRepository) AcceptByCode(ctx context.Context, code string, acceptedByUserID uuid.UUID) (*ports.MemberView, uuid.UUID, error) {
 	return r.acceptTx(ctx, "code", code, acceptedByUserID)
 }
 
-func (r *InviteRepository) AcceptByTokenHash(ctx context.Context, tokenHash string, acceptedByUserID uuid.UUID) (*repository.MemberView, uuid.UUID, error) {
-	return r.acceptTx(ctx, "token_hash", tokenHash, acceptedByUserID)
+func (r *InviteRepository) AcceptByToken(ctx context.Context, token string, acceptedByUserID uuid.UUID) (*ports.MemberView, uuid.UUID, error) {
+	return r.acceptTx(ctx, "token", token, acceptedByUserID)
 }
 
 func (r *InviteRepository) RevokeByID(ctx context.Context, petID, inviteID uuid.UUID) error {
@@ -168,18 +166,17 @@ func (r *InviteRepository) RevokeByID(ctx context.Context, petID, inviteID uuid.
 			return err
 		}
 		if exists {
-			return repository.ErrConflict
+			return ports.ErrConflict
 		}
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
 
-func (r *InviteRepository) RotateTokenHashByID(ctx context.Context, petID, inviteID uuid.UUID, tokenHash, tokenValue string) (*repository.InviteView, error) {
+func (r *InviteRepository) RotateTokenByID(ctx context.Context, petID, inviteID uuid.UUID, token string) (*ports.InviteView, error) {
 	const updateQ = `
 		UPDATE pet_invites
-		SET token_hash = $3,
-		    token_value = $4,
+		SET token = $3,
 		    updated_at = NOW()
 		WHERE id = $1
 		  AND pet_id = $2
@@ -189,14 +186,14 @@ func (r *InviteRepository) RotateTokenHashByID(ctx context.Context, petID, invit
 	`
 
 	var updatedID uuid.UUID
-	err := r.db.QueryRow(ctx, updateQ, inviteID, petID, tokenHash, tokenValue).Scan(&updatedID)
+	err := r.db.QueryRow(ctx, updateQ, inviteID, petID, token).Scan(&updatedID)
 	if err == nil {
 		return r.getByID(ctx, updatedID)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, repository.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -206,15 +203,15 @@ func (r *InviteRepository) RotateTokenHashByID(ctx context.Context, petID, invit
 		return nil, stateErr
 	}
 	if !exists {
-		return nil, repository.ErrNotFound
+		return nil, ports.ErrNotFound
 	}
 	if state != "ACTIVE" {
-		return nil, repository.ErrConflict
+		return nil, ports.ErrConflict
 	}
-	return nil, repository.ErrConflict
+	return nil, ports.ErrConflict
 }
 
-func (r *InviteRepository) acceptTx(ctx context.Context, key string, value string, acceptedByUserID uuid.UUID) (*repository.MemberView, uuid.UUID, error) {
+func (r *InviteRepository) acceptTx(ctx context.Context, key string, value string, acceptedByUserID uuid.UUID) (*ports.MemberView, uuid.UUID, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, uuid.Nil, err
@@ -229,7 +226,12 @@ func (r *InviteRepository) acceptTx(ctx context.Context, key string, value strin
 		if err := r.markInviteExpired(ctx, tx, invite.ID); err != nil {
 			return nil, uuid.Nil, err
 		}
-		return nil, uuid.Nil, repository.ErrNotFound
+		return nil, uuid.Nil, ports.ErrNotFound
+	}
+	if exists, err := r.activeMembershipExistsForUpdate(ctx, tx, invite.PetID, acceptedByUserID); err != nil {
+		return nil, uuid.Nil, err
+	} else if exists {
+		return nil, uuid.Nil, ports.ErrConflict
 	}
 
 	if err := r.consumeInvite(ctx, tx, invite.ID, acceptedByUserID); err != nil {
@@ -252,13 +254,13 @@ func (r *InviteRepository) acceptTx(ctx context.Context, key string, value strin
 	return member, invite.PetID, nil
 }
 
-func (r *InviteRepository) selectInviteForUpdate(ctx context.Context, tx pgx.Tx, key string, value string) (*repository.InviteView, error) {
+func (r *InviteRepository) selectInviteForUpdate(ctx context.Context, tx pgx.Tx, key string, value string) (*ports.InviteView, error) {
 	query := `
 		SELECT
-			i.id, i.pet_id, i.status, i.token_value, i.code, i.expires_at,
-			i.base_preset_id, i.created_by_user_id, i.created_at,
+			i.id, i.pet_id, i.status, i.token, i.code, i.expires_at,
+			i.created_by_user_id, i.created_at,
 			i.consumed_at, i.consumed_by_user_id, i.policy,
-			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.policy, r.created_by_user_id
 		FROM pet_invites i
 		JOIN roles r ON r.id = i.role_id
 		WHERE i.status = 'ACTIVE'
@@ -266,10 +268,10 @@ func (r *InviteRepository) selectInviteForUpdate(ctx context.Context, tx pgx.Tx,
 	switch key {
 	case "code":
 		query += ` AND i.code = $1`
-	case "token_hash":
-		query += ` AND i.token_hash = $1`
+	case "token":
+		query += ` AND i.token = $1`
 	default:
-		return nil, repository.ErrNotFound
+		return nil, ports.ErrNotFound
 	}
 	query += ` FOR UPDATE`
 
@@ -277,11 +279,31 @@ func (r *InviteRepository) selectInviteForUpdate(ctx context.Context, tx pgx.Tx,
 	invite, err := scanInviteRow(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
 	return invite, nil
+}
+
+func (r *InviteRepository) activeMembershipExistsForUpdate(ctx context.Context, tx pgx.Tx, petID, userID uuid.UUID) (bool, error) {
+	const query = `
+		SELECT 1
+		FROM pet_memberships
+		WHERE pet_id = $1
+		  AND user_id = $2
+		  AND status = 'ACTIVE'
+		FOR UPDATE
+	`
+	var x int
+	err := tx.QueryRow(ctx, query, petID, userID).Scan(&x)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *InviteRepository) markInviteExpired(ctx context.Context, tx pgx.Tx, inviteID uuid.UUID) error {
@@ -307,7 +329,7 @@ func (r *InviteRepository) consumeInvite(ctx context.Context, tx pgx.Tx, inviteI
 	return err
 }
 
-func (r *InviteRepository) upsertMembership(ctx context.Context, tx pgx.Tx, invite *repository.InviteView, acceptedByUserID uuid.UUID) (uuid.UUID, error) {
+func (r *InviteRepository) upsertMembership(ctx context.Context, tx pgx.Tx, invite *ports.InviteView, acceptedByUserID uuid.UUID) (uuid.UUID, error) {
 	policyRaw, err := json.Marshal(invite.Policy)
 	if err != nil {
 		return uuid.Nil, err
@@ -316,19 +338,18 @@ func (r *InviteRepository) upsertMembership(ctx context.Context, tx pgx.Tx, invi
 	memberID := uuid.New()
 	const query = `
 		INSERT INTO pet_memberships (
-			id, pet_id, user_id, status, role_id, policy, base_preset_id,
+			id, pet_id, user_id, status, role_id, policy,
 			is_primary_owner, created_by_user_id, created_at, updated_at,
 			removed_at, removed_by_user_id
 		) VALUES (
-			$1, $2, $3, 'ACTIVE', $4, $5, $6,
-			FALSE, $7, NOW(), NOW(),
+			$1, $2, $3, 'ACTIVE', $4, $5,
+			FALSE, $6, NOW(), NOW(),
 			NULL, NULL
 		)
 		ON CONFLICT (pet_id, user_id) DO UPDATE SET
 			status = 'ACTIVE',
 			role_id = EXCLUDED.role_id,
 			policy = EXCLUDED.policy,
-			base_preset_id = EXCLUDED.base_preset_id,
 			updated_at = NOW(),
 			removed_at = NULL,
 			removed_by_user_id = NULL
@@ -340,7 +361,6 @@ func (r *InviteRepository) upsertMembership(ctx context.Context, tx pgx.Tx, invi
 		acceptedByUserID,
 		invite.Role.ID,
 		policyRaw,
-		invite.BasePresetID,
 		invite.CreatedByUserID,
 	).Scan(&memberID)
 	if err != nil {
@@ -349,11 +369,11 @@ func (r *InviteRepository) upsertMembership(ctx context.Context, tx pgx.Tx, invi
 	return memberID, nil
 }
 
-func (r *InviteRepository) getMemberByID(ctx context.Context, tx pgx.Tx, memberID uuid.UUID) (*repository.MemberView, error) {
+func (r *InviteRepository) getMemberByID(ctx context.Context, tx pgx.Tx, memberID uuid.UUID) (*ports.MemberView, error) {
 	const query = `
 		SELECT
 			m.id, m.pet_id, m.user_id, m.status, m.is_primary_owner, m.policy, m.created_at, m.updated_at,
-			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.created_by_user_id
+			r.id, r.kind, r.pet_id, COALESCE(r.code, ''), r.title, r.policy, r.created_by_user_id
 		FROM pet_memberships m
 		JOIN roles r ON r.id = m.role_id
 		WHERE m.id = $1
@@ -362,7 +382,7 @@ func (r *InviteRepository) getMemberByID(ctx context.Context, tx pgx.Tx, memberI
 	member, err := scanMemberRow(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -373,38 +393,42 @@ type inviteScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanInviteRow(s inviteScanner) (*repository.InviteView, error) {
+func scanInviteRow(s inviteScanner) (*ports.InviteView, error) {
 	var (
-		inv       repository.InviteView
-		role      repository.RoleView
-		policyRaw []byte
+		inv           ports.InviteView
+		role          ports.RoleView
+		invPolicyRaw  []byte
+		rolePolicyRaw []byte
 	)
 
 	err := s.Scan(
 		&inv.ID,
 		&inv.PetID,
 		&inv.Status,
-		&inv.TokenValue,
+		&inv.Token,
 		&inv.Code,
 		&inv.ExpiresAt,
-		&inv.BasePresetID,
 		&inv.CreatedByUserID,
 		&inv.CreatedAt,
 		&inv.ConsumedAt,
 		&inv.ConsumedByUserID,
-		&policyRaw,
+		&invPolicyRaw,
 		&role.ID,
 		&role.Kind,
 		&role.PetID,
 		&role.Code,
 		&role.Title,
+		&rolePolicyRaw,
 		&role.CreatedByUserID,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := json.Unmarshal(policyRaw, &inv.Policy); err != nil {
+	if err := json.Unmarshal(invPolicyRaw, &inv.Policy); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(rolePolicyRaw, &role.Policy); err != nil {
 		return nil, err
 	}
 	inv.Role = role
@@ -449,4 +473,4 @@ func (r *InviteRepository) getInviteStateByIDAndPet(ctx context.Context, inviteI
 	return status, true, nil
 }
 
-var _ repository.InviteRepository = (*InviteRepository)(nil)
+var _ ports.InviteRepository = (*InviteRepository)(nil)

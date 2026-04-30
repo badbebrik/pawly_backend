@@ -5,11 +5,10 @@ import (
 	"auth/internal/transport/http/authz"
 	"auth/internal/transport/http/dto"
 	localemw "auth/internal/transport/http/middleware"
-	"github.com/rs/zerolog/log"
 	"net/http"
 )
 
-func (h *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	tok, err := authz.BearerToken(r)
 	if err != nil {
 		writeServiceError(w, http.StatusUnauthorized, err)
@@ -18,32 +17,31 @@ func (h *AuthHandlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	var req dto.ChangePasswordRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	err = h.uc.ChangePassword.Execute(r.Context(), authuc.ChangePasswordInput{
+	err = h.useCases.ChangePassword.Execute(r.Context(), authuc.ChangePasswordParams{
 		AccessToken: tok,
 		OldPassword: req.OldPassword,
 		NewPassword: req.NewPassword,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("ChangePassword failed")
 		writeChangePasswordError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, dto.ChangePasswordResponse{Status: "ok"})
+	writeJSON(w, http.StatusOK, statusResponse())
 }
 
-func (h *AuthHandlers) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
-	var req dto.PasswordResetRequestRequest
+func (h *Handlers) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
+	var req dto.PasswordResetRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	err := h.uc.PasswordResetRequest.Execute(r.Context(), authuc.PasswordResetRequestInput{
+	err := h.useCases.PasswordResetRequest.Execute(r.Context(), authuc.PasswordResetRequestParams{
 		Email:  req.Email,
 		Locale: localemw.LocaleFromCtx(r.Context(), "ru"),
 	})
@@ -52,17 +50,17 @@ func (h *AuthHandlers) PasswordResetRequest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusOK, dto.PasswordResetRequestResponse{Status: "ok"})
+	writeJSON(w, http.StatusOK, statusResponse())
 }
 
-func (h *AuthHandlers) PasswordResetVerify(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) PasswordResetVerify(w http.ResponseWriter, r *http.Request) {
 	var req dto.PasswordResetVerifyRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	resp, err := h.uc.PasswordResetVerify.Execute(r.Context(), authuc.PasswordResetVerifyInput{
+	resp, err := h.useCases.PasswordResetVerify.Execute(r.Context(), authuc.PasswordResetVerifyParams{
 		Email: req.Email,
 		Code:  req.Code,
 	})
@@ -71,17 +69,17 @@ func (h *AuthHandlers) PasswordResetVerify(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, dto.PasswordResetVerifyResponse{ResetToken: resp.ResetToken})
+	writeJSON(w, http.StatusOK, passwordResetVerifyResponse(resp))
 }
 
-func (h *AuthHandlers) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 	var req dto.PasswordResetConfirmRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	err := h.uc.PasswordResetConfirm.Execute(r.Context(), authuc.PasswordResetConfirmInput{
+	err := h.useCases.PasswordResetConfirm.Execute(r.Context(), authuc.PasswordResetConfirmParams{
 		ResetToken:  req.ResetToken,
 		NewPassword: req.NewPassword,
 	})
@@ -90,5 +88,5 @@ func (h *AuthHandlers) PasswordResetConfirm(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusOK, dto.PasswordResetConfirmResponse{Status: "ok"})
+	writeJSON(w, http.StatusOK, statusResponse())
 }

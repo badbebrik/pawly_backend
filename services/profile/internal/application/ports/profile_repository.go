@@ -2,7 +2,7 @@ package ports
 
 import (
 	"context"
-	"profile/internal/model"
+	"profile/internal/domain/model"
 
 	"github.com/google/uuid"
 )

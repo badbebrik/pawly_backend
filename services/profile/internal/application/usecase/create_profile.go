@@ -2,16 +2,16 @@ package usecase
 
 import (
 	"context"
-	"profile/internal/model"
+	"profile/internal/domain/model"
 
 	"github.com/google/uuid"
 )
 
-type CreateProfileUseCase struct {
+type CreateProfile struct {
 	deps *dependencies
 }
 
-type CreateProfileInput struct {
+type CreateProfileParams struct {
 	UserID    uuid.UUID
 	Locale    *string
 	Timezone  *string
@@ -19,7 +19,7 @@ type CreateProfileInput struct {
 	LastName  *string
 }
 
-func (uc *CreateProfileUseCase) Execute(ctx context.Context, in CreateProfileInput) (*model.Profile, error) {
+func (uc *CreateProfile) Execute(ctx context.Context, in CreateProfileParams) (*model.Profile, error) {
 	if in.UserID == uuid.Nil {
 		return nil, ErrInvalidInput
 	}

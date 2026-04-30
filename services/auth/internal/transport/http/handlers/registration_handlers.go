@@ -4,22 +4,21 @@ import (
 	authuc "auth/internal/application/usecase"
 	"auth/internal/transport/http/dto"
 	localemw "auth/internal/transport/http/middleware"
-	"github.com/rs/zerolog/log"
 	"net/http"
 )
 
-func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterEmailRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "incorrect_format", nil)
+		writeError(w, http.StatusBadRequest, "incorrect_format", "incorrect format")
 		return
 	}
 
-	resp, err := h.uc.RegisterEmail.Execute(r.Context(), authuc.RegisterEmailInput{
+	resp, err := h.useCases.RegisterEmail.Execute(r.Context(), authuc.RegisterEmailParams{
 		Email:     req.Email,
 		Password:  req.Password,
 		FirstName: req.FirstName,
@@ -28,69 +27,48 @@ func (h *AuthHandlers) RegisterEmail(w http.ResponseWriter, r *http.Request) {
 		Timezone:  req.Timezone,
 	})
 	if err != nil {
-		log.Warn().Err(err).Msg("RegisterEmail failed")
 		writeRegisterEmailError(w, err, resp)
 		return
 	}
 
-	var out dto.RegisterEmailResponse
-	out.UserID = resp.UserID
-	out.Verification.Channel = resp.Verification.Channel
-	out.Verification.CodeTTLSeconds = resp.Verification.CodeTTLSeconds
-	out.Verification.CanResendInSeconds = resp.Verification.CanResendInSeconds
-
-	writeJSON(w, http.StatusCreated, out)
+	writeJSON(w, http.StatusCreated, registerEmailResponse(resp))
 }
 
-func (h *AuthHandlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req dto.VerifyEmailRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	resp, err := h.uc.VerifyEmail.Execute(r.Context(), authuc.VerifyEmailInput{
+	resp, err := h.useCases.VerifyEmail.Execute(r.Context(), authuc.VerifyEmailParams{
 		Email:  req.Email,
 		Code:   req.Code,
 		Locale: localemw.LocaleFromCtx(r.Context(), "ru"),
 	})
 	if err != nil {
-		log.Error().Err(err).Str("email", req.Email).Msg("VerifyEmail failed")
 		writeVerifyEmailError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, dto.VerifyEmailResponse{
-		UserID:       resp.UserID,
-		AccessToken:  resp.AccessToken,
-		RefreshToken: resp.RefreshToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    resp.ExpiresIn,
-	})
+	writeJSON(w, http.StatusOK, sessionResponse(resp.UserID, resp.AccessToken, resp.RefreshToken, resp.ExpiresIn))
 }
 
-func (h *AuthHandlers) ResendEmailVerification(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) ResendEmailVerification(w http.ResponseWriter, r *http.Request) {
 	var req dto.ResendEmailVerificationRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", nil)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	resp, err := h.uc.ResendEmailVerification.Execute(r.Context(), authuc.ResendEmailVerificationInput{
+	resp, err := h.useCases.ResendEmailVerification.Execute(r.Context(), authuc.ResendEmailVerificationParams{
 		Email:  req.Email,
 		Locale: localemw.LocaleFromCtx(r.Context(), "ru"),
 	})
 	if err != nil {
-		log.Error().Err(err).Str("email", req.Email).Msg("ResendEmailVerification failed")
 		writeResendEmailVerificationError(w, err, resp)
 		return
 	}
 
-	var out dto.ResendEmailVerificationResponse
-	out.UserID = resp.UserID
-	out.Verification.Channel = resp.Verification.Channel
-	out.Verification.CodeTTLSeconds = resp.Verification.CodeTTLSeconds
-	out.Verification.CanResendInSeconds = resp.Verification.CanResendInSeconds
-
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, resendEmailVerificationResponse(resp))
 }

@@ -9,11 +9,14 @@ CREATE TABLE scheduled_items (
     title TEXT NOT NULL,
     note TEXT NULL,
     starts_at TIMESTAMPTZ NOT NULL,
+    push_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    remind_offset_minutes INT NULL,
     recurrence_rule TEXT NULL CHECK (
         recurrence_rule IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY')
     ),
     recurrence_interval INT NULL,
     recurrence_until TIMESTAMPTZ NULL,
+    occurrences_generated_until TIMESTAMPTZ NULL,
     row_version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by_user_id UUID NOT NULL,
@@ -24,10 +27,16 @@ CREATE TABLE scheduled_items (
     CONSTRAINT scheduled_items_recurrence_interval_check CHECK (
         recurrence_interval IS NULL OR recurrence_interval > 0
     ),
+    CONSTRAINT scheduled_items_remind_offset_minutes_check CHECK (
+        remind_offset_minutes IS NULL OR remind_offset_minutes >= 0
+    ),
     CONSTRAINT scheduled_items_recurrence_invariant CHECK (
         (recurrence_rule IS NULL AND recurrence_interval IS NULL AND recurrence_until IS NULL)
         OR
         (recurrence_rule IS NOT NULL AND recurrence_interval IS NOT NULL)
+    ),
+    CONSTRAINT scheduled_items_recurrence_until_check CHECK (
+        recurrence_until IS NULL OR recurrence_until >= starts_at
     )
 );
 
@@ -42,6 +51,10 @@ ON scheduled_items (source_type, source_id)
 WHERE deleted_at IS NULL
   AND source_id IS NOT NULL
   AND source_type IN ('VET_VISIT', 'VACCINATION', 'PROCEDURE');
+
+CREATE INDEX idx_scheduled_items_push_enabled_active
+ON scheduled_items (push_enabled, starts_at ASC, id ASC)
+WHERE deleted_at IS NULL;
 
 CREATE TABLE scheduled_item_occurrences (
     id UUID PRIMARY KEY,

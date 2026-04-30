@@ -1,24 +1,17 @@
 package profileclient
 
 import (
+	"acl/internal/application/ports"
 	"context"
 	"fmt"
 	"strings"
 
-	profilepb "acl/proto/profilepb"
+	profilepb "pawly/pkg/profilepb"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
-
-type ProfileBrief struct {
-	UserID            uuid.UUID
-	FirstName         *string
-	LastName          *string
-	DisplayName       *string
-	AvatarDownloadURL *string
-}
 
 type Client struct {
 	conn   *grpc.ClientConn
@@ -47,12 +40,12 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) BatchProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([]ProfileBrief, []uuid.UUID, error) {
+func (c *Client) BatchProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([]ports.ProfileBrief, []uuid.UUID, error) {
 	if c == nil || c.client == nil {
 		return nil, nil, fmt.Errorf("profile client is not configured")
 	}
 	if len(userIDs) == 0 {
-		return []ProfileBrief{}, []uuid.UUID{}, nil
+		return []ports.ProfileBrief{}, []uuid.UUID{}, nil
 	}
 
 	rawUserIDs := make([]string, 0, len(userIDs))
@@ -67,14 +60,14 @@ func (c *Client) BatchProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([
 		return nil, nil, err
 	}
 
-	items := make([]ProfileBrief, 0, len(resp.GetItems()))
+	items := make([]ports.ProfileBrief, 0, len(resp.GetItems()))
 	for i := range resp.GetItems() {
 		item := resp.GetItems()[i]
 		userID, err := uuid.Parse(item.GetUserId())
 		if err != nil {
 			continue
 		}
-		items = append(items, ProfileBrief{
+		items = append(items, ports.ProfileBrief{
 			UserID:            userID,
 			FirstName:         optionalString(item.GetFirstName()),
 			LastName:          optionalString(item.GetLastName()),
@@ -94,6 +87,8 @@ func (c *Client) BatchProfilesBrief(ctx context.Context, userIDs []uuid.UUID) ([
 
 	return items, notFound, nil
 }
+
+var _ ports.ProfileClient = (*Client)(nil)
 
 func optionalString(raw string) *string {
 	trimmed := strings.TrimSpace(raw)

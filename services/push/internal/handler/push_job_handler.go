@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"push/internal/model"
-	"push/internal/service"
+	pushuc "push/internal/application/usecase"
+	"push/internal/domain/model"
 	"push/internal/sender"
 
 	"github.com/google/uuid"
@@ -16,12 +16,12 @@ import (
 )
 
 type PushJobHandler struct {
-	svc    *service.Service
-	sender sender.Sender
+	useCases *pushuc.Set
+	sender   sender.Sender
 }
 
-func NewPushJobHandler(svc *service.Service, pushSender sender.Sender) *PushJobHandler {
-	return &PushJobHandler{svc: svc, sender: pushSender}
+func NewPushJobHandler(useCases *pushuc.Set, pushSender sender.Sender) *PushJobHandler {
+	return &PushJobHandler{useCases: useCases, sender: pushSender}
 }
 
 func (h *PushJobHandler) Handle(ctx context.Context, msg amqp091.Delivery) {
@@ -53,7 +53,7 @@ func (h *PushJobHandler) Handle(ctx context.Context, msg amqp091.Delivery) {
 			continue
 		}
 
-		items, err := h.svc.ListEligibleDeviceTokens(ctx, service.ListEligibleDeviceTokensParams{
+		items, err := h.useCases.ListEligibleDeviceTokens(ctx, pushuc.ListEligibleDeviceTokensParams{
 			UserID: userID,
 			PetID:  petID,
 		})
@@ -73,7 +73,7 @@ func (h *PushJobHandler) Handle(ctx context.Context, msg amqp091.Delivery) {
 						Str("user_id", item.UserID.String()).
 						Str("device_id", item.DeviceID).
 						Msg("invalid push token, deleting device token")
-					_ = h.svc.DeleteDeviceToken(ctx, service.DeleteDeviceTokenParams{
+					_ = h.useCases.DeleteDeviceToken(ctx, pushuc.DeleteDeviceTokenParams{
 						UserID:   item.UserID,
 						DeviceID: item.DeviceID,
 					})

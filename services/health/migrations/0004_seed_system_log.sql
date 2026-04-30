@@ -1,0 +1,162 @@
+-- +goose Up
+INSERT INTO metrics (
+    id, scope, pet_id, code, name, input_kind, unit, min_value, max_value, created_at, updated_at
+) VALUES
+    ('10000000-0000-0000-0000-000000000001', 'SYSTEM', NULL, 'WEIGHT', 'Вес', 'NUMERIC', 'kg', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000002', 'SYSTEM', NULL, 'TEMPERATURE', 'Температура', 'NUMERIC', 'c', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000003', 'SYSTEM', NULL, 'HEART_RATE', 'Пульс', 'NUMERIC', 'bpm', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000004', 'SYSTEM', NULL, 'RESPIRATORY_RATE', 'Частота дыхания', 'NUMERIC', 'rpm', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000005', 'SYSTEM', NULL, 'WATER_AMOUNT', 'Объем выпитой воды', 'NUMERIC', 'ml', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000006', 'SYSTEM', NULL, 'FOOD_AMOUNT', 'Объем съеденного', 'NUMERIC', 'g', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000007', 'SYSTEM', NULL, 'SLEEP_HOURS', 'Длительность сна', 'NUMERIC', 'h', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000008', 'SYSTEM', NULL, 'ACTIVITY_SCORE', 'Активность', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000009', 'SYSTEM', NULL, 'PAIN_SCORE', 'Боль', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000010', 'SYSTEM', NULL, 'STOOL_SCORE', 'Стул', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000011', 'SYSTEM', NULL, 'URINATION_COUNT', 'Количество мочеиспусканий', 'NUMERIC', 'count', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000012', 'SYSTEM', NULL, 'VOMIT_COUNT', 'Количество эпизодов рвоты', 'NUMERIC', 'count', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000013', 'SYSTEM', NULL, 'COUGH_COUNT', 'Количество эпизодов кашля', 'NUMERIC', 'count', NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000014', 'SYSTEM', NULL, 'ITCH_SCORE', 'Зуд', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000015', 'SYSTEM', NULL, 'LETHARGY_SCORE', 'Вялость', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000016', 'SYSTEM', NULL, 'DIARRHEA_PRESENT', 'Диарея', 'BOOLEAN', NULL, NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000017', 'SYSTEM', NULL, 'VOMITING_PRESENT', 'Рвота', 'BOOLEAN', NULL, NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000018', 'SYSTEM', NULL, 'COUGH_PRESENT', 'Кашель', 'BOOLEAN', NULL, NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000019', 'SYSTEM', NULL, 'ITCHING_PRESENT', 'Зуд есть', 'BOOLEAN', NULL, NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000020', 'SYSTEM', NULL, 'PAIN_PRESENT', 'Признаки боли', 'BOOLEAN', NULL, NULL, NULL, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000021', 'SYSTEM', NULL, 'APPETITE_SCORE', 'Аппетит', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000022', 'SYSTEM', NULL, 'WATER_INTAKE_SCORE', 'Питье', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000023', 'SYSTEM', NULL, 'MOOD_SCORE', 'Настроение', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000024', 'SYSTEM', NULL, 'ANXIETY_SCORE', 'Тревожность', 'SCALE', NULL, 1, 5, NOW(), NOW()),
+    ('10000000-0000-0000-0000-000000000025', 'SYSTEM', NULL, 'MEDICATION_GIVEN', 'Лекарство принято', 'BOOLEAN', NULL, NULL, NULL, NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+INSERT INTO log_types (
+    id, scope, pet_id, code, name, created_at, updated_at
+) VALUES
+    ('20000000-0000-0000-0000-000000000001', 'SYSTEM', NULL, 'WEIGHING', 'Взвешивание', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000002', 'SYSTEM', NULL, 'TEMPERATURE', 'Температура', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000003', 'SYSTEM', NULL, 'APPETITE', 'Аппетит', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000004', 'SYSTEM', NULL, 'WATER_INTAKE', 'Питье', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000005', 'SYSTEM', NULL, 'ACTIVITY', 'Активность', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000006', 'SYSTEM', NULL, 'SLEEP', 'Сон', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000007', 'SYSTEM', NULL, 'STOOL', 'Стул', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000008', 'SYSTEM', NULL, 'URINATION', 'Мочеиспускание', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000009', 'SYSTEM', NULL, 'VOMITING', 'Рвота', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000010', 'SYSTEM', NULL, 'COUGHING', 'Кашель', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000011', 'SYSTEM', NULL, 'ITCHING', 'Зуд', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000012', 'SYSTEM', NULL, 'PAIN_EPISODE', 'Болевой эпизод', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000013', 'SYSTEM', NULL, 'SEIZURE_EPISODE', 'Судорожный эпизод', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000014', 'SYSTEM', NULL, 'MEDICATION', 'Прием лекарства', NOW(), NOW()),
+    ('20000000-0000-0000-0000-000000000015', 'SYSTEM', NULL, 'RESPIRATORY_SYMPTOMS', 'Дыхательные симптомы', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+INSERT INTO log_type_metric_requirements (
+    log_type_id, metric_id, is_required, sort_order, created_at
+)
+SELECT lt.id, m.id, v.is_required, v.sort_order, NOW()
+FROM (
+    VALUES
+        ('WEIGHING', 'WEIGHT', TRUE, 0),
+        ('TEMPERATURE', 'TEMPERATURE', TRUE, 0),
+        ('APPETITE', 'APPETITE_SCORE', TRUE, 0),
+        ('APPETITE', 'FOOD_AMOUNT', FALSE, 1),
+        ('WATER_INTAKE', 'WATER_INTAKE_SCORE', FALSE, 0),
+        ('WATER_INTAKE', 'WATER_AMOUNT', FALSE, 1),
+        ('ACTIVITY', 'ACTIVITY_SCORE', TRUE, 0),
+        ('ACTIVITY', 'LETHARGY_SCORE', FALSE, 1),
+        ('ACTIVITY', 'MOOD_SCORE', FALSE, 2),
+        ('ACTIVITY', 'ANXIETY_SCORE', FALSE, 3),
+        ('SLEEP', 'SLEEP_HOURS', FALSE, 0),
+        ('STOOL', 'STOOL_SCORE', TRUE, 0),
+        ('STOOL', 'DIARRHEA_PRESENT', FALSE, 1),
+        ('URINATION', 'URINATION_COUNT', FALSE, 0),
+        ('VOMITING', 'VOMITING_PRESENT', TRUE, 0),
+        ('VOMITING', 'VOMIT_COUNT', FALSE, 1),
+        ('COUGHING', 'COUGH_PRESENT', TRUE, 0),
+        ('COUGHING', 'COUGH_COUNT', FALSE, 1),
+        ('ITCHING', 'ITCHING_PRESENT', TRUE, 0),
+        ('ITCHING', 'ITCH_SCORE', FALSE, 1),
+        ('PAIN_EPISODE', 'PAIN_PRESENT', TRUE, 0),
+        ('PAIN_EPISODE', 'PAIN_SCORE', FALSE, 1),
+        ('MEDICATION', 'MEDICATION_GIVEN', TRUE, 0),
+        ('RESPIRATORY_SYMPTOMS', 'RESPIRATORY_RATE', FALSE, 0),
+        ('RESPIRATORY_SYMPTOMS', 'COUGH_PRESENT', FALSE, 1),
+        ('RESPIRATORY_SYMPTOMS', 'COUGH_COUNT', FALSE, 2)
+) AS v(log_type_code, metric_code, is_required, sort_order)
+JOIN log_types lt ON lt.scope = 'SYSTEM' AND lt.code = v.log_type_code
+JOIN metrics m ON m.scope = 'SYSTEM' AND m.code = v.metric_code
+ON CONFLICT DO NOTHING;
+
+-- +goose Down
+DELETE FROM log_type_metric_requirements
+WHERE log_type_id IN (
+    SELECT id
+    FROM log_types
+    WHERE scope = 'SYSTEM'
+      AND code IN (
+          'WEIGHING',
+          'TEMPERATURE',
+          'APPETITE',
+          'WATER_INTAKE',
+          'ACTIVITY',
+          'SLEEP',
+          'STOOL',
+          'URINATION',
+          'VOMITING',
+          'COUGHING',
+          'ITCHING',
+          'PAIN_EPISODE',
+          'SEIZURE_EPISODE',
+          'MEDICATION',
+          'RESPIRATORY_SYMPTOMS'
+      )
+);
+
+DELETE FROM log_types
+WHERE scope = 'SYSTEM'
+  AND code IN (
+      'WEIGHING',
+      'TEMPERATURE',
+      'APPETITE',
+      'WATER_INTAKE',
+      'ACTIVITY',
+      'SLEEP',
+      'STOOL',
+      'URINATION',
+      'VOMITING',
+      'COUGHING',
+      'ITCHING',
+      'PAIN_EPISODE',
+      'SEIZURE_EPISODE',
+      'MEDICATION',
+      'RESPIRATORY_SYMPTOMS'
+  );
+
+DELETE FROM metrics
+WHERE scope = 'SYSTEM'
+  AND code IN (
+      'WEIGHT',
+      'TEMPERATURE',
+      'HEART_RATE',
+      'RESPIRATORY_RATE',
+      'WATER_AMOUNT',
+      'FOOD_AMOUNT',
+      'SLEEP_HOURS',
+      'ACTIVITY_SCORE',
+      'PAIN_SCORE',
+      'STOOL_SCORE',
+      'URINATION_COUNT',
+      'VOMIT_COUNT',
+      'COUGH_COUNT',
+      'ITCH_SCORE',
+      'LETHARGY_SCORE',
+      'DIARRHEA_PRESENT',
+      'VOMITING_PRESENT',
+      'COUGH_PRESENT',
+      'ITCHING_PRESENT',
+      'PAIN_PRESENT',
+      'APPETITE_SCORE',
+      'WATER_INTAKE_SCORE',
+      'MOOD_SCORE',
+      'ANXIETY_SCORE',
+      'MEDICATION_GIVEN'
+  );

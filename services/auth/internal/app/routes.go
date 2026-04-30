@@ -3,39 +3,41 @@ package app
 import (
 	"auth/internal/transport/http/handlers"
 	appmw "auth/internal/transport/http/middleware"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 )
 
 func (a *App) setupRoutes() http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
+	r.Use(chimw.RequestID)
+	r.Use(chimw.RealIP)
+	r.Use(appmw.RequestLogger)
+	r.Use(chimw.Recoverer)
 	r.Use(appmw.WithLocale("ru"))
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		_, err := w.Write([]byte(`{"status":"ok"}`))
-		if err != nil {
-			return
-		}
+	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-	authHandlers := handlers.NewAuthHandlers(a.AuthSvc)
 
-	r.Post("/auth/register/email", authHandlers.RegisterEmail)
-	r.Post("/auth/verification/email/resend", authHandlers.ResendEmailVerification)
-	r.Post("/auth/verify/email", authHandlers.VerifyEmail)
-	r.Post("/auth/login/email", authHandlers.LoginEmail)
-	r.Post("/auth/login/oauth", authHandlers.LoginOAuth)
-	r.Post("/auth/logout", authHandlers.Logout)
-	r.Post("/auth/logout-all", authHandlers.LogoutAll)
-	r.Post("/auth/password/change", authHandlers.ChangePassword)
-	r.Post("/auth/refresh", authHandlers.Refresh)
-	r.Post("/auth/password/reset/request", authHandlers.PasswordResetRequest)
-	r.Post("/auth/password/reset/verify", authHandlers.PasswordResetVerify)
-	r.Post("/auth/password/reset/confirm", authHandlers.PasswordResetConfirm)
+	h := handlers.New(a.useCases)
+
+	r.Post("/v1/auth/email:register", h.RegisterEmail)
+	r.Post("/v1/auth/email-verification:resend", h.ResendEmailVerification)
+	r.Post("/v1/auth/email-verification:verify", h.VerifyEmail)
+	r.Post("/v1/auth/sessions:login-email", h.LoginEmail)
+	r.Post("/v1/auth/sessions:login-oauth", h.LoginOAuth)
+	r.Post("/v1/auth/sessions:revoke", h.Logout)
+	r.Post("/v1/auth/sessions:revoke-all", h.LogoutAll)
+	r.Post("/v1/auth/sessions:refresh", h.Refresh)
+	r.Post("/v1/auth/password:change", h.ChangePassword)
+	r.Post("/v1/auth/password-reset:request", h.PasswordResetRequest)
+	r.Post("/v1/auth/password-reset:verify", h.PasswordResetVerify)
+	r.Post("/v1/auth/password-reset:confirm", h.PasswordResetConfirm)
 
 	return r
 }

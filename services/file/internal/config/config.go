@@ -1,6 +1,8 @@
 package config
 
-import "os"
+import (
+	"pawly/pkg/configenv"
+)
 
 type Config struct {
 	AppPort string
@@ -15,46 +17,66 @@ type Config struct {
 	MinioAccessKey    string
 	MinioSecretKey    string
 	MinioBucket       string
-	MinioUseSSL       string
+	MinioUseSSL       bool
 	MinioRegion       string
 	MinioBucketLookup string
 
 	MinioPublicEndpoint   string
-	MinioSkipBucketEnsure string
+	MinioSkipBucketEnsure bool
 
-	UploadURLTTLSeconds   string
-	DownloadURLTTLSeconds string
-	CleanupIntervalSeconds string
-	CleanupBatchSize       string
+	UploadURLTTLSeconds    int
+	DownloadURLTTLSeconds  int
+	CleanupIntervalSeconds int
+	CleanupBatchSize       int
 }
 
-func Load() *Config {
-	return &Config{
-		AppPort:               getEnv("APP_PORT", ""),
-		PostgresUser:          getEnv("POSTGRES_USER", ""),
-		PostgresPassword:      getEnv("POSTGRES_PASSWORD", ""),
-		PostgresDB:            getEnv("POSTGRES_DB", ""),
-		PostgresHost:          getEnv("POSTGRES_HOST", ""),
-		PostgresPort:          getEnv("POSTGRES_PORT", ""),
-		MinioEndpoint:         getEnv("MINIO_ENDPOINT", ""),
-		MinioAccessKey:        getEnv("MINIO_ACCESS_KEY", ""),
-		MinioSecretKey:        getEnv("MINIO_SECRET_KEY", ""),
-		MinioBucket:           getEnv("MINIO_BUCKET", ""),
-		MinioUseSSL:           getEnv("MINIO_USE_SSL", ""),
-		MinioRegion:           getEnv("MINIO_REGION", "us-east-1"),
-		MinioBucketLookup:     getEnv("MINIO_BUCKET_LOOKUP", "path"),
-		MinioPublicEndpoint:   getEnv("MINIO_PUBLIC_ENDPOINT", ""),
-		MinioSkipBucketEnsure: getEnv("MINIO_SKIP_BUCKET_ENSURE", "false"),
-		UploadURLTTLSeconds:   getEnv("UPLOAD_URL_TTL_SECONDS", ""),
-		DownloadURLTTLSeconds: getEnv("DOWNLOAD_URL_TTL_SECONDS", ""),
-		CleanupIntervalSeconds: getEnv("CLEANUP_INTERVAL_SECONDS", "300"),
-		CleanupBatchSize:       getEnv("CLEANUP_BATCH_SIZE", "100"),
+func Load() (*Config, error) {
+	minioUseSSL, err := configenv.Bool("MINIO_USE_SSL", false)
+	if err != nil {
+		return nil, err
 	}
-}
+	minioSkipBucketEnsure, err := configenv.Bool("MINIO_SKIP_BUCKET_ENSURE", false)
+	if err != nil {
+		return nil, err
+	}
+	uploadURLTTLSeconds, err := configenv.Int("UPLOAD_URL_TTL_SECONDS", 900)
+	if err != nil {
+		return nil, err
+	}
+	downloadURLTTLSeconds, err := configenv.Int("DOWNLOAD_URL_TTL_SECONDS", 900)
+	if err != nil {
+		return nil, err
+	}
+	cleanupIntervalSeconds, err := configenv.Int("CLEANUP_INTERVAL_SECONDS", 300)
+	if err != nil {
+		return nil, err
+	}
+	cleanupBatchSize, err := configenv.Int("CLEANUP_BATCH_SIZE", 100)
+	if err != nil {
+		return nil, err
+	}
 
-func getEnv(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		return v
+	cfg := &Config{
+		AppPort:                configenv.String("APP_PORT", ""),
+		PostgresUser:           configenv.String("POSTGRES_USER", ""),
+		PostgresPassword:       configenv.String("POSTGRES_PASSWORD", ""),
+		PostgresDB:             configenv.String("POSTGRES_DB", ""),
+		PostgresHost:           configenv.String("POSTGRES_HOST", ""),
+		PostgresPort:           configenv.String("POSTGRES_PORT", ""),
+		MinioEndpoint:          configenv.String("MINIO_ENDPOINT", ""),
+		MinioAccessKey:         configenv.String("MINIO_ACCESS_KEY", ""),
+		MinioSecretKey:         configenv.String("MINIO_SECRET_KEY", ""),
+		MinioBucket:            configenv.String("MINIO_BUCKET", ""),
+		MinioUseSSL:            minioUseSSL,
+		MinioRegion:            configenv.String("MINIO_REGION", "us-east-1"),
+		MinioBucketLookup:      configenv.String("MINIO_BUCKET_LOOKUP", "path"),
+		MinioPublicEndpoint:    configenv.String("MINIO_PUBLIC_ENDPOINT", ""),
+		MinioSkipBucketEnsure:  minioSkipBucketEnsure,
+		UploadURLTTLSeconds:    uploadURLTTLSeconds,
+		DownloadURLTTLSeconds:  downloadURLTTLSeconds,
+		CleanupIntervalSeconds: cleanupIntervalSeconds,
+		CleanupBatchSize:       cleanupBatchSize,
 	}
-	return fallback
+
+	return cfg, nil
 }

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"health/internal/model"
-	repo "health/internal/repository"
+	ports "health/internal/application/ports"
+	"health/internal/domain/model"
 	"strings"
 
 	"github.com/google/uuid"
@@ -32,7 +32,6 @@ func (r *LogRepository) GetLog(ctx context.Context, petID, logID uuid.UUID) (*mo
 			lt.name,
 			lt.scope,
 			l.description,
-			l.source,
 			rel.right_entity_type,
 			rel.right_entity_id,
 			l.row_version,
@@ -66,7 +65,6 @@ func (r *LogRepository) GetLog(ctx context.Context, petID, logID uuid.UUID) (*mo
 		&logItem.LogTypeName,
 		&logItem.LogTypeScope,
 		&logItem.Description,
-		&logItem.Source,
 		&logItem.RelatedEntityType,
 		&logItem.RelatedEntityID,
 		&logItem.RowVersion,
@@ -79,7 +77,7 @@ func (r *LogRepository) GetLog(ctx context.Context, petID, logID uuid.UUID) (*mo
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -98,7 +96,7 @@ func (r *LogRepository) GetLog(ctx context.Context, petID, logID uuid.UUID) (*mo
 	return &logItem, nil
 }
 
-func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (repo.ListLogsOutput, error) {
+func (r *LogRepository) ListLogs(ctx context.Context, in ports.ListLogsQuery) (ports.ListLogsResult, error) {
 	if in.Limit <= 0 {
 		in.Limit = 30
 	}
@@ -140,10 +138,6 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 		args = append(args, in.TypeIDs)
 		where = append(where, fmt.Sprintf("l.log_type_id = ANY($%d::uuid[])", len(args)))
 	}
-	if in.Source != nil {
-		args = append(args, *in.Source)
-		where = append(where, fmt.Sprintf("l.source = $%d", len(args)))
-	}
 	if in.HasAttachments != nil {
 		if *in.HasAttachments {
 			where = append(where, "EXISTS (SELECT 1 FROM attachment_refs ar WHERE ar.entity_type = 'LOG' AND ar.entity_id = l.id)")
@@ -174,7 +168,6 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 			lt.name,
 			lt.scope,
 			l.description,
-			l.source,
 			rel.right_entity_type,
 			rel.right_entity_id,
 			l.row_version,
@@ -204,7 +197,7 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return repo.ListLogsOutput{}, err
+		return ports.ListLogsResult{}, err
 	}
 	defer rows.Close()
 
@@ -220,7 +213,6 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 			&item.LogTypeName,
 			&item.LogTypeScope,
 			&description,
-			&item.Source,
 			&item.RelatedEntityType,
 			&item.RelatedEntityID,
 			&item.RowVersion,
@@ -228,27 +220,30 @@ func (r *LogRepository) ListLogs(ctx context.Context, in repo.ListLogsInput) (re
 			&item.AttachmentsCount,
 		)
 		if err != nil {
-			return repo.ListLogsOutput{}, err
+			return ports.ListLogsResult{}, err
 		}
 		item.DescriptionPreview = preview(description, 160)
 		item.HasAttachments = item.AttachmentsCount > 0
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		return repo.ListLogsOutput{}, err
+		return ports.ListLogsResult{}, err
 	}
 
-	out := repo.ListLogsOutput{Items: items}
+	out := ports.ListLogsResult{Items: items}
 	if len(items) > in.Limit {
 		next := items[in.Limit]
-		out.NextCursor = &repo.ListCursor{OccurredAt: next.OccurredAt, ID: next.ID}
+		out.NextCursor = &ports.LogCursor{OccurredAt: next.OccurredAt, ID: next.ID}
 		out.Items = items[:in.Limit]
+	}
+	if err := r.attachMetricValuesToLogList(ctx, out.Items); err != nil {
+		return ports.ListLogsResult{}, err
 	}
 
 	return out, nil
 }
 
-func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (*model.Log, error) {
+func (r *LogRepository) CreateLog(ctx context.Context, in ports.CreateLogInput) (*model.Log, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -262,7 +257,6 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 			occurred_at,
 			log_type_id,
 			description,
-			source,
 			row_version,
 			created_at,
 			created_by_user_id,
@@ -275,12 +269,11 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 			$3,
 			$4,
 			$5,
-			$6,
 			1,
 			NOW(),
-			$7,
+			$6,
 			NOW(),
-			$8
+			$7
 		)
 	`
 	_, err = tx.Exec(ctx, insertQuery,
@@ -289,13 +282,12 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 		in.OccurredAt,
 		in.LogTypeID,
 		in.Description,
-		in.Source,
 		in.CreatedByUserID,
 		in.UpdatedByUserID,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -314,7 +306,7 @@ func (r *LogRepository) CreateLog(ctx context.Context, in repo.CreateLogInput) (
 	return r.GetLog(ctx, in.PetID, in.ID)
 }
 
-func (r *LogRepository) UpdateLog(ctx context.Context, in repo.UpdateLogInput) (*model.Log, error) {
+func (r *LogRepository) UpdateLog(ctx context.Context, in ports.UpdateLogInput) (*model.Log, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -332,7 +324,6 @@ func (r *LogRepository) UpdateLog(ctx context.Context, in repo.UpdateLogInput) (
 		WHERE id = $1
 		  AND pet_id = $2
 		  AND row_version = $3
-		  AND source = 'USER'
 		  AND deleted_at IS NULL
 	`
 
@@ -347,23 +338,20 @@ func (r *LogRepository) UpdateLog(ctx context.Context, in repo.UpdateLogInput) (
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
 
 	if cmd.RowsAffected() == 0 {
-		exists, source, err := r.lookupLogStateTx(ctx, tx, in.PetID, in.ID)
+		exists, err := r.logExistsTx(ctx, tx, in.PetID, in.ID)
 		if err != nil {
 			return nil, err
 		}
 		if !exists {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
-		if source != "USER" {
-			return nil, repo.ErrConflict
-		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 
 	if err := r.replaceMetricValuesTx(ctx, tx, in.ID, in.MetricValues); err != nil {
@@ -380,7 +368,7 @@ func (r *LogRepository) UpdateLog(ctx context.Context, in repo.UpdateLogInput) (
 	return r.GetLog(ctx, in.PetID, in.ID)
 }
 
-func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInput) error {
+func (r *LogRepository) SoftDeleteLog(ctx context.Context, in ports.DeleteLogInput) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
@@ -397,7 +385,6 @@ func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInpu
 		WHERE id = $1
 		  AND pet_id = $2
 		  AND row_version = $3
-		  AND source = 'USER'
 		  AND deleted_at IS NULL
 	`
 	cmd, err := tx.Exec(ctx, query, in.ID, in.PetID, in.RowVersion, in.DeletedByUserID)
@@ -405,17 +392,14 @@ func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInpu
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		exists, source, err := r.lookupLogStateTx(ctx, tx, in.PetID, in.ID)
+		exists, err := r.logExistsTx(ctx, tx, in.PetID, in.ID)
 		if err != nil {
 			return err
 		}
 		if !exists {
-			return repo.ErrNotFound
+			return ports.ErrNotFound
 		}
-		if source != "USER" {
-			return repo.ErrConflict
-		}
-		return repo.ErrConflict
+		return ports.ErrConflict
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, in.ID); err != nil {
 		return err
@@ -429,112 +413,6 @@ func (r *LogRepository) SoftDeleteLog(ctx context.Context, in repo.DeleteLogInpu
 			(right_entity_type = 'LOG' AND right_entity_id = $2)
 		  )
 	`, in.PetID, in.ID); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-func (r *LogRepository) UpsertHealthEntityLog(ctx context.Context, in repo.UpsertHealthEntityLogInput) error {
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	logID, err := r.lookupHealthEntityLogIDTx(ctx, tx, in.PetID, in.EntityType, in.EntityID)
-	if err != nil {
-		return err
-	}
-	if logID != nil {
-		_, err := tx.Exec(ctx, `
-			UPDATE logs
-			SET occurred_at = $3,
-			    description = $4,
-			    updated_at = NOW(),
-			    updated_by_user_id = $5,
-			    row_version = row_version + 1
-			WHERE id = $1
-			  AND pet_id = $2
-			  AND source = 'HEALTH'
-			  AND deleted_at IS NULL
-		`, *logID, in.PetID, in.OccurredAt, in.Description, in.UpdatedByUserID)
-		if err != nil {
-			return err
-		}
-		return tx.Commit(ctx)
-	}
-
-	newLogID := uuid.New()
-	_, err = tx.Exec(ctx, `
-		INSERT INTO logs (
-			id, pet_id, occurred_at, log_type_id, description, source, row_version,
-			created_at, created_by_user_id, updated_at, updated_by_user_id
-		) VALUES (
-			$1, $2, $3, NULL, $4, 'HEALTH', 1,
-			NOW(), $5, NOW(), $6
-		)
-	`, newLogID, in.PetID, in.OccurredAt, in.Description, in.CreatedByUserID, in.UpdatedByUserID)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return repo.ErrConflict
-		}
-		return err
-	}
-	_, err = tx.Exec(ctx, `
-		INSERT INTO entity_relations (
-			id, pet_id, left_entity_type, left_entity_id, right_entity_type, right_entity_id, created_by_user_id, created_at
-		) VALUES ($1, $2, 'LOG', $3, $4, $5, $6, NOW())
-	`, uuid.New(), in.PetID, newLogID, in.EntityType, in.EntityID, in.CreatedByUserID)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return repo.ErrConflict
-		}
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-func (r *LogRepository) DeleteHealthEntityLog(ctx context.Context, in repo.DeleteHealthEntityLogInput) error {
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	logID, err := r.lookupHealthEntityLogIDTx(ctx, tx, in.PetID, in.EntityType, in.EntityID)
-	if err != nil {
-		return err
-	}
-	if logID == nil {
-		return tx.Commit(ctx)
-	}
-	_, err = tx.Exec(ctx, `
-		UPDATE logs
-		SET deleted_at = NOW(),
-		    deleted_by_user_id = $3,
-		    updated_at = NOW(),
-		    updated_by_user_id = $3,
-		    row_version = row_version + 1
-		WHERE id = $1
-		  AND pet_id = $2
-		  AND source = 'HEALTH'
-		  AND deleted_at IS NULL
-	`, *logID, in.PetID, in.DeletedByUserID)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, *logID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM entity_relations
-		WHERE pet_id = $1
-		  AND (
-			(left_entity_type = 'LOG' AND left_entity_id = $2)
-			OR
-			(right_entity_type = 'LOG' AND right_entity_id = $2)
-		  )
-	`, in.PetID, *logID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -563,7 +441,7 @@ func (r *LogRepository) GetLogTypeByID(ctx context.Context, petID uuid.UUID, log
 	item, err := scanLogTypeBase(r.db.QueryRow(ctx, query, logTypeID, petID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -618,7 +496,7 @@ func (r *LogRepository) GetMetricsByIDs(ctx context.Context, petID uuid.UUID, me
 	return result, nil
 }
 
-func (r *LogRepository) replaceMetricValuesTx(ctx context.Context, tx pgx.Tx, logID uuid.UUID, values []repo.LogMetricValueInput) error {
+func (r *LogRepository) replaceMetricValuesTx(ctx context.Context, tx pgx.Tx, logID uuid.UUID, values []ports.LogMetricValueInput) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM metric_values WHERE log_id = $1`, logID); err != nil {
 		return err
 	}
@@ -630,7 +508,7 @@ func (r *LogRepository) replaceMetricValuesTx(ctx context.Context, tx pgx.Tx, lo
 		_, err := tx.Exec(ctx, query, uuid.New(), logID, values[i].MetricID, values[i].ValueNum)
 		if err != nil {
 			if isUniqueViolation(err) {
-				return repo.ErrConflict
+				return ports.ErrConflict
 			}
 			return err
 		}
@@ -638,7 +516,7 @@ func (r *LogRepository) replaceMetricValuesTx(ctx context.Context, tx pgx.Tx, lo
 	return nil
 }
 
-func (r *LogRepository) replaceAttachmentsTx(ctx context.Context, tx pgx.Tx, petID, logID uuid.UUID, attachments []repo.AttachmentInput, addedBy uuid.UUID) error {
+func (r *LogRepository) replaceAttachmentsTx(ctx context.Context, tx pgx.Tx, petID, logID uuid.UUID, attachments []ports.AttachmentInput, addedBy uuid.UUID) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM attachment_refs WHERE entity_type = 'LOG' AND entity_id = $1`, logID); err != nil {
 		return err
 	}
@@ -651,7 +529,7 @@ func (r *LogRepository) replaceAttachmentsTx(ctx context.Context, tx pgx.Tx, pet
 		_, err := tx.Exec(ctx, query, uuid.New(), petID, logID, att.FileID, att.FileName, att.FileType, addedBy)
 		if err != nil {
 			if isUniqueViolation(err) {
-				return repo.ErrConflict
+				return ports.ErrConflict
 			}
 			return err
 		}
@@ -699,6 +577,58 @@ func (r *LogRepository) listMetricValues(ctx context.Context, logID uuid.UUID) (
 	return items, nil
 }
 
+func (r *LogRepository) attachMetricValuesToLogList(ctx context.Context, items []model.LogListItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	logIDs := make([]uuid.UUID, 0, len(items))
+	indexByLogID := make(map[uuid.UUID]int, len(items))
+	for i := range items {
+		logIDs = append(logIDs, items[i].ID)
+		indexByLogID[items[i].ID] = i
+	}
+
+	const query = `
+		SELECT
+			mv.log_id,
+			mv.metric_id,
+			m.name,
+			m.input_kind,
+			m.unit,
+			mv.value_num
+		FROM metric_values mv
+		JOIN metrics m ON m.id = mv.metric_id
+		WHERE mv.log_id = ANY($1::uuid[])
+		ORDER BY mv.log_id ASC, mv.created_at ASC
+	`
+	rows, err := r.db.Query(ctx, query, logIDs)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var logID uuid.UUID
+		var value model.LogMetricValue
+		if err := rows.Scan(
+			&logID,
+			&value.MetricID,
+			&value.MetricName,
+			&value.InputKind,
+			&value.Unit,
+			&value.ValueNum,
+		); err != nil {
+			return err
+		}
+		idx, ok := indexByLogID[logID]
+		if !ok {
+			continue
+		}
+		items[idx].MetricValues = append(items[idx].MetricValues, value)
+	}
+	return rows.Err()
+}
+
 func (r *LogRepository) listAttachments(ctx context.Context, logID uuid.UUID) ([]model.LogAttachment, error) {
 	const query = `
 		SELECT
@@ -740,64 +670,21 @@ func (r *LogRepository) listAttachments(ctx context.Context, logID uuid.UUID) ([
 	return items, nil
 }
 
-func (r *LogRepository) lookupLogState(ctx context.Context, petID, logID uuid.UUID) (bool, string, error) {
+func (r *LogRepository) logExistsTx(ctx context.Context, tx pgx.Tx, petID, logID uuid.UUID) (bool, error) {
 	const query = `
-		SELECT source
+		SELECT 1
 		FROM logs
 		WHERE id = $1 AND pet_id = $2 AND deleted_at IS NULL
 	`
-	var source string
-	err := r.db.QueryRow(ctx, query, logID, petID).Scan(&source)
+	var exists int
+	err := tx.QueryRow(ctx, query, logID, petID).Scan(&exists)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return false, "", nil
+			return false, nil
 		}
-		return false, "", err
+		return false, err
 	}
-	return true, source, nil
-}
-
-func (r *LogRepository) lookupLogStateTx(ctx context.Context, tx pgx.Tx, petID, logID uuid.UUID) (bool, string, error) {
-	const query = `
-		SELECT source
-		FROM logs
-		WHERE id = $1 AND pet_id = $2 AND deleted_at IS NULL
-	`
-	var source string
-	err := tx.QueryRow(ctx, query, logID, petID).Scan(&source)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, "", nil
-		}
-		return false, "", err
-	}
-	return true, source, nil
-}
-
-func (r *LogRepository) lookupHealthEntityLogIDTx(ctx context.Context, tx pgx.Tx, petID uuid.UUID, entityType string, entityID uuid.UUID) (*uuid.UUID, error) {
-	const query = `
-		SELECT l.id
-		FROM entity_relations rel
-		JOIN logs l ON l.id = rel.left_entity_id
-		WHERE rel.pet_id = $1
-		  AND rel.left_entity_type = 'LOG'
-		  AND rel.right_entity_type = $2
-		  AND rel.right_entity_id = $3
-		  AND l.pet_id = $1
-		  AND l.source = 'HEALTH'
-		  AND l.deleted_at IS NULL
-		ORDER BY l.created_at ASC, l.id ASC
-		LIMIT 1
-	`
-	var logID uuid.UUID
-	err := tx.QueryRow(ctx, query, petID, entityType, entityID).Scan(&logID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &logID, nil
+	return true, nil
 }
 
 func preview(v *string, limit int) *string {
@@ -821,4 +708,4 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
-var _ repo.LogRepository = (*LogRepository)(nil)
+var _ ports.LogsRepository = (*LogRepository)(nil)

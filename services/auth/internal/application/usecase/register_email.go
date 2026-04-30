@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 )
 
-type RegisterEmailUseCase struct {
+type RegisterEmail struct {
 	deps *dependencies
 }
 
-type RegisterEmailInput struct {
+type RegisterEmailParams struct {
 	Email     string
 	Password  string
 	FirstName string
@@ -23,7 +23,7 @@ type RegisterEmailInput struct {
 	Timezone  string
 }
 
-type RegisterEmailOutput struct {
+type RegisterEmailResult struct {
 	UserID       uuid.UUID
 	Verification struct {
 		Channel            string
@@ -32,7 +32,7 @@ type RegisterEmailOutput struct {
 	}
 }
 
-func (uc *RegisterEmailUseCase) Execute(ctx context.Context, in RegisterEmailInput) (*RegisterEmailOutput, error) {
+func (uc *RegisterEmail) Execute(ctx context.Context, in RegisterEmailParams) (*RegisterEmailResult, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) {
 		return nil, ErrIncorrectFormat
@@ -64,7 +64,7 @@ func (uc *RegisterEmailUseCase) Execute(ctx context.Context, in RegisterEmailInp
 			return nil, err
 		}
 		meta, sendErr := sendRegistrationVerification(ctx, uc.deps, existing.ID, email, in.FirstName, in.LastName, locale)
-		out := &RegisterEmailOutput{UserID: existing.ID}
+		out := &RegisterEmailResult{UserID: existing.ID}
 		out.Verification.Channel = meta.Channel
 		out.Verification.CodeTTLSeconds = meta.CodeTTLSeconds
 		out.Verification.CanResendInSeconds = meta.CanResendInSeconds
@@ -95,7 +95,7 @@ func (uc *RegisterEmailUseCase) Execute(ctx context.Context, in RegisterEmailInp
 	}
 
 	meta, sendErr := sendRegistrationVerification(ctx, uc.deps, user.ID, email, in.FirstName, in.LastName, locale)
-	out := &RegisterEmailOutput{UserID: user.ID}
+	out := &RegisterEmailResult{UserID: user.ID}
 	out.Verification.Channel = meta.Channel
 	out.Verification.CodeTTLSeconds = meta.CodeTTLSeconds
 	out.Verification.CanResendInSeconds = meta.CanResendInSeconds

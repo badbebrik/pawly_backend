@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	rtcore "chat/internal/realtime"
 	"context"
 	"fmt"
 	"time"
@@ -8,24 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
-
-type PresenceChange struct {
-	ConversationID uuid.UUID
-	UserID         uuid.UUID
-	IsInChat       bool
-}
-
-type PresenceReader interface {
-	IsUserInConversation(ctx context.Context, conversationID, userID uuid.UUID) (bool, error)
-}
-
-type PresenceTracker interface {
-	PresenceReader
-	SetInConversation(ctx context.Context, conversationID, userID, clientID uuid.UUID, ttl time.Duration) (PresenceChange, bool, error)
-	RefreshConversations(ctx context.Context, userID, clientID uuid.UUID, conversationIDs []uuid.UUID, ttl time.Duration) error
-	ClearInConversation(ctx context.Context, conversationID, userID, clientID uuid.UUID) (PresenceChange, bool, error)
-	ClearClient(ctx context.Context, userID, clientID uuid.UUID, conversationIDs []uuid.UUID) ([]PresenceChange, error)
-}
 
 type RedisPresenceTracker struct {
 	client *redis.Client
@@ -49,7 +32,7 @@ func (t *RedisPresenceTracker) IsUserInConversation(ctx context.Context, convers
 	return count > 0, nil
 }
 
-func (t *RedisPresenceTracker) SetInConversation(ctx context.Context, conversationID, userID, clientID uuid.UUID, ttl time.Duration) (PresenceChange, bool, error) {
+func (t *RedisPresenceTracker) SetInConversation(ctx context.Context, conversationID, userID, clientID uuid.UUID, ttl time.Duration) (rtcore.PresenceChange, bool, error) {
 	return t.updatePresence(ctx, conversationID, userID, clientID, ttl, true)
 }
 
@@ -68,16 +51,16 @@ func (t *RedisPresenceTracker) RefreshConversations(ctx context.Context, userID,
 	return err
 }
 
-func (t *RedisPresenceTracker) ClearInConversation(ctx context.Context, conversationID, userID, clientID uuid.UUID) (PresenceChange, bool, error) {
+func (t *RedisPresenceTracker) ClearInConversation(ctx context.Context, conversationID, userID, clientID uuid.UUID) (rtcore.PresenceChange, bool, error) {
 	return t.updatePresence(ctx, conversationID, userID, clientID, 0, false)
 }
 
-func (t *RedisPresenceTracker) ClearClient(ctx context.Context, userID, clientID uuid.UUID, conversationIDs []uuid.UUID) ([]PresenceChange, error) {
+func (t *RedisPresenceTracker) ClearClient(ctx context.Context, userID, clientID uuid.UUID, conversationIDs []uuid.UUID) ([]rtcore.PresenceChange, error) {
 	if len(conversationIDs) == 0 {
 		return nil, nil
 	}
 
-	changes := make([]PresenceChange, 0, len(conversationIDs))
+	changes := make([]rtcore.PresenceChange, 0, len(conversationIDs))
 	for _, conversationID := range conversationIDs {
 		change, changed, err := t.ClearInConversation(ctx, conversationID, userID, clientID)
 		if err != nil {
@@ -95,13 +78,13 @@ func (t *RedisPresenceTracker) updatePresence(
 	conversationID, userID, clientID uuid.UUID,
 	ttl time.Duration,
 	present bool,
-) (PresenceChange, bool, error) {
+) (rtcore.PresenceChange, bool, error) {
 	key := t.key(conversationID, userID)
 	now := time.Now().UTC()
 	nowScore := float64(now.Unix())
 	before, err := t.hasActiveMembers(ctx, key, nowScore)
 	if err != nil {
-		return PresenceChange{}, false, err
+		return rtcore.PresenceChange{}, false, err
 	}
 
 	if present {
@@ -109,20 +92,20 @@ func (t *RedisPresenceTracker) updatePresence(
 			Score:  float64(now.Add(ttl).Unix()),
 			Member: clientID.String(),
 		}).Err(); err != nil {
-			return PresenceChange{}, false, err
+			return rtcore.PresenceChange{}, false, err
 		}
 	} else {
 		if err := t.client.ZRem(ctx, key, clientID.String()).Err(); err != nil {
-			return PresenceChange{}, false, err
+			return rtcore.PresenceChange{}, false, err
 		}
 	}
 
 	after, err := t.hasActiveMembers(ctx, key, nowScore)
 	if err != nil {
-		return PresenceChange{}, false, err
+		return rtcore.PresenceChange{}, false, err
 	}
 
-	change := PresenceChange{
+	change := rtcore.PresenceChange{
 		ConversationID: conversationID,
 		UserID:         userID,
 		IsInChat:       after,

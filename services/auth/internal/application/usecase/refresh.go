@@ -10,22 +10,22 @@ import (
 	"github.com/google/uuid"
 )
 
-type RefreshUseCase struct {
+type Refresh struct {
 	deps *dependencies
 }
 
-type RefreshInput struct {
+type RefreshParams struct {
 	RefreshToken string
 }
 
-type RefreshOutput struct {
+type RefreshResult struct {
 	UserID       uuid.UUID
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int
 }
 
-func (uc *RefreshUseCase) Execute(ctx context.Context, in RefreshInput) (*RefreshOutput, error) {
+func (uc *Refresh) Execute(ctx context.Context, in RefreshParams) (*RefreshResult, error) {
 	if in.RefreshToken == "" {
 		return nil, ErrIncorrectFormat
 	}
@@ -79,7 +79,7 @@ func (uc *RefreshUseCase) Execute(ctx context.Context, in RefreshInput) (*Refres
 		return nil, err
 	}
 
-	return &RefreshOutput{
+	return &RefreshResult{
 		UserID:       userID,
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,

@@ -1,8 +1,10 @@
 package pgrepo
 
 import (
-	"acl/internal/repository"
+	"acl/internal/application/ports"
+	"acl/internal/domain/model"
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -19,34 +21,39 @@ func NewRoleRepository(db *pgxpool.Pool) *RoleRepository {
 	return &RoleRepository{db: db}
 }
 
-func (r *RoleRepository) GetByID(ctx context.Context, id uuid.UUID) (*repository.RoleView, error) {
+func (r *RoleRepository) GetByID(ctx context.Context, id uuid.UUID) (*ports.RoleView, error) {
 	const query = `
-		SELECT id, kind, pet_id, COALESCE(code, ''), title, created_by_user_id
+		SELECT id, kind, pet_id, COALESCE(code, ''), title, policy, created_by_user_id
 		FROM roles
 		WHERE id = $1
 	`
 
-	var role repository.RoleView
+	var role ports.RoleView
+	var policyRaw []byte
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&role.ID,
 		&role.Kind,
 		&role.PetID,
 		&role.Code,
 		&role.Title,
+		&policyRaw,
 		&role.CreatedByUserID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
+		return nil, err
+	}
+	if err := json.Unmarshal(policyRaw, &role.Policy); err != nil {
 		return nil, err
 	}
 	return &role, nil
 }
 
-func (r *RoleRepository) ListSystemAndPetRoles(ctx context.Context, petID uuid.UUID) ([]repository.RoleView, error) {
+func (r *RoleRepository) ListSystemAndPetRoles(ctx context.Context, petID uuid.UUID) ([]ports.RoleView, error) {
 	const query = `
-		SELECT id, kind, pet_id, COALESCE(code, ''), title, created_by_user_id
+		SELECT id, kind, pet_id, COALESCE(code, ''), title, policy, created_by_user_id
 		FROM roles
 		WHERE kind = 'SYSTEM'
 		   OR (kind = 'CUSTOM' AND pet_id = $1)
@@ -59,10 +66,14 @@ func (r *RoleRepository) ListSystemAndPetRoles(ctx context.Context, petID uuid.U
 	}
 	defer rows.Close()
 
-	items := make([]repository.RoleView, 0)
+	items := make([]ports.RoleView, 0)
 	for rows.Next() {
-		var role repository.RoleView
-		if err := rows.Scan(&role.ID, &role.Kind, &role.PetID, &role.Code, &role.Title, &role.CreatedByUserID); err != nil {
+		var role ports.RoleView
+		var policyRaw []byte
+		if err := rows.Scan(&role.ID, &role.Kind, &role.PetID, &role.Code, &role.Title, &policyRaw, &role.CreatedByUserID); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(policyRaw, &role.Policy); err != nil {
 			return nil, err
 		}
 		items = append(items, role)
@@ -74,21 +85,52 @@ func (r *RoleRepository) ListSystemAndPetRoles(ctx context.Context, petID uuid.U
 	return items, nil
 }
 
-func (r *RoleRepository) CreateCustom(ctx context.Context, petID uuid.UUID, title string, createdByUserID uuid.UUID) (*repository.RoleView, error) {
+func (r *RoleRepository) CreateCustom(ctx context.Context, petID uuid.UUID, title string, policy model.Policy, createdByUserID uuid.UUID) (*ports.RoleView, error) {
+	policyRaw, err := json.Marshal(policy)
+	if err != nil {
+		return nil, err
+	}
 	roleID := uuid.New()
 	const query = `
 		INSERT INTO roles (
-			id, kind, pet_id, code, title, created_by_user_id, created_at, updated_at
+			id, kind, pet_id, code, title, policy, created_by_user_id, created_at, updated_at
 		) VALUES (
-			$1, 'CUSTOM', $2, NULL, $3, $4, NOW(), NOW()
+			$1, 'CUSTOM', $2, NULL, $3, $4, $5, NOW(), NOW()
 		)
 	`
-	_, err := r.db.Exec(ctx, query, roleID, petID, title, createdByUserID)
+	_, err = r.db.Exec(ctx, query, roleID, petID, title, policyRaw, createdByUserID)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repository.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
+	}
+	return r.GetByID(ctx, roleID)
+}
+
+func (r *RoleRepository) UpdateCustom(ctx context.Context, petID, roleID uuid.UUID, title string, policy model.Policy) (*ports.RoleView, error) {
+	policyRaw, err := json.Marshal(policy)
+	if err != nil {
+		return nil, err
+	}
+	const query = `
+		UPDATE roles
+		SET title = $3,
+		    policy = $4,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND pet_id = $2
+		  AND kind = 'CUSTOM'
+	`
+	cmd, err := r.db.Exec(ctx, query, roleID, petID, title, policyRaw)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ports.ErrConflict
+		}
+		return nil, err
+	}
+	if cmd.RowsAffected() == 0 {
+		return nil, ports.ErrNotFound
 	}
 	return r.GetByID(ctx, roleID)
 }
@@ -104,10 +146,17 @@ func (r *RoleRepository) DeleteCustomIfUnused(ctx context.Context, petID, roleID
 		),
 		role_usage AS (
 			SELECT EXISTS(
-				SELECT 1 FROM pet_memberships m WHERE m.role_id = $1
+				SELECT 1
+				FROM pet_memberships m
+				WHERE m.role_id = $1
+				  AND m.status = 'ACTIVE'
 			) AS in_memberships,
 			EXISTS(
-				SELECT 1 FROM pet_invites i WHERE i.role_id = $1
+				SELECT 1
+				FROM pet_invites i
+				WHERE i.role_id = $1
+				  AND i.status = 'ACTIVE'
+				  AND i.expires_at > NOW()
 			) AS in_invites
 		)
 		DELETE FROM roles
@@ -124,9 +173,9 @@ func (r *RoleRepository) DeleteCustomIfUnused(ctx context.Context, petID, roleID
 			return err
 		}
 		if exists {
-			return repository.ErrConflict
+			return ports.ErrConflict
 		}
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -156,4 +205,4 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
-var _ repository.RoleRepository = (*RoleRepository)(nil)
+var _ ports.RoleRepository = (*RoleRepository)(nil)

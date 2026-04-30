@@ -7,7 +7,10 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("load chat config: %v", err)
+	}
 
 	application, err := app.New(cfg)
 	if err != nil {

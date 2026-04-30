@@ -11,25 +11,25 @@ import (
 	"github.com/google/uuid"
 )
 
-type LoginOAuthUseCase struct {
+type LoginOAuth struct {
 	deps *dependencies
 }
 
-type LoginOAuthInput struct {
+type LoginOAuthParams struct {
 	Provider string
 	IDToken  string
 	Locale   string
 	Timezone string
 }
 
-type LoginOAuthOutput struct {
+type LoginOAuthResult struct {
 	UserID       uuid.UUID
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int
 }
 
-func (uc *LoginOAuthUseCase) Execute(ctx context.Context, in LoginOAuthInput) (*LoginOAuthOutput, error) {
+func (uc *LoginOAuth) Execute(ctx context.Context, in LoginOAuthParams) (*LoginOAuthResult, error) {
 	provider := strings.ToLower(strings.TrimSpace(in.Provider))
 	if provider != "google" || strings.TrimSpace(in.IDToken) == "" {
 		return nil, ErrIncorrectFormat
@@ -126,7 +126,7 @@ func (uc *LoginOAuthUseCase) Execute(ctx context.Context, in LoginOAuthInput) (*
 		return nil, err
 	}
 
-	return &LoginOAuthOutput{
+	return &LoginOAuthResult{
 		UserID:       user.ID,
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,

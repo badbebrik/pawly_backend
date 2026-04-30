@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"health/internal/application/ports"
 	"net/http"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ func (c *Client) ListPetUserIDs(ctx context.Context, petID uuid.UUID) ([]uuid.UU
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/internal/v1/acl/list-members-for-pet", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/internal/v1/acl:list-members-for-pet", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -80,3 +81,5 @@ func (c *Client) ListPetUserIDs(ctx context.Context, petID uuid.UUID) ([]uuid.UU
 	}
 	return items, nil
 }
+
+var _ ports.PetUserLister = (*Client)(nil)

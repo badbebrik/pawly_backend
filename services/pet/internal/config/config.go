@@ -1,9 +1,9 @@
 package config
 
-import "os"
+import "pawly/pkg/configenv"
 
 type Config struct {
-	AppPort string
+	AppPort     string
 	AppGRPCPort string
 
 	PostgresUser     string
@@ -16,23 +16,16 @@ type Config struct {
 	FileGRPCAddr string
 }
 
-func Load() *Config {
+func Load() (*Config, error) {
 	return &Config{
-		AppPort:          getEnv("APP_PORT", "8085"),
-		AppGRPCPort:      getEnv("APP_GRPC_PORT", "50059"),
-		PostgresUser:     getEnv("POSTGRES_USER", "pet_user"),
-		PostgresPassword: getEnv("POSTGRES_PASSWORD", "supersecret"),
-		PostgresDB:       getEnv("POSTGRES_DB", "pet_db"),
-		PostgresHost:     getEnv("POSTGRES_HOST", "localhost"),
-		PostgresPort:     getEnv("POSTGRES_PORT", "5435"),
-		ACLGRPCAddr:      getEnv("ACL_GRPC_ADDR", "localhost:50057"),
-		FileGRPCAddr:     getEnv("FILE_GRPC_ADDR", "localhost:50056"),
-	}
-}
-
-func getEnv(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		return v
-	}
-	return fallback
+		AppPort:          configenv.String("APP_PORT", "8085"),
+		AppGRPCPort:      configenv.String("APP_GRPC_PORT", "50059"),
+		PostgresUser:     configenv.String("POSTGRES_USER", "pet_user"),
+		PostgresPassword: configenv.String("POSTGRES_PASSWORD", "supersecret"),
+		PostgresDB:       configenv.String("POSTGRES_DB", "pet_db"),
+		PostgresHost:     configenv.String("POSTGRES_HOST", "localhost"),
+		PostgresPort:     configenv.String("POSTGRES_PORT", "5435"),
+		ACLGRPCAddr:      configenv.String("ACL_GRPC_ADDR", "localhost:50057"),
+		FileGRPCAddr:     configenv.String("FILE_GRPC_ADDR", "localhost:50056"),
+	}, nil
 }

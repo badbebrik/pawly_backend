@@ -10,17 +10,17 @@ import (
 	"github.com/google/uuid"
 )
 
-type ChangePasswordUseCase struct {
+type ChangePassword struct {
 	deps *dependencies
 }
 
-type ChangePasswordInput struct {
+type ChangePasswordParams struct {
 	AccessToken string
 	OldPassword string
 	NewPassword string
 }
 
-func (uc *ChangePasswordUseCase) Execute(ctx context.Context, in ChangePasswordInput) error {
+func (uc *ChangePassword) Execute(ctx context.Context, in ChangePasswordParams) error {
 	if in.AccessToken == "" || in.OldPassword == "" {
 		return ErrIncorrectFormat
 	}

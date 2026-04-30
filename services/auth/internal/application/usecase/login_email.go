@@ -10,24 +10,24 @@ import (
 	"github.com/google/uuid"
 )
 
-type LoginEmailUseCase struct {
+type LoginEmail struct {
 	deps *dependencies
 }
 
-type LoginEmailInput struct {
+type LoginEmailParams struct {
 	Email    string
 	Password string
 	Locale   string
 }
 
-type LoginEmailOutput struct {
+type LoginEmailResult struct {
 	UserID       uuid.UUID
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int
 }
 
-func (uc *LoginEmailUseCase) Execute(ctx context.Context, in LoginEmailInput) (*LoginEmailOutput, error) {
+func (uc *LoginEmail) Execute(ctx context.Context, in LoginEmailParams) (*LoginEmailResult, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) || in.Password == "" {
 		return nil, ErrIncorrectFormat
@@ -62,7 +62,7 @@ func (uc *LoginEmailUseCase) Execute(ctx context.Context, in LoginEmailInput) (*
 		return nil, err
 	}
 
-	return &LoginEmailOutput{
+	return &LoginEmailResult{
 		UserID:       user.ID,
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,

@@ -5,6 +5,7 @@ CREATE TABLE roles (
     pet_id UUID NULL,
     code TEXT NULL,
     title TEXT NOT NULL,
+    policy JSONB NOT NULL,
     created_by_user_id UUID NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -21,26 +22,13 @@ CREATE UNIQUE INDEX roles_custom_pet_title ON roles (pet_id, title) WHERE kind =
 CREATE INDEX idx_roles_pet_id ON roles (pet_id);
 CREATE INDEX idx_roles_kind ON roles (kind);
 
-CREATE TABLE permission_presets (
-    id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
-    role_code TEXT NULL,
-    policy JSONB NOT NULL,
-    is_system BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_presets_role_code ON permission_presets (role_code);
-
 CREATE TABLE pet_memberships (
     id UUID PRIMARY KEY,
     pet_id UUID NOT NULL,
     user_id UUID NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'REMOVED')),
-    role_id UUID NOT NULL REFERENCES roles(id),
+    role_id UUID NOT NULL,
     policy JSONB NOT NULL,
-    base_preset_id UUID NULL REFERENCES permission_presets(id),
     is_primary_owner BOOLEAN NOT NULL DEFAULT FALSE,
     created_by_user_id UUID NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -69,20 +57,17 @@ CREATE TABLE pet_invites (
     pet_id UUID NOT NULL,
     created_by_user_id UUID NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'CONSUMED', 'EXPIRED', 'REVOKED')),
-    token_hash TEXT NOT NULL,
-    token_value TEXT NOT NULL,
+    token TEXT NOT NULL,
     code TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ NULL,
     consumed_by_user_id UUID NULL,
-    role_id UUID NOT NULL REFERENCES roles(id),
+    role_id UUID NOT NULL,
     policy JSONB NOT NULL,
-    base_preset_id UUID NULL REFERENCES permission_presets(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT invites_code_format CHECK (code ~ '^[0-9]{6}$'),
-    CONSTRAINT invites_token_value_non_empty CHECK (length(token_value) > 0),
     CONSTRAINT invites_consumed_fields CHECK (
         (status = 'CONSUMED' AND consumed_at IS NOT NULL AND consumed_by_user_id IS NOT NULL)
         OR
@@ -90,27 +75,20 @@ CREATE TABLE pet_invites (
     )
 );
 
-CREATE UNIQUE INDEX invites_token_hash ON pet_invites (token_hash);
+CREATE UNIQUE INDEX invites_token ON pet_invites (token);
 CREATE UNIQUE INDEX invites_active_code ON pet_invites (code) WHERE status = 'ACTIVE';
 CREATE INDEX invites_pet_status ON pet_invites (pet_id, status);
 CREATE INDEX invites_expires_at ON pet_invites (expires_at);
 CREATE INDEX invites_created_by ON pet_invites (created_by_user_id);
 
-INSERT INTO roles (id, kind, pet_id, code, title, created_by_user_id, created_at, updated_at)
-VALUES
-    ('a1111111-1111-1111-1111-111111111111', 'SYSTEM', NULL, 'OWNER',     'Owner',      NULL, NOW(), NOW()),
-    ('a2222222-2222-2222-2222-222222222222', 'SYSTEM', NULL, 'CO_OWNER',  'Co-owner',   NULL, NOW(), NOW()),
-    ('a3333333-3333-3333-3333-333333333333', 'SYSTEM', NULL, 'VET',       'Veterinary', NULL, NOW(), NOW()),
-    ('a4444444-4444-4444-4444-444444444444', 'SYSTEM', NULL, 'PETSITTER', 'Petsitter',  NULL, NOW(), NOW()),
-    ('a5555555-5555-5555-5555-555555555555', 'SYSTEM', NULL, 'WALKER',    'Walker',     NULL, NOW(), NOW())
-ON CONFLICT DO NOTHING;
-
-INSERT INTO permission_presets (id, name, role_code, policy, is_system, created_at, updated_at)
+INSERT INTO roles (id, kind, pet_id, code, title, policy, created_by_user_id, created_at, updated_at)
 VALUES
     (
-      'b1111111-1111-1111-1111-111111111111',
-      'Owner Full Access',
+      'a1111111-1111-1111-1111-111111111111',
+      'SYSTEM',
+      NULL,
       'OWNER',
+      'Owner',
       '{
         "pet_read": true,
         "pet_write": true,
@@ -118,19 +96,19 @@ VALUES
         "log_write": true,
         "health_read": true,
         "health_write": true,
-        "task_read": true,
-        "task_write": true,
         "members_read": true,
         "members_write": true
       }'::jsonb,
-      TRUE,
+      NULL,
       NOW(),
       NOW()
     ),
     (
-      'b2222222-2222-2222-2222-222222222222',
-      'Co-owner Standard',
+      'a2222222-2222-2222-2222-222222222222',
+      'SYSTEM',
+      NULL,
       'CO_OWNER',
+      'Co-owner',
       '{
         "pet_read": true,
         "pet_write": true,
@@ -138,19 +116,19 @@ VALUES
         "log_write": true,
         "health_read": true,
         "health_write": true,
-        "task_read": true,
-        "task_write": true,
         "members_read": true,
         "members_write": true
       }'::jsonb,
-      TRUE,
+      NULL,
       NOW(),
       NOW()
     ),
     (
-      'b3333333-3333-3333-3333-333333333333',
-      'Vet Access',
+      'a3333333-3333-3333-3333-333333333333',
+      'SYSTEM',
+      NULL,
       'VET',
+      'Veterinary',
       '{
         "pet_read": true,
         "pet_write": false,
@@ -158,19 +136,19 @@ VALUES
         "log_write": true,
         "health_read": true,
         "health_write": true,
-        "task_read": true,
-        "task_write": false,
         "members_read": false,
         "members_write": false
       }'::jsonb,
-      TRUE,
+      NULL,
       NOW(),
       NOW()
     ),
     (
-      'b4444444-4444-4444-4444-444444444444',
-      'Petsitter Access',
+      'a4444444-4444-4444-4444-444444444444',
+      'SYSTEM',
+      NULL,
       'PETSITTER',
+      'Petsitter',
       '{
         "pet_read": true,
         "pet_write": false,
@@ -178,19 +156,19 @@ VALUES
         "log_write": true,
         "health_read": true,
         "health_write": false,
-        "task_read": true,
-        "task_write": true,
         "members_read": false,
         "members_write": false
       }'::jsonb,
-      TRUE,
+      NULL,
       NOW(),
       NOW()
     ),
     (
-      'b5555555-5555-5555-5555-555555555555',
-      'Walker Access',
+      'a5555555-5555-5555-5555-555555555555',
+      'SYSTEM',
+      NULL,
       'WALKER',
+      'Walker',
       '{
         "pet_read": true,
         "pet_write": false,
@@ -198,12 +176,10 @@ VALUES
         "log_write": true,
         "health_read": false,
         "health_write": false,
-        "task_read": true,
-        "task_write": true,
         "members_read": false,
         "members_write": false
       }'::jsonb,
-      TRUE,
+      NULL,
       NOW(),
       NOW()
     )
@@ -212,5 +188,4 @@ ON CONFLICT DO NOTHING;
 -- +goose Down
 DROP TABLE IF EXISTS pet_invites;
 DROP TABLE IF EXISTS pet_memberships;
-DROP TABLE IF EXISTS permission_presets;
 DROP TABLE IF EXISTS roles;

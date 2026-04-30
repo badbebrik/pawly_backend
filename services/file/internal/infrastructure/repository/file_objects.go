@@ -3,9 +3,11 @@ package pgrepo
 import (
 	"context"
 	"errors"
-	"file/internal/model"
-	"file/internal/repository"
 	"time"
+
+	"file/internal/application/ports"
+	"file/internal/domain/model"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -68,7 +70,7 @@ func (r *FileObjectRepository) GetByID(ctx context.Context, id uuid.UUID) (*mode
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -170,7 +172,7 @@ func (r *FileObjectRepository) UpdateStatus(ctx context.Context, id uuid.UUID, s
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -189,7 +191,7 @@ func (r *FileObjectRepository) ConfirmUpload(ctx context.Context, id uuid.UUID, 
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -206,7 +208,7 @@ func (r *FileObjectRepository) MarkPendingDelete(ctx context.Context, id uuid.UU
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -224,7 +226,7 @@ func (r *FileObjectRepository) MarkDeleted(ctx context.Context, id uuid.UUID) er
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }
@@ -239,7 +241,7 @@ func (r *FileObjectRepository) DeleteByID(ctx context.Context, id uuid.UUID) err
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }

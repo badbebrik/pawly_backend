@@ -3,30 +3,28 @@ package grpc
 import (
 	"context"
 	"errors"
-	"file/internal/model"
-	"file/internal/repository"
-	"file/internal/service"
+	"file/internal/application/ports"
+	"file/internal/application/usecase"
+	"file/internal/domain/model"
 
 	"github.com/google/uuid"
-	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	filepb "pawly/pkg/filepb"
 )
 
 type Server struct {
 	filepb.UnimplementedFileServiceServer
-	svc *service.FileService
+	useCases *usecase.Set
 }
 
-func NewServer(svc *service.FileService) *Server {
-	return &Server{svc: svc}
+func NewServer(useCases *usecase.Set) *Server {
+	return &Server{useCases: useCases}
 }
 
 func (s *Server) InitUpload(ctx context.Context, req *filepb.InitUploadRequest) (*filepb.InitUploadResponse, error) {
-	params := service.InitUploadParams{
-		MimeType: req.GetMimeType(),
-	}
+	params := usecase.InitUploadParams{MimeType: req.GetMimeType()}
 	if req.GetExpectedSizeBytes() > 0 {
 		v := req.GetExpectedSizeBytes()
 		params.ExpectedSizeBytes = &v
@@ -36,7 +34,7 @@ func (s *Server) InitUpload(ctx context.Context, req *filepb.InitUploadRequest) 
 		params.OriginalFilename = &v
 	}
 
-	f, upload, err := s.svc.InitUpload(ctx, params)
+	f, upload, err := s.useCases.InitUpload(ctx, params)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -58,7 +56,7 @@ func (s *Server) ConfirmUpload(ctx context.Context, req *filepb.ConfirmUploadReq
 		return nil, status.Error(codes.InvalidArgument, "invalid file_id")
 	}
 
-	f, err := s.svc.ConfirmUpload(ctx, service.ConfirmUploadParams{
+	f, err := s.useCases.ConfirmUpload(ctx, usecase.ConfirmUploadParams{
 		FileID:    fileID,
 		SizeBytes: req.GetSizeBytes(),
 	})
@@ -75,7 +73,7 @@ func (s *Server) GetDownloadUrl(ctx context.Context, req *filepb.GetDownloadUrlR
 		return nil, status.Error(codes.InvalidArgument, "invalid file_id")
 	}
 
-	url, expiresAt, err := s.svc.GetDownloadURL(ctx, fileID)
+	url, expiresAt, err := s.useCases.GetDownloadURL(ctx, fileID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -94,7 +92,7 @@ func (s *Server) BatchGetDownloadUrls(ctx context.Context, req *filepb.BatchGetD
 		if err != nil {
 			continue
 		}
-		url, expiresAt, err := s.svc.GetDownloadURL(ctx, fileID)
+		url, expiresAt, err := s.useCases.GetDownloadURL(ctx, fileID)
 		if err != nil {
 			continue
 		}
@@ -122,7 +120,7 @@ func (s *Server) LinkFile(ctx context.Context, req *filepb.LinkFileRequest) (*fi
 		return nil, status.Error(codes.InvalidArgument, "unsupported owner mapping")
 	}
 
-	link, err := s.svc.Link(ctx, service.LinkParams{
+	link, err := s.useCases.Link(ctx, usecase.LinkParams{
 		FileID:    fileID,
 		UsageType: usageType,
 		OwnerID:   ownerID,
@@ -148,7 +146,7 @@ func (s *Server) UnlinkFile(ctx context.Context, req *filepb.UnlinkFileRequest) 
 		return nil, status.Error(codes.InvalidArgument, "unsupported owner mapping")
 	}
 
-	deleted, err := s.svc.Unlink(ctx, fileID, usageType, ownerID)
+	deleted, err := s.useCases.Unlink(ctx, fileID, usageType, ownerID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -162,7 +160,7 @@ func (s *Server) GetFile(ctx context.Context, req *filepb.GetFileRequest) (*file
 		return nil, status.Error(codes.InvalidArgument, "invalid file_id")
 	}
 
-	f, err := s.svc.GetFile(ctx, fileID)
+	f, err := s.useCases.GetFile(ctx, fileID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -176,7 +174,7 @@ func (s *Server) DeleteFileIfUnlinked(ctx context.Context, req *filepb.GetFileRe
 		return nil, status.Error(codes.InvalidArgument, "invalid file_id")
 	}
 
-	f, err := s.svc.DeleteFileIfUnlinked(ctx, fileID)
+	f, err := s.useCases.DeleteFileIfUnlinked(ctx, fileID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -190,16 +188,16 @@ func toProtoFile(f *model.FileObject) *filepb.FileObject {
 		size = *f.SizeBytes
 	}
 	return &filepb.FileObject{
-		Id:              f.ID.String(),
-		Status:          mapFileStatus(f.Status),
-		MimeType:        f.MimeType,
-		SizeBytes:       size,
-		Bucket:          f.StorageBucket,
-		ObjectKey:       f.StorageKey,
-		CreatedByUserId: uuid.Nil.String(),
-		CreatedAt:       timestamppb.New(f.CreatedAt),
-		UpdatedAt:       timestamppb.New(f.UpdatedAt),
-		UploadExpiresAt: timestamppb.New(f.UploadExpiresAt),
+		Id:               f.ID.String(),
+		Status:           mapFileStatus(f.Status),
+		MimeType:         f.MimeType,
+		SizeBytes:        size,
+		Bucket:           f.StorageBucket,
+		ObjectKey:        f.StorageKey,
+		CreatedByUserId:  uuid.Nil.String(),
+		CreatedAt:        timestamppb.New(f.CreatedAt),
+		UpdatedAt:        timestamppb.New(f.UpdatedAt),
+		UploadExpiresAt:  timestamppb.New(f.UploadExpiresAt),
 		OriginalFilename: strOrEmpty(f.OriginalFilename),
 	}
 }
@@ -227,17 +225,17 @@ func toProtoLink(l *model.FileLink) *filepb.FileLink {
 
 func mapSvcErr(err error) error {
 	switch {
-	case errors.Is(err, repository.ErrNotFound):
+	case errors.Is(err, ports.ErrNotFound):
 		return status.Error(codes.NotFound, "not found")
-	case errors.Is(err, service.ErrInvalidInput):
+	case errors.Is(err, usecase.ErrInvalidInput):
 		return status.Error(codes.InvalidArgument, "invalid input")
-	case errors.Is(err, service.ErrInvalidState):
+	case errors.Is(err, usecase.ErrInvalidState):
 		return status.Error(codes.FailedPrecondition, "invalid state")
-	case errors.Is(err, service.ErrUploadExpired):
+	case errors.Is(err, usecase.ErrUploadExpired):
 		return status.Error(codes.FailedPrecondition, "upload expired")
-	case errors.Is(err, service.ErrNotReady):
+	case errors.Is(err, usecase.ErrNotReady):
 		return status.Error(codes.FailedPrecondition, "file not ready")
-	case errors.Is(err, service.ErrHasLinks):
+	case errors.Is(err, usecase.ErrHasLinks):
 		return status.Error(codes.FailedPrecondition, "file still has links")
 	default:
 		return status.Error(codes.Internal, "internal error")
@@ -275,11 +273,7 @@ func mapUsageType(ownerService filepb.OwnerService, ownerType string) (model.Fil
 		}
 	case filepb.OwnerService_OWNER_SERVICE_HEALTH:
 		switch ownerType {
-		case "VET_VISIT":
-		case "VACCINATION":
-		case "MEDICAL_RECORD":
-		case "PROCEDURE":
-		case "HEALTH_ATTACHMENT":
+		case "VET_VISIT", "VACCINATION", "MEDICAL_RECORD", "PROCEDURE", "HEALTH_ATTACHMENT":
 			return model.FileUsageTypeHealthAttach, true
 		}
 	case filepb.OwnerService_OWNER_SERVICE_CHAT:

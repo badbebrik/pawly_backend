@@ -12,10 +12,6 @@ type RegisterEmailRequest struct {
 }
 
 type RegisterEmailResponse struct {
-	UserID       uuid.UUID `json:"user_id"`
-	Verification struct {
-		Channel            string `json:"channel"`
-		CodeTTLSeconds     int    `json:"code_ttl_seconds"`
-		CanResendInSeconds int    `json:"can_resend_in_seconds"`
-	} `json:"verification"`
+	UserID       uuid.UUID            `json:"user_id"`
+	Verification VerificationResponse `json:"verification"`
 }

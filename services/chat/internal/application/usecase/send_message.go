@@ -38,10 +38,11 @@ func NewSendMessage(
 }
 
 type SendMessageParams struct {
-	CurrentUserID   uuid.UUID
-	ConversationID  uuid.UUID
-	ClientMsgID     uuid.UUID
-	Text            *string
+	CurrentUserID  uuid.UUID
+	OriginClientID uuid.UUID
+	ConversationID uuid.UUID
+	ClientMsgID    uuid.UUID
+	Text           *string
 }
 
 type SendMessageMessage struct {
@@ -99,6 +100,7 @@ func (uc *SendMessage) Execute(ctx context.Context, params SendMessageParams) (S
 		return SendMessageResult{}, ErrInvalidInput
 	}
 
+	created := false
 	err = uc.tx.WithinTransaction(ctx, func(txCtx context.Context) error {
 		existingMessage, err := uc.messages.FindByClientMsgID(txCtx, params.ConversationID, params.CurrentUserID, params.ClientMsgID)
 		if err == nil {
@@ -120,6 +122,7 @@ func (uc *SendMessage) Execute(ctx context.Context, params SendMessageParams) (S
 			}
 			return err
 		}
+		created = true
 
 		if err := uc.conversations.UpdateLastMessage(
 			txCtx,
@@ -140,6 +143,19 @@ func (uc *SendMessage) Execute(ctx context.Context, params SendMessageParams) (S
 	})
 	if err != nil {
 		return SendMessageResult{}, err
+	}
+
+	if created && uc.realtime != nil {
+		_ = uc.realtime.PublishMessageSent(ctx, ports.MessageSentEvent{
+			OriginClientID:  params.OriginClientID,
+			ConversationID:  message.ConversationID,
+			MessageID:       message.ID,
+			SenderUserID:    message.SenderUserID,
+			RecipientUserID: otherUserID,
+			ClientMsgID:     message.ClientMsgID,
+			Text:            message.Text,
+			CreatedAt:       message.CreatedAt,
+		})
 	}
 
 	return SendMessageResult{

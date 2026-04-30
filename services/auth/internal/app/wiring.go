@@ -19,7 +19,7 @@ import (
 )
 
 type runtime struct {
-	authSvc    *usecase.Set
+	useCases   *usecase.Set
 	pg         *db.Postgres
 	redis      *redisdb.Redis
 	rabbitConn *amqp091.Connection
@@ -56,10 +56,10 @@ func buildRuntime(cfg *config.Config) (*runtime, error) {
 		return nil, err
 	}
 
-	authSvc, outboxWkr := buildAuthModule(cfg, pg, redis, rabbitCh, profile)
+	useCases, outboxWkr := buildAuthModule(cfg, pg, redis, rabbitCh, profile)
 
 	return &runtime{
-		authSvc:    authSvc,
+		useCases:   useCases,
 		pg:         pg,
 		redis:      redis,
 		rabbitConn: rabbitConn,
@@ -78,7 +78,7 @@ func buildAuthModule(cfg *config.Config, pg *db.Postgres, redis *redisdb.Redis, 
 	verificationRepo := redisstore.NewRedisStore(redis.Client())
 
 	outboxPublisher := outbox.NewPublisher(outboxRepo)
-	rabbitPublisher := rabbit.NewRabbitPublisher(rabbitCh, cfg.RabbitNotificationsQueue)
+	rabbitPublisher := rabbit.NewRabbitPublisher(rabbitCh, cfg.RabbitEmailQueue)
 	outboxWorker := outbox.NewWorker(
 		outboxRepo,
 		rabbitPublisher,
@@ -86,7 +86,7 @@ func buildAuthModule(cfg *config.Config, pg *db.Postgres, redis *redisdb.Redis, 
 		cfg.OutboxWorkerBatchSize,
 	)
 
-	authSvc := usecase.NewSet(usecase.Dependencies{
+	useCases := usecase.NewSet(usecase.Dependencies{
 		Users:        userRepo,
 		Sessions:     sessionRepo,
 		OAuth:        oauthRepo,
@@ -98,7 +98,7 @@ func buildAuthModule(cfg *config.Config, pg *db.Postgres, redis *redisdb.Redis, 
 		OAuthVerify:  oauth.NewGoogleVerifier(time.Duration(cfg.OAuthHTTPTimeoutSeconds)*time.Second, cfg.GoogleOAuthClientID),
 	})
 
-	return authSvc, outboxWorker
+	return useCases, outboxWorker
 }
 
 func newRabbitChannel(cfg *config.Config) (*amqp091.Connection, *amqp091.Channel, error) {
@@ -120,7 +120,7 @@ func newRabbitChannel(cfg *config.Config) (*amqp091.Connection, *amqp091.Channel
 	}
 
 	if _, err := ch.QueueDeclare(
-		cfg.RabbitNotificationsQueue,
+		cfg.RabbitEmailQueue,
 		true,
 		false,
 		false,

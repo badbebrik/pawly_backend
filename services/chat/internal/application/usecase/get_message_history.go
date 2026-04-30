@@ -27,10 +27,10 @@ func NewGetMessageHistory(
 }
 
 type GetMessageHistoryParams struct {
-	CurrentUserID    uuid.UUID
-	ConversationID   uuid.UUID
-	BeforeMessageID  *uuid.UUID
-	Limit            int
+	CurrentUserID   uuid.UUID
+	ConversationID  uuid.UUID
+	BeforeMessageID *uuid.UUID
+	Limit           int
 }
 
 type GetMessageHistoryItem struct {

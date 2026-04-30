@@ -1,11 +1,11 @@
 package app
 
 import (
+	"acl/internal/application/usecase"
 	"acl/internal/config"
 	"acl/internal/infrastructure/db"
+	petclient "acl/internal/infrastructure/petclient"
 	profileclient "acl/internal/infrastructure/profileclient"
-	pgrepo "acl/internal/infrastructure/repository"
-	aclservice "acl/internal/service"
 	grpcserver "acl/internal/transport/grpc"
 	"context"
 	"errors"
@@ -23,81 +23,45 @@ import (
 type App struct {
 	cfg *config.Config
 
-	pg      *db.Postgres
-	aclSvc  *aclservice.ACLService
-	profile *profileclient.Client
-	httpSrv *http.Server
-	grpcSrv *grpc.Server
+	useCases *usecase.Set
+	pg       *db.Postgres
+	profile  *profileclient.Client
+	pet      *petclient.Client
+	httpSrv  *http.Server
+	grpcSrv  *grpc.Server
 
 	grpcListener net.Listener
 }
 
 func New(cfg *config.Config) (*App, error) {
-	pg, err := db.NewPostgres(cfg)
+	runtime, err := buildRuntime(cfg)
 	if err != nil {
-		return nil, err
-	}
-
-	membershipRepo := pgrepo.NewMembershipRepository(pg.Pool)
-	roleRepo := pgrepo.NewRoleRepository(pg.Pool)
-	presetRepo := pgrepo.NewPresetRepository(pg.Pool)
-	inviteRepo := pgrepo.NewInviteRepository(pg.Pool)
-	aclSvc := aclservice.New(
-		membershipRepo,
-		roleRepo,
-		presetRepo,
-		inviteRepo,
-		aclservice.Options{
-			InviteTTL:          time.Duration(cfg.InviteTTLMinutes) * time.Minute,
-			InviteDeeplinkBase: cfg.InviteDeeplinkBase,
-		},
-	)
-	profile, err := profileclient.New(cfg.ProfileServiceGRPCAddr)
-	if err != nil {
-		pg.Close()
 		return nil, err
 	}
 
 	app := &App{
-		cfg:     cfg,
-		pg:      pg,
-		aclSvc:  aclSvc,
-		profile: profile,
+		cfg:          cfg,
+		useCases:     runtime.useCases,
+		pg:           runtime.pg,
+		profile:      runtime.profile,
+		pet:          runtime.pet,
+		grpcListener: runtime.grpcListener,
 	}
 
-	httpRouter := app.setupRoutes()
 	app.httpSrv = &http.Server{
 		Addr:    ":" + cfg.AppHTTPPort,
-		Handler: httpRouter,
+		Handler: app.setupRoutes(),
 	}
-
-	grpcListener, err := net.Listen("tcp", ":"+cfg.AppGRPCPort)
-	if err != nil {
-		profile.Close()
-		pg.Close()
-		return nil, err
-	}
-	app.grpcListener = grpcListener
 
 	grpcSrv := grpc.NewServer()
-	grpcserver.Register(grpcSrv, grpcserver.NewServer(aclSvc))
+	grpcserver.Register(grpcSrv, grpcserver.NewServer(runtime.useCases))
 	app.grpcSrv = grpcSrv
 
 	return app, nil
 }
 
 func (a *App) Close() {
-	log.Info().Msg("closing ACL App resources...")
-
-	if a.httpSrv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = a.httpSrv.Shutdown(ctx)
-		cancel()
-	}
-
-	if a.grpcSrv != nil {
-		a.grpcSrv.GracefulStop()
-	}
+	log.Info().Msg("closing acl app resources...")
 	if a.grpcListener != nil {
 		_ = a.grpcListener.Close()
 	}
@@ -107,6 +71,9 @@ func (a *App) Close() {
 	}
 	if a.profile != nil {
 		a.profile.Close()
+	}
+	if a.pet != nil {
+		a.pet.Close()
 	}
 }
 
@@ -129,13 +96,16 @@ func (a *App) Run() error {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Info().Msg("shutting down ACL service...")
+	log.Info().Msg("shutting down acl service...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := a.httpSrv.Shutdown(ctx); err != nil {
 		return err
+	}
+	if a.grpcSrv != nil {
+		a.grpcSrv.GracefulStop()
 	}
 
 	return nil

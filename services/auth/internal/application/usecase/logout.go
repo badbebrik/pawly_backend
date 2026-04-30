@@ -8,15 +8,15 @@ import (
 	"github.com/google/uuid"
 )
 
-type LogoutUseCase struct {
+type Logout struct {
 	deps *dependencies
 }
 
-type LogoutAllUseCase struct {
+type LogoutAll struct {
 	deps *dependencies
 }
 
-func (uc *LogoutUseCase) Execute(ctx context.Context, accessToken string) error {
+func (uc *Logout) Execute(ctx context.Context, accessToken string) error {
 	claims, err := uc.deps.tokens.ValidateToken(accessToken)
 	if err != nil {
 		return ErrUnauthorized
@@ -40,7 +40,7 @@ func (uc *LogoutUseCase) Execute(ctx context.Context, accessToken string) error 
 	return nil
 }
 
-func (uc *LogoutAllUseCase) Execute(ctx context.Context, accessToken string) error {
+func (uc *LogoutAll) Execute(ctx context.Context, accessToken string) error {
 	claims, err := uc.deps.tokens.ValidateToken(accessToken)
 	if err != nil {
 		return ErrUnauthorized

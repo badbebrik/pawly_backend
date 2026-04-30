@@ -1,34 +1,34 @@
 package usecase
 
 type Set struct {
-	CreateProfile        *CreateProfileUseCase
-	DeleteProfile        *DeleteProfileUseCase
-	GetProfile           *GetProfileUseCase
-	UpdateProfileInfo    *UpdateProfileInfoUseCase
-	UpdatePreferences    *UpdatePreferencesUseCase
-	GetAvatarDownloadURL *GetAvatarDownloadURLUseCase
-	InitAvatarUpload     *InitAvatarUploadUseCase
-	ConfirmAvatarUpload  *ConfirmAvatarUploadUseCase
-	DeleteAvatar         *DeleteAvatarUseCase
-	GetPreferences       *GetPreferencesUseCase
-	BatchGetPreferences  *BatchGetPreferencesUseCase
-	BatchProfilesBrief   *BatchProfilesBriefUseCase
+	CreateProfile        *CreateProfile
+	DeleteProfile        *DeleteProfile
+	GetProfile           *GetProfile
+	UpdateProfileInfo    *UpdateProfileInfo
+	UpdatePreferences    *UpdatePreferences
+	GetAvatarDownloadURL *GetAvatarDownloadURL
+	InitAvatarUpload     *InitAvatarUpload
+	ConfirmAvatarUpload  *ConfirmAvatarUpload
+	DeleteAvatar         *DeleteAvatar
+	GetPreferences       *GetPreferences
+	BatchGetPreferences  *BatchGetPreferences
+	BatchProfilesBrief   *BatchProfilesBrief
 }
 
 func NewSet(in Dependencies) *Set {
 	deps := newDependencies(in)
 	return &Set{
-		CreateProfile:        &CreateProfileUseCase{deps: deps},
-		DeleteProfile:        &DeleteProfileUseCase{deps: deps},
-		GetProfile:           &GetProfileUseCase{deps: deps},
-		UpdateProfileInfo:    &UpdateProfileInfoUseCase{deps: deps},
-		UpdatePreferences:    &UpdatePreferencesUseCase{deps: deps},
-		GetAvatarDownloadURL: &GetAvatarDownloadURLUseCase{deps: deps},
-		InitAvatarUpload:     &InitAvatarUploadUseCase{deps: deps},
-		ConfirmAvatarUpload:  &ConfirmAvatarUploadUseCase{deps: deps},
-		DeleteAvatar:         &DeleteAvatarUseCase{deps: deps},
-		GetPreferences:       &GetPreferencesUseCase{deps: deps},
-		BatchGetPreferences:  &BatchGetPreferencesUseCase{deps: deps},
-		BatchProfilesBrief:   &BatchProfilesBriefUseCase{deps: deps},
+		CreateProfile:        &CreateProfile{deps: deps},
+		DeleteProfile:        &DeleteProfile{deps: deps},
+		GetProfile:           &GetProfile{deps: deps},
+		UpdateProfileInfo:    &UpdateProfileInfo{deps: deps},
+		UpdatePreferences:    &UpdatePreferences{deps: deps},
+		GetAvatarDownloadURL: &GetAvatarDownloadURL{deps: deps},
+		InitAvatarUpload:     &InitAvatarUpload{deps: deps},
+		ConfirmAvatarUpload:  &ConfirmAvatarUpload{deps: deps},
+		DeleteAvatar:         &DeleteAvatar{deps: deps},
+		GetPreferences:       &GetPreferences{deps: deps},
+		BatchGetPreferences:  &BatchGetPreferences{deps: deps},
+		BatchProfilesBrief:   &BatchProfilesBrief{deps: deps},
 	}
 }

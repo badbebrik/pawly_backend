@@ -1,19 +1,18 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	"pawly/pkg/configenv"
 	"time"
 )
 
 type Config struct {
 	AppPort string
 
-	RabbitHost           string
-	RabbitPort           string
-	RabbitUser           string
-	RabbitPassword       string
-	RabbitEmailJobsQueue string
+	RabbitHost       string
+	RabbitPort       string
+	RabbitUser       string
+	RabbitPassword   string
+	RabbitEmailQueue string
 
 	TemplateDir   string
 	DefaultLocale string
@@ -37,74 +36,84 @@ type SMTPConfig struct {
 	SendTimeout    time.Duration
 }
 
-func Load() *Config {
-	return &Config{
-		AppPort:              getEnv("APP_PORT", ""),
-		RabbitHost:           getEnv("RABBITMQ_HOST", ""),
-		RabbitPort:           getEnv("RABBITMQ_PORT", ""),
-		RabbitUser:           getEnv("RABBITMQ_USER", ""),
-		RabbitPassword:       getEnv("RABBITMQ_PASSWORD", ""),
-		RabbitEmailJobsQueue: getEnv("RABBITMQ_EMAIL_JOBS_QUEUE", ""),
+func Load() (*Config, error) {
+	primaryPort, err := configenv.Int("SMTP_PRIMARY_PORT", 587)
+	if err != nil {
+		return nil, err
+	}
+	primaryUseTLS, err := configenv.Bool("SMTP_PRIMARY_USE_TLS", false)
+	if err != nil {
+		return nil, err
+	}
+	primaryUseStartTLS, err := configenv.Bool("SMTP_PRIMARY_USE_STARTTLS", true)
+	if err != nil {
+		return nil, err
+	}
+	primarySkipTLSVerify, err := configenv.Bool("SMTP_PRIMARY_SKIP_TLS_VERIFY", false)
+	if err != nil {
+		return nil, err
+	}
 
-		TemplateDir:   getEnv("TEMPLATE_DIR", ""),
-		DefaultLocale: getEnv("DEFAULT_LOCALE", ""),
+	fallbackPort, err := configenv.Int("SMTP_FALLBACK_PORT", 0)
+	if err != nil {
+		return nil, err
+	}
+	fallbackUseTLS, err := configenv.Bool("SMTP_FALLBACK_USE_TLS", false)
+	if err != nil {
+		return nil, err
+	}
+	fallbackUseStartTLS, err := configenv.Bool("SMTP_FALLBACK_USE_STARTTLS", false)
+	if err != nil {
+		return nil, err
+	}
+	fallbackSkipTLSVerify, err := configenv.Bool("SMTP_FALLBACK_SKIP_TLS_VERIFY", false)
+	if err != nil {
+		return nil, err
+	}
+
+	requeueOnFail, err := configenv.Bool("REQUEUE_ON_FAIL", false)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &Config{
+		AppPort:          configenv.String("APP_PORT", ""),
+		RabbitHost:       configenv.String("RABBITMQ_HOST", ""),
+		RabbitPort:       configenv.String("RABBITMQ_PORT", ""),
+		RabbitUser:       configenv.String("RABBITMQ_USER", ""),
+		RabbitPassword:   configenv.String("RABBITMQ_PASSWORD", ""),
+		RabbitEmailQueue: configenv.String("RABBITMQ_EMAIL_QUEUE", "email.notifications"),
+
+		TemplateDir:   configenv.String("TEMPLATE_DIR", ""),
+		DefaultLocale: configenv.String("DEFAULT_LOCALE", ""),
 
 		SMTPPrimary: SMTPConfig{
-			Host:           getEnv("SMTP_PRIMARY_HOST", ""),
-			Port:           getEnvInt("SMTP_PRIMARY_PORT", 587),
-			Username:       getEnv("SMTP_PRIMARY_USERNAME", ""),
-			Password:       getEnv("SMTP_PRIMARY_PASSWORD", ""),
-			From:           getEnv("SMTP_PRIMARY_FROM", ""),
-			UseTLS:         getEnvBool("SMTP_PRIMARY_USE_TLS", false),
-			UseStartTLS:    getEnvBool("SMTP_PRIMARY_USE_STARTTLS", true),
-			SkipTLSVerify:  getEnvBool("SMTP_PRIMARY_SKIP_TLS_VERIFY", false),
+			Host:           configenv.String("SMTP_PRIMARY_HOST", ""),
+			Port:           primaryPort,
+			Username:       configenv.String("SMTP_PRIMARY_USERNAME", ""),
+			Password:       configenv.String("SMTP_PRIMARY_PASSWORD", ""),
+			From:           configenv.String("SMTP_PRIMARY_FROM", ""),
+			UseTLS:         primaryUseTLS,
+			UseStartTLS:    primaryUseStartTLS,
+			SkipTLSVerify:  primarySkipTLSVerify,
 			ConnectTimeout: 5 * time.Second,
 			SendTimeout:    15 * time.Second,
 		},
 		SMTPFallback: SMTPConfig{
-			Host:           getEnv("SMTP_FALLBACK_HOST", ""),
-			Port:           getEnvInt("SMTP_FALLBACK_PORT", 0),
-			Username:       getEnv("SMTP_FALLBACK_USERNAME", ""),
-			Password:       getEnv("SMTP_FALLBACK_PASSWORD", ""),
-			From:           getEnv("SMTP_FALLBACK_FROM", ""),
-			UseTLS:         getEnvBool("SMTP_FALLBACK_USE_TLS", false),
-			UseStartTLS:    getEnvBool("SMTP_FALLBACK_USE_STARTTLS", false),
-			SkipTLSVerify:  getEnvBool("SMTP_FALLBACK_SKIP_TLS_VERIFY", false),
+			Host:           configenv.String("SMTP_FALLBACK_HOST", ""),
+			Port:           fallbackPort,
+			Username:       configenv.String("SMTP_FALLBACK_USERNAME", ""),
+			Password:       configenv.String("SMTP_FALLBACK_PASSWORD", ""),
+			From:           configenv.String("SMTP_FALLBACK_FROM", ""),
+			UseTLS:         fallbackUseTLS,
+			UseStartTLS:    fallbackUseStartTLS,
+			SkipTLSVerify:  fallbackSkipTLSVerify,
 			ConnectTimeout: 5 * time.Second,
 			SendTimeout:    15 * time.Second,
 		},
 
-		RequeueOnFail: getEnvBool("REQUEUE_ON_FAIL", false),
+		RequeueOnFail: requeueOnFail,
 	}
-}
 
-func getEnv(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		return v
-	}
-	return fallback
-}
-
-func getEnvInt(key string, fallback int) int {
-	v := getEnv(key, "")
-	if v == "" {
-		return fallback
-	}
-	i, err := strconv.Atoi(v)
-	if err != nil {
-		return fallback
-	}
-	return i
-}
-
-func getEnvBool(key string, fallback bool) bool {
-	v := getEnv(key, "")
-	if v == "" {
-		return fallback
-	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return fallback
-	}
-	return b
+	return cfg, nil
 }

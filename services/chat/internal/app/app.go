@@ -7,31 +7,32 @@ import (
 	chatdb "chat/internal/infrastructure/db"
 	petclient "chat/internal/infrastructure/petclient"
 	profileclient "chat/internal/infrastructure/profileclient"
-	"chat/internal/infrastructure/realtime"
+	rtinfra "chat/internal/infrastructure/realtime"
+	"chat/internal/realtime"
 	"context"
 	"errors"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
 type App struct {
 	cfg      *config.Config
-	useCases *UseCases
+	useCases *usecase.Set
 	httpSrv  *http.Server
 	hub      *realtime.Hub
 	redis    *redis.Client
-	rtPub    realtime.EventPublisher
-	rtSub    *realtime.RedisSubscriber
+	rtPub    rtinfra.EventPublisher
+	rtSub    *rtinfra.RedisSubscriber
 	presence realtime.PresenceTracker
 	pg       *chatdb.Postgres
 	acl      *aclclient.Client
 	profile  *profileclient.Client
 	pet      *petclient.Client
-	stopBg   func()
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -39,54 +40,35 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, errors.New("config is nil")
 	}
 
-	a := &App{
-		cfg: cfg,
-		hub: realtime.NewHub(),
-	}
-
-	if err := a.wire(); err != nil {
+	hub := realtime.NewHub()
+	runtime, err := buildRuntime(cfg, hub)
+	if err != nil {
 		return nil, err
 	}
 
-	a.httpSrv = &http.Server{
+	app := &App{
+		cfg:      cfg,
+		useCases: runtime.useCases,
+		hub:      hub,
+		redis:    runtime.redis,
+		rtPub:    runtime.rtPub,
+		rtSub:    runtime.rtSub,
+		presence: runtime.presence,
+		pg:       runtime.pg,
+		acl:      runtime.acl,
+		profile:  runtime.profile,
+		pet:      runtime.pet,
+	}
+
+	app.httpSrv = &http.Server{
 		Addr:    ":" + cfg.AppPort,
-		Handler: a.setupRoutes(),
+		Handler: app.setupRoutes(),
 	}
 
-	return a, nil
-}
-
-func (a *App) Run() error {
-	if a.rtSub != nil {
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		a.stopBg = cancel
-		go func() {
-			_ = a.rtSub.Run(ctx)
-		}()
-	} else {
-		quitCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		a.stopBg = cancel
-		_ = quitCtx
-	}
-
-	go func() {
-		_ = a.httpSrv.ListenAndServe()
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
-
-	return nil
+	return app, nil
 }
 
 func (a *App) Close() {
-	if a.stopBg != nil {
-		a.stopBg()
-	}
-	if a.httpSrv != nil {
-		_ = a.httpSrv.Close()
-	}
 	if a.redis != nil {
 		_ = a.redis.Close()
 	}
@@ -104,12 +86,38 @@ func (a *App) Close() {
 	}
 }
 
-type UseCases struct {
-	OpenDirectConversation *usecase.OpenDirectConversation
-	ListConversations      *usecase.ListConversations
-	GetConversation        *usecase.GetConversation
-	GetUnreadSummary       *usecase.GetUnreadSummary
-	GetMessageHistory      *usecase.GetMessageHistory
-	SendMessage            *usecase.SendMessage
-	MarkRead               *usecase.MarkRead
+func (a *App) Run() error {
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+
+	if a.rtSub != nil {
+		go func() {
+			_ = a.rtSub.Run(runCtx)
+		}()
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := a.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(quit)
+
+	select {
+	case <-quit:
+	case err := <-serverErr:
+		cancelRun()
+		return err
+	}
+
+	cancelRun()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	return a.httpSrv.Shutdown(shutdownCtx)
 }

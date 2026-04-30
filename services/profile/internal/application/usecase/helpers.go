@@ -3,7 +3,7 @@ package usecase
 import (
 	"context"
 	"profile/internal/application/ports"
-	"profile/internal/model"
+	"profile/internal/domain/model"
 	"regexp"
 	"strings"
 	"time"
@@ -75,17 +75,17 @@ func uniqueUserIDs(userIDs []uuid.UUID) []uuid.UUID {
 	return unique
 }
 
-func resolveAvatarDownloadURLs(ctx context.Context, files ports.FileGateway, profiles []model.Profile) map[uuid.UUID]string {
+func resolveAvatarDownloadURLs(ctx context.Context, fileClient ports.FileClient, profiles []model.Profile) map[uuid.UUID]string {
 	avatarIDs := make([]uuid.UUID, 0, len(profiles))
 	for i := range profiles {
 		if profiles[i].AvatarFileID != nil {
 			avatarIDs = append(avatarIDs, *profiles[i].AvatarFileID)
 		}
 	}
-	if files == nil || len(avatarIDs) == 0 {
+	if fileClient == nil || len(avatarIDs) == 0 {
 		return map[uuid.UUID]string{}
 	}
-	urls, err := files.BatchGetDownloadURLs(ctx, avatarIDs)
+	urls, err := fileClient.BatchGetDownloadURLs(ctx, avatarIDs)
 	if err != nil {
 		return map[uuid.UUID]string{}
 	}

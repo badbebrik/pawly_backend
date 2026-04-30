@@ -7,16 +7,16 @@ import (
 	"errors"
 )
 
-type PasswordResetRequestUseCase struct {
+type PasswordResetRequest struct {
 	deps *dependencies
 }
 
-type PasswordResetRequestInput struct {
+type PasswordResetRequestParams struct {
 	Email  string
 	Locale string
 }
 
-func (uc *PasswordResetRequestUseCase) Execute(ctx context.Context, in PasswordResetRequestInput) error {
+func (uc *PasswordResetRequest) Execute(ctx context.Context, in PasswordResetRequestParams) error {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) {
 		return ErrIncorrectFormat

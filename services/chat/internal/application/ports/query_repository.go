@@ -13,15 +13,15 @@ type ListConversationsParams struct {
 }
 
 type ConversationListRow struct {
-	ConversationID       uuid.UUID
-	PetID                uuid.UUID
-	OtherUserID          uuid.UUID
-	LastMessageID        *uuid.UUID
-	LastMessageAt        *time.Time
-	LastMessagePreview   *string
-	LastMessageSenderID  *uuid.UUID
-	LastReadMessageID    *uuid.UUID
-	UnreadCount          int
+	ConversationID      uuid.UUID
+	PetID               uuid.UUID
+	OtherUserID         uuid.UUID
+	LastMessageID       *uuid.UUID
+	LastMessageAt       *time.Time
+	LastMessagePreview  *string
+	LastMessageSenderID *uuid.UUID
+	LastReadMessageID   *uuid.UUID
+	UnreadCount         int
 }
 
 type ListConversationsResult struct {

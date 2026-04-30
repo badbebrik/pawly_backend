@@ -3,23 +3,21 @@ package app
 import (
 	"context"
 	"email/internal/config"
-	"email/internal/queue"
-	"email/internal/service"
-	"email/internal/smtp"
-	"email/internal/template"
 	"errors"
-	"fmt"
-	"github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"email/internal/queue"
+
+	"github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
 )
 
 type App struct {
-	config *config.Config
+	cfg *config.Config
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -32,72 +30,20 @@ type App struct {
 }
 
 func New(cfg *config.Config) (*App, error) {
-	conn, err := amqp091.Dial(fmt.Sprintf(
-		"amqp://%s:%s@%s:%s/",
-		cfg.RabbitUser,
-		cfg.RabbitPassword,
-		cfg.RabbitHost,
-		cfg.RabbitPort,
-	))
+	rt, err := buildRuntime(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("rabbit connect: %w", err)
+		return nil, err
 	}
-
-	ch, err := conn.Channel()
-	if err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("rabbit channel: %w", err)
-	}
-
-	if _, err := ch.QueueDeclare(cfg.RabbitEmailJobsQueue, true, false, false, false, nil); err != nil {
-		_ = ch.Close()
-		_ = conn.Close()
-		return nil, fmt.Errorf("queue declare %s: %w", cfg.RabbitEmailJobsQueue, err)
-	}
-
-	renderer := template.NewRenderer(cfg.TemplateDir)
-
-	primary := smtp.NewSMTPProvider("primary", smtp.Config{
-		Host:           cfg.SMTPPrimary.Host,
-		Port:           cfg.SMTPPrimary.Port,
-		Username:       cfg.SMTPPrimary.Username,
-		Password:       cfg.SMTPPrimary.Password,
-		From:           cfg.SMTPPrimary.From,
-		UseTLS:         cfg.SMTPPrimary.UseTLS,
-		UseStartTLS:    cfg.SMTPPrimary.UseStartTLS,
-		SkipTLSVerify:  cfg.SMTPPrimary.SkipTLSVerify,
-		ConnectTimeout: cfg.SMTPPrimary.ConnectTimeout,
-		SendTimeout:    cfg.SMTPPrimary.SendTimeout,
-	})
-
-	var fallback smtp.Provider
-	if cfg.SMTPFallback.Host != "" {
-		fallback = smtp.NewSMTPProvider("fallback", smtp.Config{
-			Host:           cfg.SMTPFallback.Host,
-			Port:           cfg.SMTPFallback.Port,
-			Username:       cfg.SMTPFallback.Username,
-			Password:       cfg.SMTPFallback.Password,
-			From:           cfg.SMTPFallback.From,
-			UseTLS:         cfg.SMTPFallback.UseTLS,
-			UseStartTLS:    cfg.SMTPFallback.UseStartTLS,
-			SkipTLSVerify:  cfg.SMTPFallback.SkipTLSVerify,
-			ConnectTimeout: cfg.SMTPFallback.ConnectTimeout,
-			SendTimeout:    cfg.SMTPFallback.SendTimeout,
-		})
-	}
-
-	dispatcher := service.NewDispatcher(renderer, primary, fallback, cfg.RequeueOnFail)
-	consumer := queue.NewConsumer(ch, cfg.RabbitEmailJobsQueue, dispatcher)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &App{
-		config:     cfg,
+		cfg:        cfg,
 		ctx:        ctx,
 		cancel:     cancel,
-		rabbitConn: conn,
-		rabbitCh:   ch,
-		consumer:   consumer,
+		rabbitConn: rt.rabbitConn,
+		rabbitCh:   rt.rabbitCh,
+		consumer:   rt.consumer,
 	}, nil
 }
 
@@ -109,11 +55,8 @@ func (a *App) Close() {
 	}
 
 	if a.httpSrv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = a.httpSrv.Shutdown(ctx)
-		cancel()
+		_ = a.httpSrv.Close()
 	}
-
 	if a.rabbitCh != nil {
 		_ = a.rabbitCh.Close()
 	}
@@ -126,16 +69,16 @@ func (a *App) Run() error {
 	if err := a.consumer.Start(a.ctx); err != nil {
 		return err
 	}
-	log.Info().Str("queue", a.config.RabbitEmailJobsQueue).Msg("started email.jobs consumer")
+	log.Info().Str("queue", a.cfg.RabbitEmailQueue).Msg("started email notifications consumer")
 
 	r := a.setupRoutes()
 	a.httpSrv = &http.Server{
-		Addr:    ":" + a.config.AppPort,
+		Addr:    ":" + a.cfg.AppPort,
 		Handler: r,
 	}
 
 	go func() {
-		log.Info().Str("port", a.config.AppPort).Msg("starting HTTP server")
+		log.Info().Str("port", a.cfg.AppPort).Msg("starting HTTP server")
 		if err := a.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal().Err(err).Msg("http server crash")
 		}
@@ -146,5 +89,13 @@ func (a *App) Run() error {
 	<-quit
 
 	log.Info().Msg("shutting down Email service...")
+	if a.httpSrv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := a.httpSrv.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			cancel()
+			return err
+		}
+		cancel()
+	}
 	return nil
 }

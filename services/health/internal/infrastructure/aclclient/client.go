@@ -3,8 +3,8 @@ package aclclient
 import (
 	"context"
 	"fmt"
-	"health/internal/service"
-	aclpb "health/proto"
+	"health/internal/application/ports"
+	aclpb "pawly/pkg/aclpb"
 	"strings"
 
 	"github.com/google/uuid"
@@ -53,7 +53,7 @@ func (c *Client) Check(ctx context.Context, petID, userID uuid.UUID, action stri
 	return resp.GetAllowed(), nil
 }
 
-func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+func (c *Client) ListPetAccessForUser(ctx context.Context, userID uuid.UUID) ([]ports.PetAccess, error) {
 	resp, err := c.client.ListPetsForUser(ctx, &aclpb.ListPetsForUserRequest{
 		UserId: userID.String(),
 	})
@@ -61,10 +61,10 @@ func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.
 		return nil, mapErr(err)
 	}
 
-	petIDs := make([]uuid.UUID, 0, len(resp.GetMemberships()))
+	items := make([]ports.PetAccess, 0, len(resp.GetMemberships()))
 	seen := make(map[uuid.UUID]struct{}, len(resp.GetMemberships()))
 	for _, membership := range resp.GetMemberships() {
-		if membership == nil || membership.GetPolicy() == nil || !membership.GetPolicy().GetHealthRead() {
+		if membership == nil || membership.GetPolicy() == nil {
 			continue
 		}
 		petID, err := uuid.Parse(strings.TrimSpace(membership.GetPetId()))
@@ -75,20 +75,33 @@ func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.
 			continue
 		}
 		seen[petID] = struct{}{}
-		petIDs = append(petIDs, petID)
+		policy := membership.GetPolicy()
+		items = append(items, ports.PetAccess{
+			PetID:       petID,
+			PetRead:     policy.GetPetRead(),
+			PetWrite:    policy.GetPetWrite(),
+			LogRead:     policy.GetLogRead(),
+			LogWrite:    policy.GetLogWrite(),
+			HealthRead:  policy.GetHealthRead(),
+			HealthWrite: policy.GetHealthWrite(),
+		})
 	}
-	return petIDs, nil
+	return items, nil
 }
 
 func mapAction(action string) aclpb.Action {
 	switch action {
-	case service.ActionLogRead:
+	case ports.ActionPetRead:
+		return aclpb.Action_ACTION_PET_READ
+	case ports.ActionPetWrite:
+		return aclpb.Action_ACTION_PET_WRITE
+	case ports.ActionLogRead:
 		return aclpb.Action_ACTION_LOG_READ
-	case service.ActionLogWrite:
+	case ports.ActionLogWrite:
 		return aclpb.Action_ACTION_LOG_WRITE
-	case service.ActionHealthRead:
+	case ports.ActionHealthRead:
 		return aclpb.Action_ACTION_HEALTH_READ
-	case service.ActionHealthWrite:
+	case ports.ActionHealthWrite:
 		return aclpb.Action_ACTION_HEALTH_WRITE
 	default:
 		return aclpb.Action_ACTION_UNSPECIFIED
@@ -102,16 +115,17 @@ func mapErr(err error) error {
 	}
 	switch st.Code() {
 	case codes.NotFound:
-		return service.ErrNotFound
+		return ports.ErrNotFound
 	case codes.PermissionDenied:
-		return service.ErrForbidden
+		return ports.ErrForbidden
 	case codes.InvalidArgument:
-		return service.ErrInvalidInput
+		return ports.ErrInvalidInput
 	case codes.FailedPrecondition, codes.AlreadyExists:
-		return service.ErrConflict
+		return ports.ErrConflict
 	default:
 		return err
 	}
 }
 
-var _ service.ACLClient = (*Client)(nil)
+var _ ports.HealthAccessChecker = (*Client)(nil)
+var _ ports.HealthPetLister = (*Client)(nil)

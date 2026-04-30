@@ -6,21 +6,21 @@ import (
 )
 
 type Dependencies struct {
-	Profiles ports.ProfileRepository
-	Files    ports.FileGateway
-	Config   *config.Config
+	Profiles   ports.ProfileRepository
+	FileClient ports.FileClient
+	Config     *config.Config
 }
 
 type dependencies struct {
-	profiles ports.ProfileRepository
-	files    ports.FileGateway
-	config   *config.Config
+	profiles   ports.ProfileRepository
+	fileClient ports.FileClient
+	config     *config.Config
 }
 
 func newDependencies(in Dependencies) *dependencies {
 	return &dependencies{
-		profiles: in.Profiles,
-		files:    in.Files,
-		config:   in.Config,
+		profiles:   in.Profiles,
+		fileClient: in.FileClient,
+		config:     in.Config,
 	}
 }

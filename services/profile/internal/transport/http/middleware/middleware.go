@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"pawly/pkg/gatewayauth"
+	"pawly/pkg/httpjson"
 )
 
 func WithUserID(next http.Handler) http.Handler {
@@ -20,13 +21,13 @@ func WithInternalToken(expectedToken string) func(next http.Handler) http.Handle
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if expectedToken == "" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpjson.WriteError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
 			}
 
 			token := r.Header.Get("X-Internal-Token")
 			if token == "" || token != expectedToken {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpjson.WriteError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
 			}
 

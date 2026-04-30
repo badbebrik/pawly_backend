@@ -3,17 +3,17 @@ package fileclient
 import (
 	"context"
 	"fmt"
-	"health/internal/model"
-	"health/internal/service"
+	"health/internal/application/ports"
+	domainmodel "health/internal/domain/model"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	filepb "pawly/pkg/filepb"
 )
 
 type Client struct {
@@ -43,19 +43,19 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, service.UploadInfo, error) {
+func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, ports.UploadInfo, error) {
 	resp, err := c.client.InitUpload(ctx, &filepb.InitUploadRequest{
 		MimeType:          mimeType,
 		ExpectedSizeBytes: expectedSize,
 		OriginalFilename:  strings.TrimSpace(originalFilename),
 	})
 	if err != nil {
-		return uuid.Nil, service.UploadInfo{}, mapErr(err)
+		return uuid.Nil, ports.UploadInfo{}, mapErr(err)
 	}
 
 	fileID, err := uuid.Parse(resp.GetFile().GetId())
 	if err != nil {
-		return uuid.Nil, service.UploadInfo{}, err
+		return uuid.Nil, ports.UploadInfo{}, err
 	}
 
 	expiresAt := time.Time{}
@@ -63,7 +63,7 @@ func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize i
 		expiresAt = resp.GetUpload().GetExpiresAt().AsTime()
 	}
 
-	return fileID, service.UploadInfo{
+	return fileID, ports.UploadInfo{
 		Method:    resp.GetUpload().GetMethod(),
 		URL:       resp.GetUpload().GetUrl(),
 		Headers:   resp.GetUpload().GetHeaders(),
@@ -71,7 +71,7 @@ func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize i
 	}, nil
 }
 
-func (c *Client) ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) (*service.UploadedFile, error) {
+func (c *Client) ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes int64) (*ports.UploadedFile, error) {
 	resp, err := c.client.ConfirmUpload(ctx, &filepb.ConfirmUploadRequest{
 		FileId:    fileID.String(),
 		SizeBytes: sizeBytes,
@@ -82,10 +82,10 @@ func (c *Client) ConfirmUpload(ctx context.Context, fileID uuid.UUID, sizeBytes 
 
 	file := resp.GetFile()
 	if file == nil {
-		return nil, service.ErrConflict
+		return nil, ports.ErrConflict
 	}
 
-	return &service.UploadedFile{
+	return &ports.UploadedFile{
 		ID:               fileID,
 		MimeType:         file.GetMimeType(),
 		SizeBytes:        file.GetSizeBytes(),
@@ -134,15 +134,15 @@ func (c *Client) BatchGetDownloadURLs(ctx context.Context, fileIDs []uuid.UUID) 
 	return out, nil
 }
 
-func (c *Client) GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]model.HealthFile, error) {
-	out := make(map[uuid.UUID]model.HealthFile, len(fileIDs))
+func (c *Client) GetFiles(ctx context.Context, fileIDs []uuid.UUID) (map[uuid.UUID]domainmodel.HealthFile, error) {
+	out := make(map[uuid.UUID]domainmodel.HealthFile, len(fileIDs))
 	for i := range fileIDs {
 		resp, err := c.client.GetFile(ctx, &filepb.GetFileRequest{FileId: fileIDs[i].String()})
 		if err != nil {
 			return nil, mapErr(err)
 		}
 		file := resp.GetFile()
-		out[fileIDs[i]] = model.HealthFile{
+		out[fileIDs[i]] = domainmodel.HealthFile{
 			ID:       fileIDs[i],
 			MimeType: file.GetMimeType(),
 			FileName: optionalString(file.GetOriginalFilename()),
@@ -168,7 +168,7 @@ func (c *Client) LinkAttachments(ctx context.Context, petID uuid.UUID, entityTyp
 		})
 		if err != nil {
 			mapped := mapErr(err)
-			if mapped == service.ErrConflict {
+			if mapped == ports.ErrConflict {
 				continue
 			}
 			return mapped
@@ -193,7 +193,7 @@ func (c *Client) UnlinkAttachments(ctx context.Context, entityType string, entit
 		})
 		if err != nil {
 			mapped := mapErr(err)
-			if mapped == service.ErrNotFound {
+			if mapped == ports.ErrNotFound {
 				continue
 			}
 			return mapped
@@ -209,7 +209,7 @@ func (c *Client) DeleteFilesIfUnlinked(ctx context.Context, fileIDs []uuid.UUID)
 		})
 		if err != nil {
 			mapped := mapErr(err)
-			if mapped == service.ErrConflict || mapped == service.ErrNotFound {
+			if mapped == ports.ErrConflict || mapped == ports.ErrNotFound {
 				continue
 			}
 			return mapped
@@ -236,16 +236,16 @@ func mapErr(err error) error {
 	}
 	switch st.Code() {
 	case codes.NotFound:
-		return service.ErrNotFound
+		return ports.ErrNotFound
 	case codes.PermissionDenied:
-		return service.ErrForbidden
+		return ports.ErrForbidden
 	case codes.InvalidArgument:
-		return service.ErrInvalidInput
+		return ports.ErrInvalidInput
 	case codes.FailedPrecondition, codes.AlreadyExists:
-		return service.ErrConflict
+		return ports.ErrConflict
 	default:
 		return err
 	}
 }
 
-var _ service.FileClient = (*Client)(nil)
+var _ ports.HealthFileClient = (*Client)(nil)

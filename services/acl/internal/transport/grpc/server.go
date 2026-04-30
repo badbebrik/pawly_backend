@@ -1,12 +1,12 @@
 package grpc
 
 import (
-	"acl/internal/model"
-	"acl/internal/repository"
-	"acl/internal/service"
-	aclpb "acl/proto"
+	"acl/internal/application/ports"
+	acluc "acl/internal/application/usecase"
+	"acl/internal/domain/model"
 	"context"
 	"errors"
+	aclpb "pawly/pkg/aclpb"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -18,11 +18,11 @@ import (
 
 type Server struct {
 	aclpb.UnimplementedACLServiceServer
-	svc *service.ACLService
+	useCases *acluc.Set
 }
 
-func NewServer(svc *service.ACLService) *Server {
-	return &Server{svc: svc}
+func NewServer(useCases *acluc.Set) *Server {
+	return &Server{useCases: useCases}
 }
 
 func Register(srv *grpc.Server, s *Server) {
@@ -38,7 +38,7 @@ func (s *Server) IsMember(ctx context.Context, req *aclpb.IsMemberRequest) (*acl
 		return nil, err
 	}
 
-	ok, err := s.svc.IsMember(ctx, petID, userID)
+	ok, err := s.useCases.IsMember(ctx, petID, userID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -51,7 +51,7 @@ func (s *Server) GetPolicy(ctx context.Context, req *aclpb.GetPolicyRequest) (*a
 		return nil, err
 	}
 
-	res, err := s.svc.GetPolicy(ctx, petID, userID)
+	res, err := s.useCases.GetPolicy(ctx, petID, userID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -70,7 +70,7 @@ func (s *Server) Check(ctx context.Context, req *aclpb.CheckRequest) (*aclpb.Che
 		return nil, err
 	}
 
-	allowed, err := s.svc.Check(ctx, service.CheckParams{
+	allowed, err := s.useCases.Check(ctx, acluc.CheckParams{
 		PetID:  petID,
 		UserID: userID,
 		Action: mapAction(req.GetAction()),
@@ -88,7 +88,7 @@ func (s *Server) ListPetsForUser(ctx context.Context, req *aclpb.ListPetsForUser
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
 
-	memberships, err := s.svc.ListPetMembershipsForUser(ctx, userID)
+	memberships, err := s.useCases.ListPetMembershipsForUser(ctx, userID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -112,7 +112,7 @@ func (s *Server) CreateOwnerMembership(ctx context.Context, req *aclpb.CreateOwn
 		return nil, err
 	}
 
-	member, err := s.svc.CreateOwnerMembership(ctx, petID, userID)
+	member, err := s.useCases.CreateOwnerMembership(ctx, petID, userID)
 	if err != nil {
 		return nil, mapSvcErr(err)
 	}
@@ -130,7 +130,7 @@ func (s *Server) TransferOwnership(ctx context.Context, req *aclpb.TransferOwner
 		return nil, status.Error(codes.InvalidArgument, "invalid target_member_id")
 	}
 
-	res, err := s.svc.TransferOwnership(ctx, service.TransferOwnershipParams{
+	res, err := s.useCases.TransferOwnership(ctx, acluc.TransferOwnershipParams{
 		PetID:          petID,
 		RequesterID:    requesterUserID,
 		TargetMemberID: targetMemberID,
@@ -163,13 +163,13 @@ func parsePetAndUser(petRaw, userRaw string) (uuid.UUID, uuid.UUID, error) {
 
 func mapSvcErr(err error) error {
 	switch {
-	case errors.Is(err, service.ErrNotFound):
+	case errors.Is(err, acluc.ErrNotFound):
 		return status.Error(codes.NotFound, "not found")
-	case errors.Is(err, service.ErrForbidden):
+	case errors.Is(err, acluc.ErrForbidden):
 		return status.Error(codes.PermissionDenied, "forbidden")
-	case errors.Is(err, service.ErrInvalidInput):
+	case errors.Is(err, acluc.ErrInvalidInput):
 		return status.Error(codes.InvalidArgument, "invalid input")
-	case errors.Is(err, service.ErrConflict):
+	case errors.Is(err, acluc.ErrConflict):
 		return status.Error(codes.FailedPrecondition, "conflict")
 	default:
 		return status.Error(codes.Internal, "internal error")
@@ -190,25 +190,21 @@ func mapMembershipStatus(s string) aclpb.MembershipStatus {
 func mapAction(action aclpb.Action) string {
 	switch action {
 	case aclpb.Action_ACTION_PET_READ:
-		return string(service.ActionPetRead)
+		return string(acluc.ActionPetRead)
 	case aclpb.Action_ACTION_PET_WRITE:
-		return string(service.ActionPetWrite)
+		return string(acluc.ActionPetWrite)
 	case aclpb.Action_ACTION_LOG_READ:
-		return string(service.ActionLogRead)
+		return string(acluc.ActionLogRead)
 	case aclpb.Action_ACTION_LOG_WRITE:
-		return string(service.ActionLogWrite)
+		return string(acluc.ActionLogWrite)
 	case aclpb.Action_ACTION_HEALTH_READ:
-		return string(service.ActionHealthRead)
+		return string(acluc.ActionHealthRead)
 	case aclpb.Action_ACTION_HEALTH_WRITE:
-		return string(service.ActionHealthWrite)
-	case aclpb.Action_ACTION_TASK_READ:
-		return string(service.ActionTaskRead)
-	case aclpb.Action_ACTION_TASK_WRITE:
-		return string(service.ActionTaskWrite)
+		return string(acluc.ActionHealthWrite)
 	case aclpb.Action_ACTION_MEMBERS_READ:
-		return string(service.ActionMembersRead)
+		return string(acluc.ActionMembersRead)
 	case aclpb.Action_ACTION_MEMBERS_WRITE:
-		return string(service.ActionMembersWrite)
+		return string(acluc.ActionMembersWrite)
 	default:
 		return ""
 	}
@@ -222,14 +218,12 @@ func toProtoPolicy(p model.Policy) *aclpb.Policy {
 		LogWrite:     p.LogWrite,
 		HealthRead:   p.HealthRead,
 		HealthWrite:  p.HealthWrite,
-		TaskRead:     p.TaskRead,
-		TaskWrite:    p.TaskWrite,
 		MembersRead:  p.MembersRead,
 		MembersWrite: p.MembersWrite,
 	}
 }
 
-func toProtoPetMembership(member repository.MemberView) *aclpb.PetMembership {
+func toProtoPetMembership(member ports.MemberView) *aclpb.PetMembership {
 	return &aclpb.PetMembership{
 		PetId:          member.PetID.String(),
 		MemberId:       member.ID.String(),
@@ -240,7 +234,7 @@ func toProtoPetMembership(member repository.MemberView) *aclpb.PetMembership {
 	}
 }
 
-func toProtoRole(role repository.RoleView) *aclpb.Role {
+func toProtoRole(role ports.RoleView) *aclpb.Role {
 	var petID string
 	if role.PetID != nil {
 		petID = role.PetID.String()
@@ -257,6 +251,7 @@ func toProtoRole(role repository.RoleView) *aclpb.Role {
 		Code:            role.Code,
 		Title:           role.Title,
 		CreatedByUserId: createdBy,
+		Policy:          toProtoPolicy(role.Policy),
 	}
 }
 

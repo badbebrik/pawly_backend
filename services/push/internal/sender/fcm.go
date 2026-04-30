@@ -18,16 +18,15 @@ import (
 	"sync"
 	"time"
 
-	"push/internal/model"
-
+	"push/internal/domain/model"
 )
 
 const (
-	fcmScope      = "https://www.googleapis.com/auth/firebase.messaging"
-	fcmTokenURL   = "https://oauth2.googleapis.com/token"
-	fcmAudience   = fcmTokenURL
-	tokenLeeway   = 30 * time.Second
-	sendTimeout   = 10 * time.Second
+	fcmScope    = "https://www.googleapis.com/auth/firebase.messaging"
+	fcmTokenURL = "https://oauth2.googleapis.com/token"
+	fcmAudience = fcmTokenURL
+	tokenLeeway = 30 * time.Second
+	sendTimeout = 10 * time.Second
 )
 
 type serviceAccount struct {

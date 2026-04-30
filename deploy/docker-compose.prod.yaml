@@ -1,0 +1,429 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-restart: &default-restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: auth_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/auth.prod.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  file_postgres:
+    image: postgres:16
+    container_name: file_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/file.prod.env
+    volumes:
+      - file_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U file_user -d file_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  acl_postgres:
+    image: postgres:16
+    container_name: acl_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/acl.prod.env
+    volumes:
+      - acl_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acl_user -d acl_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  profile_postgres:
+    image: postgres:16
+    container_name: profile_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/profile.prod.env
+    volumes:
+      - profile_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U profile_user -d profile_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  pet_postgres:
+    image: postgres:16
+    container_name: pet_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/pet.prod.env
+    volumes:
+      - pet_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pet_user -d pet_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  health_postgres:
+    image: postgres:16
+    container_name: health_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/health.prod.env
+    volumes:
+      - health_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U health_user -d health_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  push_postgres:
+    image: postgres:16
+    container_name: push_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/push.prod.env
+    volumes:
+      - push_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U push_user -d push_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  chat_postgres:
+    image: postgres:16
+    container_name: chat_postgres
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/chat.prod.env
+    volumes:
+      - chat_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d chat_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    container_name: auth_redis
+    <<: *default-restart
+    logging: *default-logging
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  chat_redis:
+    image: redis:7-alpine
+    container_name: chat_redis
+    <<: *default-restart
+    logging: *default-logging
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: auth_rabbitmq
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/rabbitmq.prod.env
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  file:
+    build:
+      context: ../services
+      dockerfile: file/Dockerfile
+    container_name: pawly_file
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/file.prod.env
+    depends_on:
+      file_postgres:
+        condition: service_healthy
+
+  acl:
+    build:
+      context: ../services
+      dockerfile: acl/Dockerfile
+    container_name: pawly_acl
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/acl.prod.env
+    depends_on:
+      acl_postgres:
+        condition: service_healthy
+      profile:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8087/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  profile:
+    build:
+      context: ../services
+      dockerfile: profile/Dockerfile
+    container_name: pawly_profile
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/profile.prod.env
+    depends_on:
+      profile_postgres:
+        condition: service_healthy
+      file:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8086/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  auth:
+    build:
+      context: ../services
+      dockerfile: auth/Dockerfile
+    container_name: pawly_auth
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/auth.prod.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      profile:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  chat:
+    build:
+      context: ..
+      dockerfile: services/chat/Dockerfile
+    container_name: pawly_chat
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/chat.prod.env
+    depends_on:
+      chat_postgres:
+        condition: service_healthy
+      chat_redis:
+        condition: service_healthy
+      acl:
+        condition: service_started
+      profile:
+        condition: service_started
+      pet:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8089/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  email:
+    build:
+      context: ../services
+      dockerfile: email/Dockerfile
+    container_name: pawly_email
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/email.prod.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8084/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  pet:
+    build:
+      context: ../services
+      dockerfile: pet/Dockerfile
+    container_name: pawly_pet
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/pet.prod.env
+    depends_on:
+      pet_postgres:
+        condition: service_healthy
+      acl:
+        condition: service_started
+      file:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8085/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  health:
+    build:
+      context: ../services
+      dockerfile: health/Dockerfile
+    container_name: pawly_health
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/health.prod.env
+    depends_on:
+      health_postgres:
+        condition: service_healthy
+      acl:
+        condition: service_started
+      file:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8088/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  push:
+    build:
+      context: ../services
+      dockerfile: push/Dockerfile
+    container_name: pawly_push
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/push.prod.env
+    volumes:
+      - ./secrets/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
+    depends_on:
+      push_postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8090/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  kong:
+    image: kong:3.6
+    container_name: pawly_kong
+    <<: *default-restart
+    logging: *default-logging
+    env_file:
+      - ./env/kong.prod.env
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./kong/kong.prod.yml:/opt/kong/kong.yml:ro
+    depends_on:
+      auth:
+        condition: service_started
+      profile:
+        condition: service_started
+      acl:
+        condition: service_started
+      pet:
+        condition: service_started
+      health:
+        condition: service_started
+      push:
+        condition: service_started
+      chat:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/migrate/Dockerfile
+    profiles:
+      - tools
+    logging: *default-logging
+    volumes:
+      - ..:/work:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      file_postgres:
+        condition: service_healthy
+      acl_postgres:
+        condition: service_healthy
+      profile_postgres:
+        condition: service_healthy
+      pet_postgres:
+        condition: service_healthy
+      health_postgres:
+        condition: service_healthy
+      push_postgres:
+        condition: service_healthy
+      chat_postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  file_postgres_data:
+  acl_postgres_data:
+  profile_postgres_data:
+  pet_postgres_data:
+  health_postgres_data:
+  push_postgres_data:
+  chat_postgres_data:
+  redis_data:
+  rabbitmq_data:

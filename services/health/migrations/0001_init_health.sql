@@ -50,9 +50,7 @@ CREATE TABLE metrics (
         (scope = 'CUSTOM' AND pet_id IS NOT NULL)
     ),
     CONSTRAINT metrics_range_invariant CHECK (
-        (min_value IS NULL AND max_value IS NULL)
-        OR
-        (min_value IS NOT NULL AND max_value IS NOT NULL AND min_value <= max_value)
+        min_value IS NULL OR max_value IS NULL OR min_value <= max_value
     ),
     CONSTRAINT metrics_boolean_invariant CHECK (
         input_kind <> 'BOOLEAN'
@@ -86,7 +84,6 @@ CREATE TABLE logs (
     occurred_at TIMESTAMPTZ NOT NULL,
     log_type_id UUID NULL REFERENCES log_types(id),
     description TEXT NULL,
-    source TEXT NOT NULL CHECK (source IN ('USER', 'HEALTH')),
     row_version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by_user_id UUID NOT NULL,
@@ -97,9 +94,6 @@ CREATE TABLE logs (
 );
 
 CREATE INDEX idx_logs_pet_occurred_id_active ON logs (pet_id, occurred_at DESC, id DESC)
-WHERE deleted_at IS NULL;
-
-CREATE INDEX idx_logs_pet_source_active ON logs (pet_id, source)
 WHERE deleted_at IS NULL;
 
 CREATE TABLE metric_values (
@@ -128,43 +122,6 @@ CREATE TABLE attachment_refs (
 
 CREATE INDEX idx_attachment_refs_entity ON attachment_refs (pet_id, entity_type, entity_id, added_at DESC);
 CREATE INDEX idx_attachment_refs_file_id ON attachment_refs (file_id);
-
-INSERT INTO metrics (
-    id, scope, pet_id, code, name, input_kind, unit, min_value, max_value, created_at, updated_at
-) VALUES
-    ('10000000-0000-0000-0000-000000000001', 'SYSTEM', NULL, 'WEIGHT', 'Вес', 'NUMERIC', 'kg', 0.1, 200, NOW(), NOW()),
-    ('10000000-0000-0000-0000-000000000002', 'SYSTEM', NULL, 'TEMPERATURE', 'Температура', 'NUMERIC', 'c', 30, 45, NOW(), NOW())
-ON CONFLICT DO NOTHING;
-
-INSERT INTO log_types (
-    id, scope, pet_id, code, name, created_at, updated_at
-) VALUES
-    (
-        '20000000-0000-0000-0000-000000000001',
-        'SYSTEM',
-        NULL,
-        'WEIGHING',
-        'Взвешивание',
-        NOW(),
-        NOW()
-    ),
-    (
-        '20000000-0000-0000-0000-000000000002',
-        'SYSTEM',
-        NULL,
-        'TEMPERATURE',
-        'Температура',
-        NOW(),
-        NOW()
-    )
-ON CONFLICT DO NOTHING;
-
-INSERT INTO log_type_metric_requirements (
-    log_type_id, metric_id, is_required, sort_order, created_at
-) VALUES
-    ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', TRUE, 0, NOW()),
-    ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', TRUE, 0, NOW())
-ON CONFLICT DO NOTHING;
 
 -- +goose Down
 DROP TABLE IF EXISTS attachment_refs;

@@ -26,7 +26,7 @@ internal_host() {
 run_one() {
   service="$1"
   cmd="$2"
-  env_file="/work/services/$service/.goose.env"
+  env_file="/work/deploy/env/$service.prod.env"
   migrations_dir="/work/services/$service/migrations"
 
   if [ ! -f "$env_file" ]; then

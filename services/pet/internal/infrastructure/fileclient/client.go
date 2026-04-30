@@ -3,15 +3,15 @@ package fileclient
 import (
 	"context"
 	"fmt"
-	"pet/internal/service"
+	"pet/internal/application/ports"
 	"time"
 
 	"github.com/google/uuid"
-	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	filepb "pawly/pkg/filepb"
 )
 
 type Client struct {
@@ -41,22 +41,22 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, service.UploadInfo, error) {
+func (c *Client) InitUpload(ctx context.Context, mimeType string, expectedSize int64, originalFilename string) (uuid.UUID, ports.UploadInfo, error) {
 	resp, err := c.client.InitUpload(ctx, &filepb.InitUploadRequest{
 		MimeType:          mimeType,
 		ExpectedSizeBytes: expectedSize,
 		OriginalFilename:  originalFilename,
 	})
 	if err != nil {
-		return uuid.Nil, service.UploadInfo{}, mapErr(err)
+		return uuid.Nil, ports.UploadInfo{}, mapErr(err)
 	}
 
 	fileID, err := uuid.Parse(resp.GetFile().GetId())
 	if err != nil {
-		return uuid.Nil, service.UploadInfo{}, service.ErrConflict
+		return uuid.Nil, ports.UploadInfo{}, ports.ErrConflict
 	}
 
-	return fileID, service.UploadInfo{
+	return fileID, ports.UploadInfo{
 		Method:    resp.GetUpload().GetMethod(),
 		URL:       resp.GetUpload().GetUrl(),
 		Headers:   resp.GetUpload().GetHeaders(),
@@ -153,16 +153,16 @@ func mapErr(err error) error {
 
 	switch st.Code() {
 	case codes.NotFound:
-		return service.ErrNotFound
+		return ports.ErrNotFound
 	case codes.PermissionDenied:
-		return service.ErrForbidden
+		return ports.ErrForbidden
 	case codes.InvalidArgument:
-		return service.ErrInvalidInput
+		return ports.ErrInvalidInput
 	case codes.FailedPrecondition, codes.AlreadyExists:
-		return service.ErrConflict
+		return ports.ErrConflict
 	default:
 		return err
 	}
 }
 
-var _ service.FileClient = (*Client)(nil)
+var _ ports.FileClient = (*Client)(nil)

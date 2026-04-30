@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"health/internal/model"
-	repo "health/internal/repository"
+	"health/internal/application/ports"
+	"health/internal/domain/model"
 	"strings"
 	"time"
 
@@ -71,7 +71,7 @@ func (r *ScheduledRepository) GetScheduledItem(ctx context.Context, petID, itemI
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -127,14 +127,14 @@ func (r *ScheduledRepository) GetScheduledItemBySource(ctx context.Context, petI
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
 	return &item, nil
 }
 
-func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.ListScheduledItemsInput) (repo.ListScheduledItemsOutput, error) {
+func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in ports.ListScheduledItemsQuery) (ports.ListScheduledItemsResult, error) {
 	if in.Limit <= 0 {
 		in.Limit = 20
 	}
@@ -147,6 +147,9 @@ func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.Li
 	if in.SourceType != nil {
 		args = append(args, *in.SourceType)
 		where = append(where, fmt.Sprintf("source_type = $%d", len(args)))
+	} else if len(in.SourceTypes) > 0 {
+		args = append(args, in.SourceTypes)
+		where = append(where, fmt.Sprintf("source_type = ANY($%d)", len(args)))
 	}
 	if in.DateFrom != nil {
 		args = append(args, *in.DateFrom)
@@ -158,7 +161,7 @@ func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.Li
 	}
 	if !in.IncludePast {
 		args = append(args, time.Now().UTC())
-		where = append(where, fmt.Sprintf("starts_at >= $%d", len(args)))
+		where = append(where, fmt.Sprintf("(starts_at >= $%d OR (recurrence_rule IS NOT NULL AND (recurrence_until IS NULL OR recurrence_until >= $%d)))", len(args), len(args)))
 	}
 	if in.Cursor != nil {
 		args = append(args, in.Cursor.SortAt, in.Cursor.ID)
@@ -197,7 +200,7 @@ func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.Li
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return repo.ListScheduledItemsOutput{}, err
+		return ports.ListScheduledItemsResult{}, err
 	}
 	defer rows.Close()
 
@@ -224,24 +227,101 @@ func (r *ScheduledRepository) ListScheduledItems(ctx context.Context, in repo.Li
 			&item.UpdatedAt,
 			&item.UpdatedByUserID,
 		); err != nil {
-			return repo.ListScheduledItemsOutput{}, err
+			return ports.ListScheduledItemsResult{}, err
 		}
 		items = append(items, item)
 		cursorTimes = append(cursorTimes, item.StartsAt)
 	}
 	if err := rows.Err(); err != nil {
-		return repo.ListScheduledItemsOutput{}, err
+		return ports.ListScheduledItemsResult{}, err
 	}
 
-	out := repo.ListScheduledItemsOutput{Items: items}
+	out := ports.ListScheduledItemsResult{Items: items}
 	if len(items) > in.Limit {
-		out.NextCursor = &repo.TimeCursor{SortAt: cursorTimes[in.Limit], ID: items[in.Limit].ID}
+		out.NextCursor = &ports.TimeCursor{SortAt: cursorTimes[in.Limit], ID: items[in.Limit].ID}
 		out.Items = items[:in.Limit]
 	}
 	return out, nil
 }
 
-func (r *ScheduledRepository) CreateScheduledItem(ctx context.Context, in repo.CreateScheduledItemInput) (*model.ScheduledItem, error) {
+func (r *ScheduledRepository) ListRecurringScheduledItemsForHorizon(ctx context.Context, in ports.ListRecurringScheduledItemsForHorizonParams) ([]model.ScheduledItem, error) {
+	if in.Limit <= 0 {
+		in.Limit = 100
+	}
+	if in.Limit > 500 {
+		in.Limit = 500
+	}
+	const query = `
+		SELECT
+			id,
+			pet_id,
+			source_type,
+			source_id,
+			title,
+			note,
+			starts_at,
+			push_enabled,
+			remind_offset_minutes,
+			recurrence_rule,
+			recurrence_interval,
+			recurrence_until,
+			row_version,
+			created_at,
+			created_by_user_id,
+			updated_at,
+			updated_by_user_id,
+			deleted_at,
+			deleted_by_user_id
+		FROM scheduled_items
+		WHERE deleted_at IS NULL
+		  AND recurrence_rule IS NOT NULL
+		  AND starts_at <= $2
+		  AND (recurrence_until IS NULL OR recurrence_until >= $1)
+		  AND COALESCE(occurrences_generated_until, starts_at) < ($2 - INTERVAL '1 day')
+		ORDER BY updated_at ASC, id ASC
+		LIMIT $3
+	`
+	rows, err := r.db.Query(ctx, query, in.Now, in.Horizon, in.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.ScheduledItem, 0, in.Limit)
+	for rows.Next() {
+		var item model.ScheduledItem
+		if err := rows.Scan(
+			&item.ID,
+			&item.PetID,
+			&item.SourceType,
+			&item.SourceID,
+			&item.Title,
+			&item.Note,
+			&item.StartsAt,
+			&item.PushEnabled,
+			&item.RemindOffsetMinutes,
+			&item.RecurrenceRule,
+			&item.RecurrenceInterval,
+			&item.RecurrenceUntil,
+			&item.RowVersion,
+			&item.CreatedAt,
+			&item.CreatedByUserID,
+			&item.UpdatedAt,
+			&item.UpdatedByUserID,
+			&item.DeletedAt,
+			&item.DeletedByUserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *ScheduledRepository) CreateScheduledItem(ctx context.Context, in ports.CreateScheduledItemInput) (*model.ScheduledItem, error) {
 	const query = `
 		INSERT INTO scheduled_items (
 			id,
@@ -283,14 +363,14 @@ func (r *ScheduledRepository) CreateScheduledItem(ctx context.Context, in repo.C
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
 	return r.GetScheduledItem(ctx, in.PetID, in.ID)
 }
 
-func (r *ScheduledRepository) UpdateScheduledItem(ctx context.Context, in repo.UpdateScheduledItemInput) (*model.ScheduledItem, error) {
+func (r *ScheduledRepository) UpdateScheduledItem(ctx context.Context, in ports.UpdateScheduledItemInput) (*model.ScheduledItem, error) {
 	const query = `
 		UPDATE scheduled_items
 		SET
@@ -302,6 +382,7 @@ func (r *ScheduledRepository) UpdateScheduledItem(ctx context.Context, in repo.U
 			recurrence_rule = $9,
 			recurrence_interval = $10,
 			recurrence_until = $11,
+			occurrences_generated_until = NULL,
 			updated_at = NOW(),
 			updated_by_user_id = $12,
 			row_version = row_version + 1
@@ -323,23 +404,23 @@ func (r *ScheduledRepository) UpdateScheduledItem(ctx context.Context, in repo.U
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
 	if cmd.RowsAffected() == 0 {
 		if _, err := r.GetScheduledItem(ctx, in.PetID, in.ID); err != nil {
-			if errors.Is(err, repo.ErrNotFound) {
-				return nil, repo.ErrNotFound
+			if errors.Is(err, ports.ErrNotFound) {
+				return nil, ports.ErrNotFound
 			}
 			return nil, err
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 	return r.GetScheduledItem(ctx, in.PetID, in.ID)
 }
 
-func (r *ScheduledRepository) UpdateScheduledItemReminderSettings(ctx context.Context, in repo.UpdateScheduledItemReminderSettingsInput) (*model.ScheduledItem, error) {
+func (r *ScheduledRepository) UpdateScheduledItemReminderSettings(ctx context.Context, in ports.UpdateScheduledItemReminderSettingsInput) (*model.ScheduledItem, error) {
 	const query = `
 		UPDATE scheduled_items
 		SET
@@ -363,17 +444,17 @@ func (r *ScheduledRepository) UpdateScheduledItemReminderSettings(ctx context.Co
 	}
 	if cmd.RowsAffected() == 0 {
 		if _, err := r.GetScheduledItem(ctx, in.PetID, in.ID); err != nil {
-			if errors.Is(err, repo.ErrNotFound) {
-				return nil, repo.ErrNotFound
+			if errors.Is(err, ports.ErrNotFound) {
+				return nil, ports.ErrNotFound
 			}
 			return nil, err
 		}
-		return nil, repo.ErrConflict
+		return nil, ports.ErrConflict
 	}
 	return r.GetScheduledItem(ctx, in.PetID, in.ID)
 }
 
-func (r *ScheduledRepository) DeleteScheduledItem(ctx context.Context, in repo.DeleteScheduledItemInput) error {
+func (r *ScheduledRepository) DeleteScheduledItem(ctx context.Context, in ports.DeleteScheduledItemInput) error {
 	const query = `
 		UPDATE scheduled_items
 		SET
@@ -390,17 +471,17 @@ func (r *ScheduledRepository) DeleteScheduledItem(ctx context.Context, in repo.D
 	}
 	if cmd.RowsAffected() == 0 {
 		if _, err := r.GetScheduledItem(ctx, in.PetID, in.ID); err != nil {
-			if errors.Is(err, repo.ErrNotFound) {
-				return repo.ErrNotFound
+			if errors.Is(err, ports.ErrNotFound) {
+				return ports.ErrNotFound
 			}
 			return err
 		}
-		return repo.ErrConflict
+		return ports.ErrConflict
 	}
 	return nil
 }
 
-func (r *ScheduledRepository) UpsertHealthScheduledItem(ctx context.Context, in repo.UpsertHealthScheduledItemInput) (*model.ScheduledItem, error) {
+func (r *ScheduledRepository) UpsertHealthScheduledItem(ctx context.Context, in ports.UpsertHealthScheduledItemInput) (*model.ScheduledItem, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -424,6 +505,7 @@ func (r *ScheduledRepository) UpsertHealthScheduledItem(ctx context.Context, in 
 				title = $4,
 				note = $5,
 				starts_at = $6,
+				occurrences_generated_until = NULL,
 				updated_at = NOW(),
 				updated_by_user_id = $7,
 				row_version = row_version + 1
@@ -459,7 +541,7 @@ func (r *ScheduledRepository) UpsertHealthScheduledItem(ctx context.Context, in 
 		`
 		if _, err := tx.Exec(ctx, insertQuery, itemID, in.PetID, in.SourceType, in.SourceID, in.Title, in.Note, in.StartsAt, in.PushEnabled, in.RemindOffsetMinutes, in.CreatedByUserID, in.UpdatedByUserID); err != nil {
 			if isUniqueViolation(err) {
-				return nil, repo.ErrConflict
+				return nil, ports.ErrConflict
 			}
 			return nil, err
 		}
@@ -473,7 +555,7 @@ func (r *ScheduledRepository) UpsertHealthScheduledItem(ctx context.Context, in 
 	return r.GetScheduledItem(ctx, in.PetID, itemID)
 }
 
-func (r *ScheduledRepository) DeleteHealthScheduledItem(ctx context.Context, in repo.DeleteHealthScheduledItemInput) error {
+func (r *ScheduledRepository) DeleteHealthScheduledItem(ctx context.Context, in ports.DeleteHealthScheduledItemInput) error {
 	const query = `
 		UPDATE scheduled_items
 		SET
@@ -488,7 +570,7 @@ func (r *ScheduledRepository) DeleteHealthScheduledItem(ctx context.Context, in 
 	return err
 }
 
-func (r *ScheduledRepository) ListScheduledItemOccurrences(ctx context.Context, in repo.ListScheduledItemOccurrencesInput) (repo.ListScheduledItemOccurrencesOutput, error) {
+func (r *ScheduledRepository) ListScheduledItemOccurrences(ctx context.Context, in ports.ListScheduledItemOccurrencesQuery) (ports.ListScheduledItemOccurrencesResult, error) {
 	if in.Limit <= 0 {
 		in.Limit = 20
 	}
@@ -501,6 +583,9 @@ func (r *ScheduledRepository) ListScheduledItemOccurrences(ctx context.Context, 
 	if in.SourceType != nil {
 		args = append(args, *in.SourceType)
 		where = append(where, fmt.Sprintf("si.source_type = $%d", len(args)))
+	} else if len(in.SourceTypes) > 0 {
+		args = append(args, in.SourceTypes)
+		where = append(where, fmt.Sprintf("si.source_type = ANY($%d)", len(args)))
 	}
 	if in.DateFrom != nil {
 		args = append(args, *in.DateFrom)
@@ -551,7 +636,7 @@ func (r *ScheduledRepository) ListScheduledItemOccurrences(ctx context.Context, 
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return repo.ListScheduledItemOccurrencesOutput{}, err
+		return ports.ListScheduledItemOccurrencesResult{}, err
 	}
 	defer rows.Close()
 
@@ -585,18 +670,18 @@ func (r *ScheduledRepository) ListScheduledItemOccurrences(ctx context.Context, 
 			&item.Rule.DeletedAt,
 			&item.Rule.DeletedByUserID,
 		); err != nil {
-			return repo.ListScheduledItemOccurrencesOutput{}, err
+			return ports.ListScheduledItemOccurrencesResult{}, err
 		}
 		items = append(items, item)
 		cursorTimes = append(cursorTimes, item.ScheduledFor)
 	}
 	if err := rows.Err(); err != nil {
-		return repo.ListScheduledItemOccurrencesOutput{}, err
+		return ports.ListScheduledItemOccurrencesResult{}, err
 	}
 
-	out := repo.ListScheduledItemOccurrencesOutput{Items: items}
+	out := ports.ListScheduledItemOccurrencesResult{Items: items}
 	if len(items) > in.Limit {
-		out.NextCursor = &repo.TimeCursor{SortAt: cursorTimes[in.Limit], ID: items[in.Limit].ID}
+		out.NextCursor = &ports.TimeCursor{SortAt: cursorTimes[in.Limit], ID: items[in.Limit].ID}
 		out.Items = items[:in.Limit]
 	}
 	return out, nil
@@ -662,14 +747,14 @@ func (r *ScheduledRepository) GetScheduledItemOccurrence(ctx context.Context, pe
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
 	return &item, nil
 }
 
-func (r *ScheduledRepository) CreateScheduledItemOccurrence(ctx context.Context, in repo.CreateScheduledItemOccurrenceInput) (*model.ScheduledItemOccurrence, error) {
+func (r *ScheduledRepository) CreateScheduledItemOccurrence(ctx context.Context, in ports.CreateScheduledItemOccurrenceInput) (*model.ScheduledItemOccurrence, error) {
 	const query = `
 		INSERT INTO scheduled_item_occurrences (
 			id,
@@ -681,7 +766,7 @@ func (r *ScheduledRepository) CreateScheduledItemOccurrence(ctx context.Context,
 	`
 	if _, err := r.db.Exec(ctx, query, in.ID, in.ScheduledItemID, in.PetID, in.ScheduledFor); err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
@@ -693,7 +778,7 @@ func (r *ScheduledRepository) CreateScheduledItemOccurrence(ctx context.Context,
 	}, nil
 }
 
-func (r *ScheduledRepository) DeleteScheduledItemOccurrencesFrom(ctx context.Context, in repo.DeleteScheduledItemOccurrencesFromInput) error {
+func (r *ScheduledRepository) DeleteScheduledItemOccurrencesFrom(ctx context.Context, in ports.DeleteScheduledItemOccurrencesFromInput) error {
 	const query = `
 		DELETE FROM scheduled_item_occurrences
 		WHERE scheduled_item_id = $1 AND scheduled_for >= $2
@@ -702,7 +787,17 @@ func (r *ScheduledRepository) DeleteScheduledItemOccurrencesFrom(ctx context.Con
 	return err
 }
 
-func (r *ScheduledRepository) CreateScheduledItemDispatch(ctx context.Context, in repo.CreateScheduledItemDispatchInput) error {
+func (r *ScheduledRepository) MarkScheduledItemOccurrencesGeneratedUntil(ctx context.Context, in ports.MarkScheduledItemOccurrencesGeneratedUntilInput) error {
+	const query = `
+		UPDATE scheduled_items
+		SET occurrences_generated_until = $2
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+	_, err := r.db.Exec(ctx, query, in.ScheduledItemID, in.GeneratedUntil)
+	return err
+}
+
+func (r *ScheduledRepository) CreateScheduledItemDispatch(ctx context.Context, in ports.CreateScheduledItemDispatchParams) error {
 	const query = `
 		INSERT INTO scheduled_item_push_dispatches (
 			id,
@@ -713,14 +808,14 @@ func (r *ScheduledRepository) CreateScheduledItemDispatch(ctx context.Context, i
 	`
 	if _, err := r.db.Exec(ctx, query, in.ID, in.ScheduledItemOccurrenceID, in.DispatchKey); err != nil {
 		if isUniqueViolation(err) {
-			return repo.ErrConflict
+			return ports.ErrConflict
 		}
 		return err
 	}
 	return nil
 }
 
-func (r *ScheduledRepository) ListDueScheduledItemOccurrences(ctx context.Context, in repo.ListDueScheduledItemOccurrencesInput) ([]model.ScheduledItemOccurrenceListItem, error) {
+func (r *ScheduledRepository) ListDueScheduledItemOccurrences(ctx context.Context, in ports.ListDueScheduledItemOccurrencesParams) ([]model.ScheduledItemOccurrenceListItem, error) {
 	if in.Limit <= 0 {
 		in.Limit = 100
 	}

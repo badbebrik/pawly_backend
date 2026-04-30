@@ -106,4 +106,4 @@ services/docs/
 docs/
 deploy/secrets/
 deploy/env/
-
+deploy/kong/kong.prod.yml

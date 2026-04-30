@@ -348,7 +348,7 @@ func TestRegisterEmail_UsesExplicitLocaleForProfileAndVerification(t *testing.T)
 		OAuthVerify: &stubOAuthVerifier{},
 	})
 
-	out, err := set.RegisterEmail.Execute(context.Background(), RegisterEmailInput{
+	out, err := set.RegisterEmail.Execute(context.Background(), RegisterEmailParams{
 		Email:     "User@Example.com",
 		Password:  "StrongPass123",
 		FirstName: "Vika",
@@ -432,7 +432,7 @@ func TestLoginEmail_CreatesSessionAndTouchesLastLogin(t *testing.T) {
 		Clock:       fixedClock{now: now},
 	})
 
-	out, err := set.LoginEmail.Execute(context.Background(), LoginEmailInput{
+	out, err := set.LoginEmail.Execute(context.Background(), LoginEmailParams{
 		Email:    "user@example.com",
 		Password: "StrongPass123",
 		Locale:   "ru",
@@ -537,7 +537,7 @@ func TestRefresh_RotatesSessionUsingClock(t *testing.T) {
 		Clock:       fixedClock{now: now},
 	})
 
-	out, err := set.Refresh.Execute(context.Background(), RefreshInput{RefreshToken: oldRefresh})
+	out, err := set.Refresh.Execute(context.Background(), RefreshParams{RefreshToken: oldRefresh})
 	if err != nil {
 		t.Fatalf("Refresh returned error: %v", err)
 	}
@@ -593,7 +593,7 @@ func TestRequestPasswordReset_UsesExplicitLocale(t *testing.T) {
 		OAuthVerify: &stubOAuthVerifier{},
 	})
 
-	err := set.PasswordResetRequest.Execute(context.Background(), PasswordResetRequestInput{
+	err := set.PasswordResetRequest.Execute(context.Background(), PasswordResetRequestParams{
 		Email:  "user@example.com",
 		Locale: "EN",
 	})

@@ -4,6 +4,8 @@ import (
 	authuc "auth/internal/application/usecase"
 	"errors"
 	"net/http"
+
+	"github.com/rs/zerolog/log"
 )
 
 type errorRule struct {
@@ -11,52 +13,23 @@ type errorRule struct {
 	status int
 }
 
-func writeMappedUseCaseError(w http.ResponseWriter, err error, details any, rules ...errorRule) {
+func writeMappedError(w http.ResponseWriter, err error, rules ...errorRule) {
 	for _, rule := range rules {
 		if errors.Is(err, rule.err) {
-			if details != nil {
-				writeError(w, rule.status, err.Error(), details)
-				return
+			if rule.status >= http.StatusInternalServerError {
+				log.Error().Err(err).Int("status", rule.status).Msg("auth request failed")
 			}
 			writeServiceError(w, rule.status, err)
 			return
 		}
 	}
 
+	log.Error().Err(err).Int("status", http.StatusInternalServerError).Msg("unmapped auth error")
 	writeInternalError(w)
 }
 
-func registerEmailErrorDetails(resp *authuc.RegisterEmailOutput) any {
-	if resp == nil {
-		return nil
-	}
-	return map[string]any{
-		"user_id":          resp.UserID,
-		"channel":          resp.Verification.Channel,
-		"code_ttl_seconds": resp.Verification.CodeTTLSeconds,
-		"can_resend_in":    resp.Verification.CanResendInSeconds,
-	}
-}
-
-func resendEmailVerificationErrorDetails(resp *authuc.ResendEmailVerificationOutput) any {
-	if resp == nil {
-		return nil
-	}
-	return map[string]any{
-		"user_id":          resp.UserID,
-		"channel":          resp.Verification.Channel,
-		"code_ttl_seconds": resp.Verification.CodeTTLSeconds,
-		"can_resend_in":    resp.Verification.CanResendInSeconds,
-	}
-}
-
-func writeRegisterEmailError(w http.ResponseWriter, err error, resp *authuc.RegisterEmailOutput) {
-	details := any(nil)
-	if errors.Is(err, authuc.ErrCannotResendYet) {
-		details = registerEmailErrorDetails(resp)
-	}
-
-	writeMappedUseCaseError(w, err, details,
+func writeRegisterEmailError(w http.ResponseWriter, err error, _ *authuc.RegisterEmailResult) {
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrEmailAlreadyTaken, status: http.StatusConflict},
 		errorRule{err: authuc.ErrUserBlocked, status: http.StatusForbidden},
 		errorRule{err: authuc.ErrWeakPassword, status: http.StatusBadRequest},
@@ -68,7 +41,7 @@ func writeRegisterEmailError(w http.ResponseWriter, err error, resp *authuc.Regi
 }
 
 func writeVerifyEmailError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrUserNotFound, status: http.StatusNotFound},
 		errorRule{err: authuc.ErrUserBlocked, status: http.StatusForbidden},
@@ -78,13 +51,8 @@ func writeVerifyEmailError(w http.ResponseWriter, err error) {
 	)
 }
 
-func writeResendEmailVerificationError(w http.ResponseWriter, err error, resp *authuc.ResendEmailVerificationOutput) {
-	details := any(nil)
-	if errors.Is(err, authuc.ErrCannotResendYet) {
-		details = resendEmailVerificationErrorDetails(resp)
-	}
-
-	writeMappedUseCaseError(w, err, details,
+func writeResendEmailVerificationError(w http.ResponseWriter, err error, _ *authuc.ResendEmailVerificationResult) {
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrUserNotFound, status: http.StatusNotFound},
 		errorRule{err: authuc.ErrUserBlocked, status: http.StatusForbidden},
@@ -95,7 +63,7 @@ func writeResendEmailVerificationError(w http.ResponseWriter, err error, resp *a
 }
 
 func writeLoginEmailError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrInvalidEmailOrPassword, status: http.StatusUnauthorized},
 		errorRule{err: authuc.ErrEmailNotVerified, status: http.StatusForbidden},
@@ -104,7 +72,7 @@ func writeLoginEmailError(w http.ResponseWriter, err error) {
 }
 
 func writeLoginOAuthError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrOAuthInvalidToken, status: http.StatusUnauthorized},
 		errorRule{err: authuc.ErrOAuthProviderUnavailable, status: http.StatusServiceUnavailable},
@@ -114,20 +82,20 @@ func writeLoginOAuthError(w http.ResponseWriter, err error) {
 }
 
 func writeLogoutError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrUnauthorized, status: http.StatusUnauthorized},
 		errorRule{err: authuc.ErrSessionNotFound, status: http.StatusNotFound},
 	)
 }
 
 func writeLogoutAllError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrUnauthorized, status: http.StatusUnauthorized},
 	)
 }
 
 func writeChangePasswordError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrUnauthorized, status: http.StatusUnauthorized},
 		errorRule{err: authuc.ErrInvalidEmailOrPassword, status: http.StatusUnauthorized},
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
@@ -138,7 +106,7 @@ func writeChangePasswordError(w http.ResponseWriter, err error) {
 }
 
 func writeRefreshError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrUnauthorized, status: http.StatusUnauthorized},
 		errorRule{err: authuc.ErrRefreshMismatch, status: http.StatusUnauthorized},
@@ -149,7 +117,7 @@ func writeRefreshError(w http.ResponseWriter, err error) {
 }
 
 func writePasswordResetRequestError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrCannotResendYet, status: http.StatusTooManyRequests},
 		errorRule{err: authuc.ErrVerificationFailed, status: http.StatusServiceUnavailable},
@@ -157,7 +125,7 @@ func writePasswordResetRequestError(w http.ResponseWriter, err error) {
 }
 
 func writePasswordResetVerifyError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrVerificationCodeInvalid, status: http.StatusUnprocessableEntity},
 		errorRule{err: authuc.ErrVerificationCodeExpired, status: http.StatusUnprocessableEntity},
@@ -167,7 +135,7 @@ func writePasswordResetVerifyError(w http.ResponseWriter, err error) {
 }
 
 func writePasswordResetConfirmError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: authuc.ErrIncorrectFormat, status: http.StatusBadRequest},
 		errorRule{err: authuc.ErrUnauthorized, status: http.StatusUnauthorized},
 		errorRule{err: authuc.ErrUserNotFound, status: http.StatusNotFound},

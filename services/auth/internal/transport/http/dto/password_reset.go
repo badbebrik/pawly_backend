@@ -1,11 +1,7 @@
 package dto
 
-type PasswordResetRequestRequest struct {
+type PasswordResetRequest struct {
 	Email string `json:"email"`
-}
-
-type PasswordResetRequestResponse struct {
-	Status string `json:"status"`
 }
 
 type PasswordResetVerifyRequest struct {
@@ -20,8 +16,4 @@ type PasswordResetVerifyResponse struct {
 type PasswordResetConfirmRequest struct {
 	ResetToken  string `json:"reset_token"`
 	NewPassword string `json:"new_password"`
-}
-
-type PasswordResetConfirmResponse struct {
-	Status string `json:"status"`
 }

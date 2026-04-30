@@ -2,7 +2,7 @@ package usecase
 
 import (
 	"context"
-	"profile/internal/model"
+	"profile/internal/domain/model"
 	"strings"
 
 	"github.com/google/uuid"
@@ -14,11 +14,11 @@ type Preferences struct {
 	Timezone string
 }
 
-type GetPreferencesUseCase struct{ deps *dependencies }
-type BatchGetPreferencesUseCase struct{ deps *dependencies }
-type BatchProfilesBriefUseCase struct{ deps *dependencies }
+type GetPreferences struct{ deps *dependencies }
+type BatchGetPreferences struct{ deps *dependencies }
+type BatchProfilesBrief struct{ deps *dependencies }
 
-func (uc *GetPreferencesUseCase) Execute(ctx context.Context, userID uuid.UUID) (*Preferences, error) {
+func (uc *GetPreferences) Execute(ctx context.Context, userID uuid.UUID) (*Preferences, error) {
 	if userID == uuid.Nil {
 		return nil, ErrInvalidInput
 	}
@@ -29,7 +29,7 @@ func (uc *GetPreferencesUseCase) Execute(ctx context.Context, userID uuid.UUID) 
 	return &Preferences{UserID: profile.UserID, Locale: profile.Locale, Timezone: profile.Timezone}, nil
 }
 
-func (uc *BatchGetPreferencesUseCase) Execute(ctx context.Context, userIDs []uuid.UUID) ([]Preferences, []uuid.UUID, error) {
+func (uc *BatchGetPreferences) Execute(ctx context.Context, userIDs []uuid.UUID) ([]Preferences, []uuid.UUID, error) {
 	unique := uniqueUserIDs(userIDs)
 	if len(unique) == 0 {
 		return []Preferences{}, []uuid.UUID{}, nil
@@ -63,7 +63,7 @@ type ProfileBrief struct {
 	AvatarDownloadURL *string
 }
 
-func (uc *BatchProfilesBriefUseCase) Execute(ctx context.Context, userIDs []uuid.UUID) ([]ProfileBrief, []uuid.UUID, error) {
+func (uc *BatchProfilesBrief) Execute(ctx context.Context, userIDs []uuid.UUID) ([]ProfileBrief, []uuid.UUID, error) {
 	unique := uniqueUserIDs(userIDs)
 	if len(unique) == 0 {
 		return []ProfileBrief{}, []uuid.UUID{}, nil
@@ -76,7 +76,7 @@ func (uc *BatchProfilesBriefUseCase) Execute(ctx context.Context, userIDs []uuid
 	for i := range profiles {
 		byUser[profiles[i].UserID] = profiles[i]
 	}
-	avatarURLByID := resolveAvatarDownloadURLs(ctx, uc.deps.files, profiles)
+	avatarURLByID := resolveAvatarDownloadURLs(ctx, uc.deps.fileClient, profiles)
 	items := make([]ProfileBrief, 0, len(byUser))
 	notFound := make([]uuid.UUID, 0)
 	for i := range unique {

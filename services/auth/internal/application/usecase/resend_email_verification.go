@@ -15,21 +15,21 @@ type EmailVerificationMeta struct {
 	CanResendInSeconds int
 }
 
-type ResendEmailVerificationUseCase struct {
+type ResendEmailVerification struct {
 	deps *dependencies
 }
 
-type ResendEmailVerificationInput struct {
+type ResendEmailVerificationParams struct {
 	Email  string
 	Locale string
 }
 
-type ResendEmailVerificationOutput struct {
+type ResendEmailVerificationResult struct {
 	UserID       uuid.UUID
 	Verification EmailVerificationMeta
 }
 
-func (uc *ResendEmailVerificationUseCase) Execute(ctx context.Context, in ResendEmailVerificationInput) (*ResendEmailVerificationOutput, error) {
+func (uc *ResendEmailVerification) Execute(ctx context.Context, in ResendEmailVerificationParams) (*ResendEmailVerificationResult, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) {
 		return nil, ErrIncorrectFormat
@@ -50,7 +50,7 @@ func (uc *ResendEmailVerificationUseCase) Execute(ctx context.Context, in Resend
 	}
 
 	meta, sendErr := sendRegistrationVerification(ctx, uc.deps, user.ID, email, "", "", in.Locale)
-	out := &ResendEmailVerificationOutput{
+	out := &ResendEmailVerificationResult{
 		UserID:       user.ID,
 		Verification: meta,
 	}

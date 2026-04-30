@@ -6,21 +6,21 @@ services:
     routes:
       - name: auth-public-routes
         paths:
-          - ~/auth/register/email$
-          - ~/auth/verification/email/resend$
-          - ~/auth/verify/email$
-          - ~/auth/login/email$
-          - ~/auth/login/oauth$
-          - ~/auth/refresh$
-          - ~/auth/password/reset/request$
-          - ~/auth/password/reset/verify$
-          - ~/auth/password/reset/confirm$
+          - ~/v1/auth/email:register$
+          - ~/v1/auth/email-verification:resend$
+          - ~/v1/auth/email-verification:verify$
+          - ~/v1/auth/sessions:login-email$
+          - ~/v1/auth/sessions:login-oauth$
+          - ~/v1/auth/sessions:refresh$
+          - ~/v1/auth/password-reset:request$
+          - ~/v1/auth/password-reset:verify$
+          - ~/v1/auth/password-reset:confirm$
         strip_path: false
       - name: auth-protected-routes
         paths:
-          - ~/auth/logout$
-          - ~/auth/logout-all$
-          - ~/auth/password/change$
+          - ~/v1/auth/sessions:revoke$
+          - ~/v1/auth/sessions:revoke-all$
+          - ~/v1/auth/password:change$
         strip_path: false
 
   - name: profile-service
@@ -28,7 +28,7 @@ services:
     routes:
       - name: profile-routes
         paths:
-          - /v1/profile
+          - /v1/profiles
         strip_path: false
 
   - name: acl-service
@@ -38,6 +38,7 @@ services:
         paths:
           - /v1/acl
           - ~/v1/pets/.+/acl
+        regex_priority: 200
         strip_path: false
 
   - name: pet-service
@@ -57,6 +58,7 @@ services:
     routes:
       - name: health-routes
         paths:
+          - ~/v1/health/calendar$
           - ~/v1/health/day$
           - ~/v1/pets/.+/health/bootstrap$
           - ~/v1/pets/.+/health/day$
@@ -65,6 +67,7 @@ services:
           - ~/v1/pets/.+/scheduled-item-occurrences$
           - ~/v1/pets/.+/scheduled-item-occurrences/.+$
           - ~/v1/pets/.+/documents$
+          - ~/v1/pets/.+/documents/.+$
           - ~/v1/pets/.+/attachments:init-upload$
           - ~/v1/pets/.+/attachments:confirm-upload$
           - ~/v1/pets/.+/vet-visits$
@@ -107,23 +110,6 @@ services:
           - ~/v1/pets/.+/push-settings$
         regex_priority: 200
         strip_path: false
-
-  - name: notification-service
-    url: http://notification:8083
-    routes:
-      - name: notification-routes
-        paths:
-          - /v1/notifications
-        strip_path: false
-
-  - name: email-service
-    url: http://email:8084
-    routes:
-      - name: email-routes
-        paths:
-          - /internal/v1/email
-        strip_path: false
-
 plugins:
   - name: jwt
     route: auth-protected-routes
@@ -174,13 +160,6 @@ plugins:
       claims_to_verify:
         - exp
       secret_is_base64: false
-  - name: jwt
-    route: notification-routes
-    config:
-      key_claim_name: iss
-      claims_to_verify:
-        - exp
-      secret_is_base64: false
   - name: post-function
     route: auth-protected-routes
     config:
@@ -363,36 +342,6 @@ plugins:
           end
   - name: post-function
     route: push-routes
-    config:
-      access:
-        - |
-          kong.service.request.clear_header("X-User-ID")
-          local token = kong.ctx.shared.authenticated_jwt_token
-          if type(token) == "string" then
-            local payload = token:match("^[^.]+%.([^.]+)%.?[^.]*$")
-            if payload then
-              payload = payload:gsub("-", "+"):gsub("_", "/")
-              local rem = #payload % 4
-              if rem == 2 then
-                payload = payload .. "=="
-              elseif rem == 3 then
-                payload = payload .. "="
-              elseif rem == 1 then
-                payload = nil
-              end
-            end
-            if payload then
-              local decoded = ngx.decode_base64(payload)
-              if decoded then
-                local sub = decoded:match([["sub"%s*:%s*"([^"]+)"]])
-                if sub and sub ~= "" then
-                  kong.service.request.set_header("X-User-ID", sub)
-                end
-              end
-            end
-          end
-  - name: post-function
-    route: notification-routes
     config:
       access:
         - |

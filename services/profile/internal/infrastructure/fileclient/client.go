@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	filepb "pawly/pkg/filepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	filepb "pawly/pkg/filepb"
 )
 
 type Client struct {
@@ -139,4 +139,4 @@ func (c *Client) DeleteFileIfUnlinked(ctx context.Context, fileID uuid.UUID) err
 	return err
 }
 
-var _ ports.FileGateway = (*Client)(nil)
+var _ ports.FileClient = (*Client)(nil)

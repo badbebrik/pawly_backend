@@ -10,20 +10,20 @@ import (
 
 var resetCodeRe = regexp.MustCompile(`^\d{6}$`)
 
-type PasswordResetVerifyUseCase struct {
+type PasswordResetVerify struct {
 	deps *dependencies
 }
 
-type PasswordResetVerifyInput struct {
+type PasswordResetVerifyParams struct {
 	Email string
 	Code  string
 }
 
-type PasswordResetVerifyOutput struct {
+type PasswordResetVerifyResult struct {
 	ResetToken string
 }
 
-func (uc *PasswordResetVerifyUseCase) Execute(ctx context.Context, in PasswordResetVerifyInput) (*PasswordResetVerifyOutput, error) {
+func (uc *PasswordResetVerify) Execute(ctx context.Context, in PasswordResetVerifyParams) (*PasswordResetVerifyResult, error) {
 	email := security.NormalizeEmail(in.Email)
 	if !security.ValidateEmail(email) || !resetCodeRe.MatchString(in.Code) {
 		return nil, ErrIncorrectFormat
@@ -58,5 +58,5 @@ func (uc *PasswordResetVerifyUseCase) Execute(ctx context.Context, in PasswordRe
 		return nil, err
 	}
 
-	return &PasswordResetVerifyOutput{ResetToken: resetToken}, nil
+	return &PasswordResetVerifyResult{ResetToken: resetToken}, nil
 }

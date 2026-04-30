@@ -5,6 +5,7 @@ import (
 	appmw "chat/internal/transport/http/middleware"
 	"chat/internal/transport/ws"
 	"net/http"
+	"pawly/pkg/httpjson"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,19 +19,10 @@ func (a *App) setupRoutes() http.Handler {
 	r.Use(chimw.Recoverer)
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		httpjson.Write(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	h := handlers.New(
-		a.useCases.OpenDirectConversation,
-		a.useCases.ListConversations,
-		a.useCases.GetConversation,
-		a.useCases.GetUnreadSummary,
-		a.useCases.GetMessageHistory,
-		a.useCases.MarkRead,
-	)
+	h := handlers.New(a.useCases)
 	wsHandler := ws.NewHandler(
 		a.hub,
 		a.rtPub,
@@ -54,7 +46,7 @@ func (a *App) setupRoutes() http.Handler {
 		r.Get("/v1/chat/unread-summary", h.GetUnreadSummary)
 		r.Get("/v1/chat/conversations/{conversation_id}", h.GetConversation)
 		r.Get("/v1/chat/conversations/{conversation_id}/messages", h.GetMessageHistory)
-		r.Post("/v1/chat/conversations/{conversation_id}/read", h.MarkRead)
+		r.Post("/v1/chat/conversations/{conversation_id}:mark-read", h.MarkRead)
 	})
 
 	return r

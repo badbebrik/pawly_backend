@@ -24,11 +24,11 @@ type Config struct {
 	OutboxWorkerIntervalMS   int
 	OutboxWorkerBatchSize    int
 
-	RabbitHost               string
-	RabbitPort               string
-	RabbitUser               string
-	RabbitPassword           string
-	RabbitNotificationsQueue string
+	RabbitHost       string
+	RabbitPort       string
+	RabbitUser       string
+	RabbitPassword   string
+	RabbitEmailQueue string
 
 	ProfileServiceGRPCAddr  string
 	GoogleOAuthClientID     string
@@ -75,7 +75,7 @@ func Load() (*Config, error) {
 	rabbitPort := configenv.String("RABBITMQ_PORT", "5672")
 	rabbitUser := configenv.String("RABBITMQ_USER", "")
 	rabbitPassword := configenv.String("RABBITMQ_PASSWORD", "")
-	rabbitNotificationsQueue := configenv.String("RABBITMQ_NOTIFICATIONS_QUEUE", "")
+	rabbitEmailQueue := configenv.String("RABBITMQ_EMAIL_QUEUE", "email.notifications")
 	profileServiceGRPCAddr := configenv.String("PROFILE_SERVICE_GRPC_ADDR", "localhost:50058")
 	googleOAuthClientID, err := configenv.RequiredString("GOOGLE_OAUTH_CLIENT_ID")
 	if err != nil {
@@ -108,7 +108,7 @@ func Load() (*Config, error) {
 		RabbitPort:               rabbitPort,
 		RabbitUser:               rabbitUser,
 		RabbitPassword:           rabbitPassword,
-		RabbitNotificationsQueue: rabbitNotificationsQueue,
+		RabbitEmailQueue:         rabbitEmailQueue,
 		ProfileServiceGRPCAddr:   profileServiceGRPCAddr,
 		GoogleOAuthClientID:      googleOAuthClientID,
 		OAuthHTTPTimeoutSeconds:  oauthHTTPTimeoutSeconds,

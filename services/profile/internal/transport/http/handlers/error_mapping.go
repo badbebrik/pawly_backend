@@ -3,8 +3,8 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"profile/internal/application/ports"
 	profileuc "profile/internal/application/usecase"
-	"profile/internal/repository"
 )
 
 type errorRule struct {
@@ -12,13 +12,9 @@ type errorRule struct {
 	status int
 }
 
-func writeMappedUseCaseError(w http.ResponseWriter, err error, details any, rules ...errorRule) {
+func writeMappedError(w http.ResponseWriter, err error, rules ...errorRule) {
 	for _, rule := range rules {
 		if errors.Is(err, rule.err) {
-			if details != nil {
-				writeError(w, rule.status, err.Error(), details)
-				return
-			}
 			writeServiceError(w, rule.status, err)
 			return
 		}
@@ -27,38 +23,38 @@ func writeMappedUseCaseError(w http.ResponseWriter, err error, details any, rule
 }
 
 func writeProfileQueryError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: profileuc.ErrInvalidInput, status: http.StatusBadRequest},
-		errorRule{err: repository.ErrNotFound, status: http.StatusNotFound},
+		errorRule{err: ports.ErrNotFound, status: http.StatusNotFound},
 	)
 }
 
 func writeUpdateProfileInfoError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: profileuc.ErrInvalidInput, status: http.StatusBadRequest},
-		errorRule{err: repository.ErrNotFound, status: http.StatusNotFound},
+		errorRule{err: ports.ErrNotFound, status: http.StatusNotFound},
 	)
 }
 
 func writeUpdatePreferencesError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: profileuc.ErrInvalidInput, status: http.StatusBadRequest},
 		errorRule{err: profileuc.ErrInvalidLocale, status: http.StatusBadRequest},
 		errorRule{err: profileuc.ErrInvalidTimezone, status: http.StatusBadRequest},
-		errorRule{err: repository.ErrNotFound, status: http.StatusNotFound},
+		errorRule{err: ports.ErrNotFound, status: http.StatusNotFound},
 	)
 }
 
 func writeAvatarError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: profileuc.ErrInvalidInput, status: http.StatusBadRequest},
 		errorRule{err: profileuc.ErrAvatarUpload, status: http.StatusBadRequest},
-		errorRule{err: repository.ErrNotFound, status: http.StatusNotFound},
+		errorRule{err: ports.ErrNotFound, status: http.StatusNotFound},
 	)
 }
 
 func writeBatchProfilesBriefError(w http.ResponseWriter, err error) {
-	writeMappedUseCaseError(w, err, nil,
+	writeMappedError(w, err,
 		errorRule{err: profileuc.ErrInvalidInput, status: http.StatusBadRequest},
 	)
 }

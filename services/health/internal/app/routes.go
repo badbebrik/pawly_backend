@@ -4,6 +4,7 @@ import (
 	"health/internal/transport/http/handlers"
 	appmw "health/internal/transport/http/middleware"
 	"net/http"
+	"pawly/pkg/httpjson"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -17,15 +18,14 @@ func (a *App) setupRoutes() http.Handler {
 	r.Use(middleware.Recoverer)
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		httpjson.Write(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	h := handlers.New(a.logSvc)
+	h := handlers.New(a.logs, a.scheduled, a.vetVisits, a.vaccinations, a.procedures, a.medicalRecords, a.analytics, a.documents, a.overview)
 
 	r.Group(func(r chi.Router) {
 		r.Use(appmw.WithUserID(a.cfg.JWTSecret, a.cfg.JWTIssuer))
+		r.Get("/v1/health/calendar", h.GetGlobalHealthCalendar)
 		r.Get("/v1/health/day", h.GetGlobalHealthDay)
 		r.Get("/v1/pets/{pet_id}/health/bootstrap", h.GetHealthBootstrap)
 		r.Get("/v1/pets/{pet_id}/health/day", h.GetHealthDay)
@@ -38,6 +38,7 @@ func (a *App) setupRoutes() http.Handler {
 		r.Get("/v1/pets/{pet_id}/scheduled-item-occurrences", h.GetScheduledItemOccurrences)
 		r.Get("/v1/pets/{pet_id}/scheduled-item-occurrences/{occurrence_id}", h.GetScheduledItemOccurrence)
 		r.Get("/v1/pets/{pet_id}/documents", h.GetPetDocuments)
+		r.Patch("/v1/pets/{pet_id}/documents/{document_id}", h.RenamePetDocument)
 		r.Post("/v1/pets/{pet_id}/attachments:init-upload", h.InitAttachmentUpload)
 		r.Post("/v1/pets/{pet_id}/attachments:confirm-upload", h.ConfirmAttachmentUpload)
 

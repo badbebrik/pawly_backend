@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	aclpb "acl/proto"
+	aclpb "pawly/pkg/aclpb"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"

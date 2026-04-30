@@ -9,18 +9,20 @@ import (
 	"auth/internal/infrastructure/redis"
 	"context"
 	"errors"
-	"github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
 )
 
 type App struct {
-	Config  *config.Config
-	AuthSvc *usecase.Set
+	cfg      *config.Config
+	useCases *usecase.Set
+	httpSrv  *http.Server
 
 	pg         *db.Postgres
 	redis      *redisdb.Redis
@@ -36,26 +38,30 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
-	return &App{
-		Config:     cfg,
+	a := &App{
+		cfg:        cfg,
+		useCases:   runtime.useCases,
 		pg:         runtime.pg,
 		redis:      runtime.redis,
-		AuthSvc:    runtime.authSvc,
 		rabbitConn: runtime.rabbitConn,
 		rabbitCh:   runtime.rabbitCh,
 		profile:    runtime.profile,
 		outboxWkr:  runtime.outboxWkr,
-	}, nil
+	}
+
+	a.httpSrv = &http.Server{
+		Addr:    ":" + cfg.AppPort,
+		Handler: a.setupRoutes(),
+	}
+
+	return a, nil
 }
 
 func (a *App) Close() {
 	log.Info().Msg("closing App resources...")
 
 	if a.redis != nil {
-		err := a.redis.Close()
-		if err != nil {
-			return
-		}
+		_ = a.redis.Close()
 	}
 
 	if a.pg != nil {
@@ -74,19 +80,12 @@ func (a *App) Close() {
 }
 
 func (a *App) Run() error {
-	r := a.setupRoutes()
-
-	srv := &http.Server{
-		Addr:    ":" + a.Config.AppPort,
-		Handler: r,
-	}
-
 	go func() {
 		log.Info().
-			Str("port", a.Config.AppPort).
+			Str("port", a.cfg.AppPort).
 			Msg("starting HTTP server")
 
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := a.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal().Err(err).Msg("server crash")
 		}
 	}()
@@ -108,7 +107,7 @@ func (a *App) Run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := a.httpSrv.Shutdown(ctx); err != nil {
 		return err
 	}
 

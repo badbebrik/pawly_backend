@@ -23,6 +23,10 @@ type Dispatcher struct {
 	requeueOnFail bool
 }
 
+func (d *Dispatcher) RequeueOnFail() bool {
+	return d.requeueOnFail
+}
+
 func NewDispatcher(renderer *template.Renderer, primary smtp.Provider, fallback smtp.Provider, requeueOnFail bool) *Dispatcher {
 	return &Dispatcher{
 		renderer:      renderer,
@@ -40,17 +44,24 @@ func (d *Dispatcher) Handle(ctx context.Context, msg amqp091.Delivery) {
 		return
 	}
 
+	if err := d.Process(ctx, job); err != nil {
+		d.fail(msg)
+		return
+	}
+
+	_ = msg.Ack(false)
+}
+
+func (d *Dispatcher) Process(ctx context.Context, job model.EmailJob) error {
 	if err := validateJob(job); err != nil {
 		log.Warn().Err(err).Msg("invalid email job payload")
-		_ = msg.Ack(false)
-		return
+		return nil
 	}
 
 	html, err := d.renderer.Render(job.Locale, job.Template, job.Data)
 	if err != nil {
 		log.Error().Err(err).Str("template", job.Template).Str("locale", job.Locale).Msg("template render failed")
-		d.fail(msg)
-		return
+		return errors.New("template render failed")
 	}
 
 	m := smtp.Message{
@@ -60,14 +71,12 @@ func (d *Dispatcher) Handle(ctx context.Context, msg amqp091.Delivery) {
 	}
 
 	if err := d.sendWithRetry(ctx, d.primary, m); err == nil {
-		_ = msg.Ack(false)
-		return
+		return nil
 	}
 
 	if d.fallback != nil {
 		if err := d.sendWithRetry(ctx, d.fallback, m); err == nil {
-			_ = msg.Ack(false)
-			return
+			return nil
 		}
 	}
 
@@ -76,7 +85,7 @@ func (d *Dispatcher) Handle(ctx context.Context, msg amqp091.Delivery) {
 		Str("template", job.Template).
 		Msg("email send failed after retries and fallback")
 
-	d.fail(msg)
+	return errors.New("email send failed")
 }
 
 func (d *Dispatcher) sendWithRetry(ctx context.Context, p smtp.Provider, m smtp.Message) error {

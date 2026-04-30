@@ -3,6 +3,7 @@ package main
 import (
 	"auth/internal/app"
 	"auth/internal/config"
+
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

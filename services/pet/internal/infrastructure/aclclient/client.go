@@ -2,8 +2,8 @@ package aclclient
 
 import (
 	"context"
-	"pet/internal/service"
-	aclpb "pet/proto"
+	aclpb "pawly/pkg/aclpb"
+	"pet/internal/application/ports"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -47,7 +47,7 @@ func (c *Client) Check(ctx context.Context, petID, userID uuid.UUID, action stri
 	return resp.GetAllowed(), nil
 }
 
-func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]service.ACLMembership, error) {
+func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]ports.ACLMembership, error) {
 	resp, err := c.client.ListPetsForUser(ctx, &aclpb.ListPetsForUserRequest{
 		UserId: userID.String(),
 	})
@@ -55,7 +55,7 @@ func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]servi
 		return nil, mapErr(err)
 	}
 
-	out := make([]service.ACLMembership, 0, len(resp.GetMemberships()))
+	out := make([]ports.ACLMembership, 0, len(resp.GetMemberships()))
 	for _, member := range resp.GetMemberships() {
 		petID, err := uuid.Parse(member.GetPetId())
 		if err != nil {
@@ -68,9 +68,10 @@ func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]servi
 		}
 
 		roleMsg := member.GetRole()
-		role := service.ACLRole{
-			Kind:  mapRoleKind(roleMsg.GetKind()),
-			Title: roleMsg.GetTitle(),
+		role := ports.ACLRole{
+			Kind:   mapRoleKind(roleMsg.GetKind()),
+			Title:  roleMsg.GetTitle(),
+			Policy: mapPolicy(roleMsg.GetPolicy()),
 		}
 		if roleID, err := uuid.Parse(roleMsg.GetId()); err == nil {
 			role.ID = roleID
@@ -85,7 +86,7 @@ func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]servi
 			role.CreatedByUserID = &createdBy
 		}
 
-		out = append(out, service.ACLMembership{
+		out = append(out, ports.ACLMembership{
 			PetID:          petID,
 			MemberID:       memberID,
 			Status:         mapMembershipStatus(member.GetStatus()),
@@ -95,14 +96,13 @@ func (c *Client) ListPetsForUser(ctx context.Context, userID uuid.UUID) ([]servi
 		})
 	}
 
-	// Fallback for older ACL service versions that return only pet_ids.
-	if len(out) == 0 && len(resp.GetPetIds()) > 0 {
+		if len(out) == 0 && len(resp.GetPetIds()) > 0 {
 		for _, raw := range resp.GetPetIds() {
 			id, err := uuid.Parse(raw)
 			if err != nil {
 				continue
 			}
-			out = append(out, service.ACLMembership{
+			out = append(out, ports.ACLMembership{
 				PetID: id,
 			})
 		}
@@ -122,34 +122,34 @@ func (c *Client) CreateOwnerMembership(ctx context.Context, petID, userID uuid.U
 
 	memberID, err := uuid.Parse(resp.GetMemberId())
 	if err != nil {
-		return uuid.Nil, service.ErrConflict
+		return uuid.Nil, ports.ErrConflict
 	}
 	return memberID, nil
 }
 
-func (c *Client) TransferOwnership(ctx context.Context, petID, requesterUserID, targetMemberID uuid.UUID) (service.ACLTransferOwnershipResult, error) {
+func (c *Client) TransferOwnership(ctx context.Context, petID, requesterUserID, targetMemberID uuid.UUID) (ports.ACLTransferOwnershipResult, error) {
 	resp, err := c.client.TransferOwnership(ctx, &aclpb.TransferOwnershipRequest{
 		PetId:           petID.String(),
 		RequesterUserId: requesterUserID.String(),
 		TargetMemberId:  targetMemberID.String(),
 	})
 	if err != nil {
-		return service.ACLTransferOwnershipResult{}, mapErr(err)
+		return ports.ACLTransferOwnershipResult{}, mapErr(err)
 	}
 
-	result := service.ACLTransferOwnershipResult{}
+	result := ports.ACLTransferOwnershipResult{}
 
 	if result.PreviousOwnerMemberID, err = uuid.Parse(resp.GetPreviousOwnerMemberId()); err != nil {
-		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+		return ports.ACLTransferOwnershipResult{}, ports.ErrConflict
 	}
 	if result.PreviousOwnerUserID, err = uuid.Parse(resp.GetPreviousOwnerUserId()); err != nil {
-		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+		return ports.ACLTransferOwnershipResult{}, ports.ErrConflict
 	}
 	if result.CurrentOwnerMemberID, err = uuid.Parse(resp.GetCurrentOwnerMemberId()); err != nil {
-		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+		return ports.ACLTransferOwnershipResult{}, ports.ErrConflict
 	}
 	if result.CurrentOwnerUserID, err = uuid.Parse(resp.GetCurrentOwnerUserId()); err != nil {
-		return service.ACLTransferOwnershipResult{}, service.ErrConflict
+		return ports.ACLTransferOwnershipResult{}, ports.ErrConflict
 	}
 
 	return result, nil
@@ -188,19 +188,17 @@ func mapRoleKind(kind aclpb.RoleKind) string {
 	}
 }
 
-func mapPolicy(p *aclpb.Policy) service.ACLPolicy {
+func mapPolicy(p *aclpb.Policy) ports.ACLPolicy {
 	if p == nil {
-		return service.ACLPolicy{}
+		return ports.ACLPolicy{}
 	}
-	return service.ACLPolicy{
+	return ports.ACLPolicy{
 		PetRead:      p.GetPetRead(),
 		PetWrite:     p.GetPetWrite(),
 		LogRead:      p.GetLogRead(),
 		LogWrite:     p.GetLogWrite(),
 		HealthRead:   p.GetHealthRead(),
 		HealthWrite:  p.GetHealthWrite(),
-		TaskRead:     p.GetTaskRead(),
-		TaskWrite:    p.GetTaskWrite(),
 		MembersRead:  p.GetMembersRead(),
 		MembersWrite: p.GetMembersWrite(),
 	}
@@ -214,16 +212,16 @@ func mapErr(err error) error {
 
 	switch st.Code() {
 	case codes.NotFound:
-		return service.ErrNotFound
+		return ports.ErrNotFound
 	case codes.PermissionDenied:
-		return service.ErrForbidden
+		return ports.ErrForbidden
 	case codes.InvalidArgument:
-		return service.ErrInvalidInput
+		return ports.ErrInvalidInput
 	case codes.FailedPrecondition, codes.AlreadyExists:
-		return service.ErrConflict
+		return ports.ErrConflict
 	default:
 		return err
 	}
 }
 
-var _ service.ACLClient = (*Client)(nil)
+var _ ports.ACLClient = (*Client)(nil)

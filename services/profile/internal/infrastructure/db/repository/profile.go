@@ -3,12 +3,13 @@ package pgrepo
 import (
 	"context"
 	"errors"
+	"profile/internal/application/ports"
+	"profile/internal/domain/model"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"profile/internal/model"
-	"profile/internal/repository"
 )
 
 type ProfileRepository struct {
@@ -31,7 +32,7 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	p, err := scanProfileRow(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repository.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func (r *ProfileRepository) Create(ctx context.Context, p *model.Profile) error 
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return repository.ErrConflict
+			return ports.ErrConflict
 		}
 	}
 	return err
@@ -145,7 +146,7 @@ func (r *ProfileRepository) Update(ctx context.Context, p *model.Profile) error 
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 
 	return nil
@@ -159,7 +160,7 @@ func (r *ProfileRepository) Delete(ctx context.Context, userID uuid.UUID) error 
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
-		return repository.ErrNotFound
+		return ports.ErrNotFound
 	}
 	return nil
 }

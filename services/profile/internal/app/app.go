@@ -7,11 +7,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"profile/internal/application/ports"
 	"profile/internal/application/usecase"
 	"profile/internal/config"
 	"profile/internal/infrastructure/db"
-	pgrepo "profile/internal/infrastructure/db/repository"
 	"profile/internal/infrastructure/fileclient"
 	grpcserver "profile/internal/transport/grpc"
 	"syscall"
@@ -24,75 +22,43 @@ import (
 type App struct {
 	cfg *config.Config
 
-	pg      *db.Postgres
-	httpSrv *http.Server
-	grpcSrv *grpc.Server
+	useCases *usecase.Set
+	pg       *db.Postgres
+	httpSrv  *http.Server
+	grpcSrv  *grpc.Server
 
 	grpcListener net.Listener
 	fileClient   *fileclient.Client
 }
 
 func New(cfg *config.Config) (*App, error) {
-	pg, err := db.NewPostgres(cfg)
+	runtime, err := buildRuntime(cfg)
 	if err != nil {
 		return nil, err
 	}
-
-	fileClient, err := fileclient.New(cfg.FileServiceGRPCAddr)
-	if err != nil {
-		pg.Close()
-		return nil, err
-	}
-
-	profileUC := buildProfileModule(cfg, pgrepo.NewProfileRepository(pg.Pool), fileClient)
 
 	app := &App{
-		cfg:        cfg,
-		pg:         pg,
-		fileClient: fileClient,
+		cfg:          cfg,
+		useCases:     runtime.useCases,
+		pg:           runtime.pg,
+		fileClient:   runtime.fileClient,
+		grpcListener: runtime.grpcListener,
 	}
 
-	r := app.setupRoutes(profileUC)
 	app.httpSrv = &http.Server{
 		Addr:    ":" + cfg.AppPort,
-		Handler: r,
+		Handler: app.setupRoutes(),
 	}
-
-	grpcListener, err := net.Listen("tcp", ":"+cfg.AppGRPCPort)
-	if err != nil {
-		fileClient.Close()
-		pg.Close()
-		return nil, err
-	}
-	app.grpcListener = grpcListener
 
 	grpcSrv := grpc.NewServer()
-	grpcserver.Register(grpcSrv, grpcserver.NewServer(profileUC))
+	grpcserver.Register(grpcSrv, grpcserver.NewServer(runtime.useCases))
 	app.grpcSrv = grpcSrv
 
 	return app, nil
 }
 
-func buildProfileModule(cfg *config.Config, repo ports.ProfileRepository, files ports.FileGateway) *usecase.Set {
-	return usecase.NewSet(usecase.Dependencies{
-		Profiles: repo,
-		Files:    files,
-		Config:   cfg,
-	})
-}
-
 func (a *App) Close() {
-	log.Info().Msg("closing Profile App resources...")
-
-	if a.httpSrv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = a.httpSrv.Shutdown(ctx)
-		cancel()
-	}
-
-	if a.grpcSrv != nil {
-		a.grpcSrv.GracefulStop()
-	}
+	log.Info().Msg("closing profile app resources...")
 	if a.grpcListener != nil {
 		_ = a.grpcListener.Close()
 	}
@@ -123,13 +89,16 @@ func (a *App) Run() error {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Info().Msg("shutting down Profile service...")
+	log.Info().Msg("shutting down profile service...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
 	if err := a.httpSrv.Shutdown(shutdownCtx); err != nil {
 		return err
+	}
+	if a.grpcSrv != nil {
+		a.grpcSrv.GracefulStop()
 	}
 
 	return nil

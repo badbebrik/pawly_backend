@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"push/internal/model"
-	repo "push/internal/repository"
+	"push/internal/application/ports"
+	"push/internal/domain/model"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -21,7 +21,7 @@ func NewPushRepository(db *pgxpool.Pool) *PushRepository {
 	return &PushRepository{db: db}
 }
 
-func (r *PushRepository) UpsertDeviceToken(ctx context.Context, in repo.UpsertDeviceTokenInput) (*model.DeviceToken, error) {
+func (r *PushRepository) UpsertDeviceToken(ctx context.Context, in ports.UpsertDeviceTokenParams) (*model.DeviceToken, error) {
 	const query = `
 		INSERT INTO device_tokens (
 			id, user_id, device_id, platform, push_token, created_at, updated_at
@@ -45,14 +45,14 @@ func (r *PushRepository) UpsertDeviceToken(ctx context.Context, in repo.UpsertDe
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, repo.ErrConflict
+			return nil, ports.ErrConflict
 		}
 		return nil, err
 	}
 	return &item, nil
 }
 
-func (r *PushRepository) DeleteDeviceToken(ctx context.Context, in repo.DeleteDeviceTokenInput) error {
+func (r *PushRepository) DeleteDeviceToken(ctx context.Context, in ports.DeleteDeviceTokenParams) error {
 	const query = `DELETE FROM device_tokens WHERE user_id = $1 AND device_id = $2`
 	_, err := r.db.Exec(ctx, query, in.UserID, in.DeviceID)
 	return err
@@ -109,14 +109,14 @@ func (r *PushRepository) GetPetPushSettings(ctx context.Context, userID, petID u
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, repo.ErrNotFound
+			return nil, ports.ErrNotFound
 		}
 		return nil, err
 	}
 	return &item, nil
 }
 
-func (r *PushRepository) UpsertPetPushSettings(ctx context.Context, in repo.UpsertPetPushSettingsInput) (*model.PetPushSettings, error) {
+func (r *PushRepository) UpsertPetPushSettings(ctx context.Context, in ports.UpsertPetPushSettingsParams) (*model.PetPushSettings, error) {
 	const query = `
 		INSERT INTO pet_push_settings (
 			user_id, pet_id, scheduled_items_enabled, created_at, updated_at
@@ -146,4 +146,4 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
-var _ repo.PushRepository = (*PushRepository)(nil)
+var _ ports.PushRepository = (*PushRepository)(nil)

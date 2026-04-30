@@ -21,18 +21,18 @@ type Config struct {
 	PresenceHeartbeat int
 }
 
-func Load() *Config {
+func Load() (*Config, error) {
 	redisDB, err := configenv.Int("REDIS_DB", 0)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	presenceTTL, err := configenv.Int("PRESENCE_TTL_SECONDS", 45)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	presenceHeartbeat, err := configenv.Int("PRESENCE_HEARTBEAT_SECONDS", 15)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return &Config{
@@ -52,5 +52,5 @@ func Load() *Config {
 		RedisChannel:      configenv.String("REDIS_CHANNEL", "chat.events"),
 		PresenceTTL:       presenceTTL,
 		PresenceHeartbeat: presenceHeartbeat,
-	}
+	}, nil
 }

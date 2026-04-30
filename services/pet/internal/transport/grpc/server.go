@@ -2,8 +2,8 @@ package grpc
 
 import (
 	"context"
-	"pet/internal/service"
-	petpb "pet/proto/petpb"
+	petpb "pawly/pkg/petpb"
+	"pet/internal/application/usecase"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -15,11 +15,11 @@ import (
 
 type Server struct {
 	petpb.UnimplementedPetServiceServer
-	svc *service.PetService
+	useCases *usecase.Set
 }
 
-func NewServer(svc *service.PetService) *Server {
-	return &Server{svc: svc}
+func NewServer(useCases *usecase.Set) *Server {
+	return &Server{useCases: useCases}
 }
 
 func Register(srv *grpc.Server, s *Server) {
@@ -46,7 +46,7 @@ func (s *Server) BatchGetBrief(ctx context.Context, req *petpb.BatchGetBriefRequ
 		petIDs = append(petIDs, petID)
 	}
 
-	items, notFound, err := s.svc.BatchGetBrief(ctx, petIDs)
+	items, notFound, err := s.useCases.BatchGetBrief(ctx, petIDs)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error")
 	}

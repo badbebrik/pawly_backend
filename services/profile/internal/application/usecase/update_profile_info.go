@@ -2,19 +2,19 @@ package usecase
 
 import (
 	"context"
-	"profile/internal/model"
+	"profile/internal/domain/model"
 
 	"github.com/google/uuid"
 )
 
-type UpdateProfileInfoUseCase struct{ deps *dependencies }
+type UpdateProfileInfo struct{ deps *dependencies }
 
-type UpdateProfileInfoInput struct {
+type UpdateProfileInfoParams struct {
 	FirstName *string
 	LastName  *string
 }
 
-func (uc *UpdateProfileInfoUseCase) Execute(ctx context.Context, userID uuid.UUID, in UpdateProfileInfoInput) (*model.Profile, error) {
+func (uc *UpdateProfileInfo) Execute(ctx context.Context, userID uuid.UUID, in UpdateProfileInfoParams) (*model.Profile, error) {
 	if userID == uuid.Nil {
 		return nil, ErrInvalidInput
 	}
@@ -37,14 +37,14 @@ func (uc *UpdateProfileInfoUseCase) Execute(ctx context.Context, userID uuid.UUI
 	return profile, nil
 }
 
-type UpdatePreferencesUseCase struct{ deps *dependencies }
+type UpdatePreferences struct{ deps *dependencies }
 
-type UpdatePreferencesInput struct {
+type UpdatePreferencesParams struct {
 	Locale   *string
 	Timezone *string
 }
 
-func (uc *UpdatePreferencesUseCase) Execute(ctx context.Context, userID uuid.UUID, in UpdatePreferencesInput) (*model.Profile, error) {
+func (uc *UpdatePreferences) Execute(ctx context.Context, userID uuid.UUID, in UpdatePreferencesParams) (*model.Profile, error) {
 	if userID == uuid.Nil {
 		return nil, ErrInvalidInput
 	}

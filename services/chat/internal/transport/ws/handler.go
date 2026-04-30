@@ -2,7 +2,8 @@ package ws
 
 import (
 	"chat/internal/application/usecase"
-	"chat/internal/infrastructure/realtime"
+	rtinfra "chat/internal/infrastructure/realtime"
+	"chat/internal/realtime"
 	appmw "chat/internal/transport/http/middleware"
 	"context"
 	"encoding/json"
@@ -15,7 +16,7 @@ import (
 
 type Handler struct {
 	hub              *realtime.Hub
-	publisher        realtime.EventPublisher
+	publisher        rtinfra.EventPublisher
 	presence         realtime.PresenceTracker
 	presenceTTL      time.Duration
 	heartbeatEvery   time.Duration
@@ -106,6 +107,12 @@ type conversationUpdatedPayload struct {
 	CanSend                    bool                         `json:"can_send"`
 }
 
+type conversationPresenceUpdatedPayload struct {
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         uuid.UUID `json:"user_id"`
+	IsInChat       bool      `json:"is_in_chat"`
+}
+
 type globalUnreadUpdatedPayload struct {
 	UnreadConversations int `json:"unread_conversations"`
 	UnreadMessages      int `json:"unread_messages"`
@@ -119,7 +126,7 @@ var upgrader = websocket.Upgrader{
 
 func NewHandler(
 	hub *realtime.Hub,
-	publisher realtime.EventPublisher,
+	publisher rtinfra.EventPublisher,
 	presence realtime.PresenceTracker,
 	presenceTTL time.Duration,
 	heartbeatEvery time.Duration,
@@ -171,6 +178,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *realtime.Client) {
+	pongWait := h.heartbeatEvery * 3
+	if pongWait < 30*time.Second {
+		pongWait = 30 * time.Second
+	}
+	conn.SetReadLimit(64 * 1024)
+	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
 	for {
 		_, payload, err := conn.ReadMessage()
 		if err != nil {
@@ -234,6 +251,7 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 
 			result, err := h.sendMessage.Execute(ctx, usecase.SendMessageParams{
 				CurrentUserID:  client.UserID,
+				OriginClientID: client.ID,
 				ConversationID: msg.ConversationID,
 				ClientMsgID:    msg.ClientMsgID,
 				Text:           msg.Text,
@@ -259,28 +277,6 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 			}
 
 			h.hub.PublishToClient(client, payload)
-
-			conversation, err := h.getConversation.Execute(ctx, usecase.GetConversationParams{
-				CurrentUserID:  client.UserID,
-				ConversationID: msg.ConversationID,
-			})
-			if err != nil {
-				h.publishError(client, "conversation_lookup_failed", "unable to refresh conversation")
-				continue
-			}
-
-			if err := h.publisher.PublishMessageSent(ctx, realtime.MessageSentEvent{
-				OriginClientID:  client.ID,
-				ConversationID:  result.Message.ConversationID,
-				MessageID:       result.Message.MessageID,
-				SenderUserID:    result.Message.SenderUserID,
-				RecipientUserID: conversation.Conversation.OtherUser.UserID,
-				ClientMsgID:     result.Message.ClientMsgID,
-				Text:            result.Message.Text,
-				CreatedAt:       result.Message.CreatedAt,
-			}); err != nil {
-				h.publishError(client, "realtime_publish_failed", "message saved but realtime update failed")
-			}
 		case "mark_read":
 			var msg markReadPayload
 			if err := json.Unmarshal(envelope.Payload, &msg); err != nil {
@@ -292,7 +288,7 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 				continue
 			}
 
-			result, err := h.markRead.Execute(ctx, usecase.MarkReadParams{
+			_, err := h.markRead.Execute(ctx, usecase.MarkReadParams{
 				CurrentUserID:     client.UserID,
 				ConversationID:    msg.ConversationID,
 				LastReadMessageID: msg.LastReadMessageID,
@@ -300,14 +296,6 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 			if err != nil {
 				h.publishError(client, "mark_read_failed", "unable to mark read")
 				continue
-			}
-
-			if err := h.publisher.PublishReadUpdated(ctx, realtime.ReadUpdatedEvent{
-				ConversationID:    result.ConversationID,
-				UserID:            client.UserID,
-				LastReadMessageID: result.LastReadMessageID,
-			}); err != nil {
-				h.publishError(client, "realtime_publish_failed", "read state saved but realtime update failed")
 			}
 		default:
 			h.publishError(client, "unsupported_event", "unsupported event type")
@@ -318,19 +306,26 @@ func (h *Handler) readLoop(ctx context.Context, conn *websocket.Conn, client *re
 func (h *Handler) writeLoop(conn *websocket.Conn, client *realtime.Client, send <-chan []byte) {
 	ticker := time.NewTicker(h.heartbeatEvery)
 	defer ticker.Stop()
+	defer func() {
+		client.Close()
+		_ = conn.Close()
+	}()
+
+	writeWait := 5 * time.Second
 
 	for {
 		select {
 		case <-client.Done():
-			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(writeWait))
 			return
 		case message := <-send:
+			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
 		case <-ticker.C:
 			h.refreshPresence(client)
-			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)); err != nil {
 				return
 			}
 		}
@@ -421,7 +416,7 @@ func (h *Handler) publishPresenceChange(ctx context.Context, change realtime.Pre
 	if h.publisher == nil {
 		return
 	}
-	_ = h.publisher.PublishConversationPresenceUpdated(ctx, realtime.ConversationPresenceUpdatedEvent{
+	_ = h.publisher.PublishConversationPresenceUpdated(ctx, rtinfra.ConversationPresenceUpdatedEvent{
 		ConversationID: change.ConversationID,
 		UserID:         change.UserID,
 		IsInChat:       change.IsInChat,

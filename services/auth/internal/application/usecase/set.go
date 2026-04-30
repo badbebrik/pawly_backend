@@ -1,35 +1,35 @@
 package usecase
 
 type Set struct {
-	RegisterEmail           *RegisterEmailUseCase
-	ResendEmailVerification *ResendEmailVerificationUseCase
-	VerifyEmail             *VerifyEmailUseCase
-	LoginEmail              *LoginEmailUseCase
-	LoginOAuth              *LoginOAuthUseCase
-	Logout                  *LogoutUseCase
-	LogoutAll               *LogoutAllUseCase
-	ChangePassword          *ChangePasswordUseCase
-	Refresh                 *RefreshUseCase
-	PasswordResetRequest    *PasswordResetRequestUseCase
-	PasswordResetVerify     *PasswordResetVerifyUseCase
-	PasswordResetConfirm    *PasswordResetConfirmUseCase
+	RegisterEmail           *RegisterEmail
+	ResendEmailVerification *ResendEmailVerification
+	VerifyEmail             *VerifyEmail
+	LoginEmail              *LoginEmail
+	LoginOAuth              *LoginOAuth
+	Logout                  *Logout
+	LogoutAll               *LogoutAll
+	ChangePassword          *ChangePassword
+	Refresh                 *Refresh
+	PasswordResetRequest    *PasswordResetRequest
+	PasswordResetVerify     *PasswordResetVerify
+	PasswordResetConfirm    *PasswordResetConfirm
 }
 
 func NewSet(in Dependencies) *Set {
 	deps := newDependencies(in)
 
 	return &Set{
-		RegisterEmail:           &RegisterEmailUseCase{deps: deps},
-		ResendEmailVerification: &ResendEmailVerificationUseCase{deps: deps},
-		VerifyEmail:             &VerifyEmailUseCase{deps: deps},
-		LoginEmail:              &LoginEmailUseCase{deps: deps},
-		LoginOAuth:              &LoginOAuthUseCase{deps: deps},
-		Logout:                  &LogoutUseCase{deps: deps},
-		LogoutAll:               &LogoutAllUseCase{deps: deps},
-		ChangePassword:          &ChangePasswordUseCase{deps: deps},
-		Refresh:                 &RefreshUseCase{deps: deps},
-		PasswordResetRequest:    &PasswordResetRequestUseCase{deps: deps},
-		PasswordResetVerify:     &PasswordResetVerifyUseCase{deps: deps},
-		PasswordResetConfirm:    &PasswordResetConfirmUseCase{deps: deps},
+		RegisterEmail:           &RegisterEmail{deps: deps},
+		ResendEmailVerification: &ResendEmailVerification{deps: deps},
+		VerifyEmail:             &VerifyEmail{deps: deps},
+		LoginEmail:              &LoginEmail{deps: deps},
+		LoginOAuth:              &LoginOAuth{deps: deps},
+		Logout:                  &Logout{deps: deps},
+		LogoutAll:               &LogoutAll{deps: deps},
+		ChangePassword:          &ChangePassword{deps: deps},
+		Refresh:                 &Refresh{deps: deps},
+		PasswordResetRequest:    &PasswordResetRequest{deps: deps},
+		PasswordResetVerify:     &PasswordResetVerify{deps: deps},
+		PasswordResetConfirm:    &PasswordResetConfirm{deps: deps},
 	}
 }

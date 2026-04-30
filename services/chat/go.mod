@@ -1,19 +1,15 @@
 module chat
 
-go 1.24.7
+go 1.24.0
 
 require (
-	acl v0.0.0
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/redis/go-redis/v9 v9.16.0
 	google.golang.org/grpc v1.78.0
 	pawly/pkg v0.0.0
-	pet v0.0.0
-	profile v0.0.0
 )
 
 require (
@@ -30,10 +26,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace acl => ../acl
-
-replace pet => ../pet
-
 replace pawly/pkg => ../pkg
-
-replace profile => ../profile

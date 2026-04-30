@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"health/internal/model"
+	"health/internal/application/ports"
+	"health/internal/domain/model"
 
 	"github.com/rabbitmq/amqp091-go"
 )
@@ -36,3 +37,5 @@ func (p *PushPublisher) PublishScheduledOccurrenceDue(ctx context.Context, job m
 		},
 	)
 }
+
+var _ ports.PushPublisher = (*PushPublisher)(nil)

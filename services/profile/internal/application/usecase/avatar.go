@@ -3,22 +3,22 @@ package usecase
 import (
 	"context"
 	"profile/internal/application/ports"
-	"profile/internal/model"
+	"profile/internal/domain/model"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
-type InitAvatarUploadUseCase struct{ deps *dependencies }
-type ConfirmAvatarUploadUseCase struct{ deps *dependencies }
-type DeleteAvatarUseCase struct{ deps *dependencies }
-type GetAvatarDownloadURLUseCase struct{ deps *dependencies }
+type InitAvatarUpload struct{ deps *dependencies }
+type ConfirmAvatarUpload struct{ deps *dependencies }
+type DeleteAvatar struct{ deps *dependencies }
+type GetAvatarDownloadURL struct{ deps *dependencies }
 
-func (uc *InitAvatarUploadUseCase) Execute(ctx context.Context, userID uuid.UUID, mimeType string, expectedSize *int64) (uuid.UUID, ports.UploadInfo, error) {
+func (uc *InitAvatarUpload) Execute(ctx context.Context, userID uuid.UUID, mimeType string, expectedSize *int64) (uuid.UUID, ports.UploadInfo, error) {
 	if userID == uuid.Nil || strings.TrimSpace(mimeType) == "" {
 		return uuid.Nil, ports.UploadInfo{}, ErrInvalidInput
 	}
-	if uc.deps.files == nil {
+	if uc.deps.fileClient == nil {
 		return uuid.Nil, ports.UploadInfo{}, ErrAvatarUpload
 	}
 
@@ -26,22 +26,22 @@ func (uc *InitAvatarUploadUseCase) Execute(ctx context.Context, userID uuid.UUID
 	if expectedSize != nil {
 		size = *expectedSize
 	}
-	fileID, upload, err := uc.deps.files.InitUpload(ctx, mimeType, size, userID)
+	fileID, upload, err := uc.deps.fileClient.InitUpload(ctx, mimeType, size, userID)
 	if err != nil {
 		return uuid.Nil, ports.UploadInfo{}, ErrAvatarUpload
 	}
 	return fileID, upload, nil
 }
 
-func (uc *ConfirmAvatarUploadUseCase) Execute(ctx context.Context, userID uuid.UUID, fileID uuid.UUID, sizeBytes int64) (*model.Profile, error) {
+func (uc *ConfirmAvatarUpload) Execute(ctx context.Context, userID uuid.UUID, fileID uuid.UUID, sizeBytes int64) (*model.Profile, error) {
 	if userID == uuid.Nil || fileID == uuid.Nil || sizeBytes <= 0 {
 		return nil, ErrInvalidInput
 	}
-	if uc.deps.files == nil {
+	if uc.deps.fileClient == nil {
 		return nil, ErrAvatarUpload
 	}
 
-	if err := uc.deps.files.ConfirmUpload(ctx, fileID, sizeBytes); err != nil {
+	if err := uc.deps.fileClient.ConfirmUpload(ctx, fileID, sizeBytes); err != nil {
 		return nil, ErrAvatarUpload
 	}
 
@@ -56,25 +56,25 @@ func (uc *ConfirmAvatarUploadUseCase) Execute(ctx context.Context, userID uuid.U
 		oldAvatarID = &oldID
 	}
 
-	if err := uc.deps.files.LinkAvatar(ctx, fileID, userID); err != nil {
+	if err := uc.deps.fileClient.LinkAvatar(ctx, fileID, userID); err != nil {
 		return nil, ErrAvatarUpload
 	}
 
 	profile.AvatarFileID = &fileID
 	if err := uc.deps.profiles.Update(ctx, profile); err != nil {
-		_ = uc.deps.files.UnlinkAvatar(ctx, fileID, userID)
+		_ = uc.deps.fileClient.UnlinkAvatar(ctx, fileID, userID)
 		return nil, err
 	}
 
 	if oldAvatarID != nil && *oldAvatarID != fileID {
-		_ = uc.deps.files.UnlinkAvatar(ctx, *oldAvatarID, userID)
-		_ = uc.deps.files.DeleteFileIfUnlinked(ctx, *oldAvatarID)
+		_ = uc.deps.fileClient.UnlinkAvatar(ctx, *oldAvatarID, userID)
+		_ = uc.deps.fileClient.DeleteFileIfUnlinked(ctx, *oldAvatarID)
 	}
 
 	return profile, nil
 }
 
-func (uc *DeleteAvatarUseCase) Execute(ctx context.Context, userID uuid.UUID) (*model.Profile, error) {
+func (uc *DeleteAvatar) Execute(ctx context.Context, userID uuid.UUID) (*model.Profile, error) {
 	if userID == uuid.Nil {
 		return nil, ErrInvalidInput
 	}
@@ -93,22 +93,22 @@ func (uc *DeleteAvatarUseCase) Execute(ctx context.Context, userID uuid.UUID) (*
 		return nil, err
 	}
 
-	if uc.deps.files != nil {
-		_ = uc.deps.files.UnlinkAvatar(ctx, oldAvatarID, userID)
-		_ = uc.deps.files.DeleteFileIfUnlinked(ctx, oldAvatarID)
+	if uc.deps.fileClient != nil {
+		_ = uc.deps.fileClient.UnlinkAvatar(ctx, oldAvatarID, userID)
+		_ = uc.deps.fileClient.DeleteFileIfUnlinked(ctx, oldAvatarID)
 	}
 
 	return profile, nil
 }
 
-func (uc *GetAvatarDownloadURLUseCase) Execute(ctx context.Context, fileID uuid.UUID) (string, error) {
+func (uc *GetAvatarDownloadURL) Execute(ctx context.Context, fileID uuid.UUID) (string, error) {
 	if fileID == uuid.Nil {
 		return "", ErrInvalidInput
 	}
-	if uc.deps.files == nil {
+	if uc.deps.fileClient == nil {
 		return "", ErrAvatarUpload
 	}
-	url, _, err := uc.deps.files.GetDownloadURL(ctx, fileID)
+	url, _, err := uc.deps.fileClient.GetDownloadURL(ctx, fileID)
 	if err != nil {
 		return "", ErrAvatarUpload
 	}

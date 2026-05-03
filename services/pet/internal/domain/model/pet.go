@@ -12,6 +12,7 @@ type Pet struct {
 	RowVersion           int
 	Name                 string
 	SpeciesID            *uuid.UUID
+	SpeciesName          *string
 	CustomSpeciesName    *string
 	Sex                  string
 	BirthDate            *time.Time

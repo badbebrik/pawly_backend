@@ -16,6 +16,7 @@ func petToResponse(p *model.Pet, profilePhotoDownloadURL *string) dto.PetRespons
 		RowVersion:              p.RowVersion,
 		Name:                    p.Name,
 		SpeciesID:               p.SpeciesID,
+		SpeciesName:             p.SpeciesName,
 		CustomSpeciesName:       p.CustomSpeciesName,
 		Sex:                     p.Sex,
 		BirthDate:               dateOrNil(p.BirthDate),

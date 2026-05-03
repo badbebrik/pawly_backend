@@ -228,6 +228,7 @@ func metricSeriesSummaryAppToDTO(item *domainmodel.MetricSeriesSummary) *dto.Met
 		MaxValueNum:       item.MaxValueNum,
 		LastValueNum:      item.LastValueNum,
 		AvgValueNum:       item.AvgValueNum,
+		SumValueNum:       item.SumValueNum,
 		DeltaFromFirstNum: item.DeltaFromFirstNum,
 	}
 }

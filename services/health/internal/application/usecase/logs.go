@@ -936,10 +936,10 @@ func detectAttachmentFileType(mimeType string) string {
 	switch {
 	case strings.HasPrefix(mimeType, "image/"):
 		return "image"
-	case strings.HasPrefix(mimeType, "video/"):
-		return "video"
+	case mimeType == "application/pdf":
+		return "pdf"
 	default:
-		return "file"
+		return "other"
 	}
 }
 

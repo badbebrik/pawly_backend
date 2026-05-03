@@ -81,15 +81,16 @@ func (r *PetRepository) DeleteByID(ctx context.Context, petID uuid.UUID) error {
 func (r *PetRepository) GetByID(ctx context.Context, petID uuid.UUID) (*model.Pet, error) {
 	const query = `
 		SELECT
-			id, owner_user_id, row_version, name, species_id, custom_species_name, sex, birth_date,
-			breed_id, custom_breed_name,
-			pattern_id, custom_pattern_name,
-			is_neutered, is_outdoor, profile_photo_file_id,
-			microchip_id, microchip_installed_at,
-			status, missing_since, archived_at,
-			created_at, updated_at
-		FROM pets
-		WHERE id = $1
+			p.id, p.owner_user_id, p.row_version, p.name, p.species_id, s.name, p.custom_species_name, p.sex, p.birth_date,
+			p.breed_id, p.custom_breed_name,
+			p.pattern_id, p.custom_pattern_name,
+			p.is_neutered, p.is_outdoor, p.profile_photo_file_id,
+			p.microchip_id, p.microchip_installed_at,
+			p.status, p.missing_since, p.archived_at,
+			p.created_at, p.updated_at
+		FROM pets p
+		LEFT JOIN species s ON s.id = p.species_id
+		WHERE p.id = $1
 	`
 	row := r.db.QueryRow(ctx, query, petID)
 	pet, err := scanPet(row)
@@ -266,20 +267,21 @@ func (r *PetRepository) ListByIDs(ctx context.Context, ids []uuid.UUID, includeA
 
 	listQuery := `
 		SELECT
-			id, owner_user_id, row_version, name, species_id, custom_species_name, sex, birth_date,
-			breed_id, custom_breed_name,
-			pattern_id, custom_pattern_name,
-			is_neutered, is_outdoor, profile_photo_file_id,
-			microchip_id, microchip_installed_at,
-			status, missing_since, archived_at,
-			created_at, updated_at
-		FROM pets
-		WHERE id = ANY($1::uuid[])
+			p.id, p.owner_user_id, p.row_version, p.name, p.species_id, s.name, p.custom_species_name, p.sex, p.birth_date,
+			p.breed_id, p.custom_breed_name,
+			p.pattern_id, p.custom_pattern_name,
+			p.is_neutered, p.is_outdoor, p.profile_photo_file_id,
+			p.microchip_id, p.microchip_installed_at,
+			p.status, p.missing_since, p.archived_at,
+			p.created_at, p.updated_at
+		FROM pets p
+		LEFT JOIN species s ON s.id = p.species_id
+		WHERE p.id = ANY($1::uuid[])
 	`
 	if !includeArchived {
-		listQuery += ` AND status <> 'ARCHIVED'`
+		listQuery += ` AND p.status <> 'ARCHIVED'`
 	}
-	listQuery += ` ORDER BY created_at DESC OFFSET $2 LIMIT $3`
+	listQuery += ` ORDER BY p.created_at DESC OFFSET $2 LIMIT $3`
 
 	rows, err := r.db.Query(ctx, listQuery, ids, offset, limit)
 	if err != nil {
@@ -486,7 +488,7 @@ func scanPet(s scanner) (*model.Pet, error) {
 	var pet model.Pet
 
 	err := s.Scan(
-		&pet.ID, &pet.OwnerUserID, &pet.RowVersion, &pet.Name, &pet.SpeciesID, &pet.CustomSpeciesName, &pet.Sex, &pet.BirthDate,
+		&pet.ID, &pet.OwnerUserID, &pet.RowVersion, &pet.Name, &pet.SpeciesID, &pet.SpeciesName, &pet.CustomSpeciesName, &pet.Sex, &pet.BirthDate,
 		&pet.BreedID, &pet.CustomBreedName,
 		&pet.PatternID, &pet.CustomPatternName,
 		&pet.IsNeutered, &pet.IsOutdoor, &pet.ProfilePhotoFileID,

@@ -161,5 +161,6 @@ type MetricSeriesSummary struct {
 	MaxValueNum       float64
 	LastValueNum      float64
 	AvgValueNum       float64
+	SumValueNum       float64
 	DeltaFromFirstNum float64
 }

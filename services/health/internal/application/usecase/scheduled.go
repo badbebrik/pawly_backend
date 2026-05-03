@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"health/internal/application/ports"
 	"health/internal/domain/model"
 	"strings"
@@ -731,12 +732,17 @@ func derefRecurrenceInterval(v *int) int {
 }
 
 func mapRepoErr(err error) error {
-	switch err {
-	case nil:
+	if err == nil {
 		return nil
-	case ports.ErrNotFound:
+	}
+	switch {
+	case errors.Is(err, ports.ErrInvalidInput):
+		return ErrInvalidInput
+	case errors.Is(err, ports.ErrForbidden):
+		return ErrForbidden
+	case errors.Is(err, ports.ErrNotFound):
 		return ErrNotFound
-	case ports.ErrConflict:
+	case errors.Is(err, ports.ErrConflict):
 		return ErrConflict
 	default:
 		return err

@@ -35,7 +35,7 @@ func prepareHealthAttachments(ctx context.Context, fileClient ports.HealthFileCl
 	}
 	files, err := fileClient.GetFiles(ctx, ids)
 	if err != nil {
-		return nil, err
+		return nil, mapRepoErr(err)
 	}
 	if len(files) != len(ids) {
 		return nil, ErrInvalidInput
@@ -73,15 +73,15 @@ func normalizeAttachmentFileName(name *string) *string {
 func syncHealthAttachments(ctx context.Context, fileClient ports.HealthFileClient, petID uuid.UUID, entityType string, entityID uuid.UUID, sync ports.AttachmentSync) error {
 	if len(sync.Add) > 0 {
 		if err := fileClient.LinkAttachments(ctx, petID, entityType, entityID, sync.Add); err != nil {
-			return err
+			return mapRepoErr(err)
 		}
 	}
 	if len(sync.Remove) > 0 {
 		if err := fileClient.UnlinkAttachments(ctx, entityType, entityID, sync.Remove); err != nil {
-			return err
+			return mapRepoErr(err)
 		}
 		if err := fileClient.DeleteFilesIfUnlinked(ctx, sync.Remove); err != nil {
-			return err
+			return mapRepoErr(err)
 		}
 	}
 	return nil

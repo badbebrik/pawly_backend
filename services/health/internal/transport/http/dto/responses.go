@@ -443,6 +443,7 @@ type MetricSeriesSummaryResponse struct {
 	MaxValueNum       float64 `json:"max_value_num"`
 	LastValueNum      float64 `json:"last_value_num"`
 	AvgValueNum       float64 `json:"avg_value_num"`
+	SumValueNum       float64 `json:"sum_value_num"`
 	DeltaFromFirstNum float64 `json:"delta_from_first_num"`
 }
 

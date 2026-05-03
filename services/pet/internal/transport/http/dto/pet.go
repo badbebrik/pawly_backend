@@ -114,6 +114,7 @@ type PetResponse struct {
 	RowVersion              int             `json:"row_version"`
 	Name                    string          `json:"name"`
 	SpeciesID               *uuid.UUID      `json:"species_id"`
+	SpeciesName             *string         `json:"species_name"`
 	CustomSpeciesName       *string         `json:"custom_species_name"`
 	Sex                     string          `json:"sex"`
 	BirthDate               *string         `json:"birth_date"`

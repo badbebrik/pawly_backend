@@ -282,6 +282,7 @@ func buildMetricSeriesSummary(points []model.MetricSeriesPoint, sort string) *mo
 	summary.MaxValueNum = maxValue
 	summary.LastValueNum = lastValue
 	summary.AvgValueNum = sum / float64(len(points))
+	summary.SumValueNum = sum
 	summary.DeltaFromFirstNum = lastValue - firstValue
 	return summary
 }

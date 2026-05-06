@@ -281,6 +281,132 @@ func TestCheckInvalidAction(t *testing.T) {
 	}
 }
 
+func TestBasicInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{}, &fakeRoleRepo{}, nil)
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "list pet memberships missing user",
+			run: func() error {
+				_, err := svc.ListPetMembershipsForUser(context.Background(), uuid.Nil)
+				return err
+			},
+		},
+		{
+			name: "list active members missing pet",
+			run: func() error {
+				_, err := svc.ListActiveMembersForPet(context.Background(), uuid.Nil)
+				return err
+			},
+		},
+		{
+			name: "create owner missing pet",
+			run: func() error {
+				_, err := svc.CreateOwnerMembership(context.Background(), uuid.Nil, uuid.New())
+				return err
+			},
+		},
+		{
+			name: "transfer missing target member",
+			run: func() error {
+				_, err := svc.TransferOwnership(context.Background(), TransferOwnershipParams{
+					PetID:       uuid.New(),
+					RequesterID: uuid.New(),
+				})
+				return err
+			},
+		},
+		{
+			name: "bootstrap missing user",
+			run: func() error {
+				_, err := svc.GetBootstrap(context.Background(), uuid.New(), uuid.Nil)
+				return err
+			},
+		},
+		{
+			name: "leave missing pet",
+			run: func() error {
+				_, err := svc.LeavePet(context.Background(), uuid.Nil, uuid.New())
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.run(); err != ErrInvalidInput {
+				t.Fatalf("expected ErrInvalidInput, got %v", err)
+			}
+		})
+	}
+}
+
+func TestIsMember(t *testing.T) {
+	t.Parallel()
+
+	memberSvc := newTestService(&fakeMembershipRepo{
+		activeByPetUser: &ports.MembershipAccess{Status: "ACTIVE"},
+	}, &fakeRoleRepo{}, nil)
+
+	ok, err := memberSvc.IsMember(context.Background(), uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected member")
+	}
+
+	nonMemberSvc := newTestService(&fakeMembershipRepo{}, &fakeRoleRepo{}, nil)
+	ok, err = nonMemberSvc.IsMember(context.Background(), uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected non-member")
+	}
+}
+
+func TestGetPolicyReturnsActivePolicy(t *testing.T) {
+	t.Parallel()
+
+	memberID := uuid.New()
+	policy := model.Policy{PetRead: true, MembersRead: true}
+	svc := newTestService(&fakeMembershipRepo{
+		byPetUser: &ports.MembershipAccess{
+			MemberID:       memberID,
+			Status:         "ACTIVE",
+			IsPrimaryOwner: true,
+			Policy:         policy,
+		},
+	}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.GetPolicy(context.Background(), uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.MemberID != memberID || !out.IsPrimaryOwner || !out.Policy.PetRead || !out.Policy.MembersRead {
+		t.Fatalf("unexpected policy result: %+v", out)
+	}
+}
+
+func TestGetPolicyRejectsInactiveMembership(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{
+		byPetUser: &ports.MembershipAccess{Status: "REMOVED"},
+	}, &fakeRoleRepo{}, nil)
+
+	_, err := svc.GetPolicy(context.Background(), uuid.New(), uuid.New())
+	if err != ErrForbidden {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
 func TestCreateOwnerMembershipMapsConflict(t *testing.T) {
 	t.Parallel()
 
@@ -289,6 +415,100 @@ func TestCreateOwnerMembershipMapsConflict(t *testing.T) {
 	}, &fakeRoleRepo{}, nil)
 
 	_, err := svc.CreateOwnerMembership(context.Background(), uuid.New(), uuid.New())
+	if err != ErrConflict {
+		t.Fatalf("expected ErrConflict, got %v", err)
+	}
+}
+
+func TestCreateOwnerMembershipReturnsMember(t *testing.T) {
+	t.Parallel()
+
+	member := &ports.MemberView{
+		ID:             uuid.New(),
+		PetID:          uuid.New(),
+		UserID:         uuid.New(),
+		Status:         "ACTIVE",
+		IsPrimaryOwner: true,
+		Policy:         ownerFullAccessPolicy(),
+	}
+	svc := newTestService(&fakeMembershipRepo{ownerResult: member}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.CreateOwnerMembership(context.Background(), member.PetID, member.UserID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != member {
+		t.Fatalf("unexpected owner member: %+v", out)
+	}
+}
+
+func TestTransferOwnershipReturnsPreviousAndCurrentOwners(t *testing.T) {
+	t.Parallel()
+
+	previous := ports.MemberView{ID: uuid.New(), UserID: uuid.New(), IsPrimaryOwner: false}
+	current := ports.MemberView{ID: uuid.New(), UserID: uuid.New(), IsPrimaryOwner: true}
+	svc := newTestService(&fakeMembershipRepo{
+		transferResult: &ports.TransferOwnershipView{
+			PreviousOwner: previous,
+			CurrentOwner:  current,
+		},
+	}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.TransferOwnership(context.Background(), TransferOwnershipParams{
+		PetID:          uuid.New(),
+		RequesterID:    previous.UserID,
+		TargetMemberID: current.ID,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.PreviousOwner.UserID != previous.UserID || out.CurrentOwner.UserID != current.UserID {
+		t.Fatalf("unexpected transfer result: %+v", out)
+	}
+}
+
+func TestGetMyAccessReturnsActiveMember(t *testing.T) {
+	t.Parallel()
+
+	member := &ports.MemberView{ID: uuid.New(), PetID: uuid.New(), UserID: uuid.New(), Status: "ACTIVE"}
+	svc := newTestService(&fakeMembershipRepo{activeView: member}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.GetMyAccess(context.Background(), member.PetID, member.UserID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != member {
+		t.Fatalf("unexpected member: %+v", out)
+	}
+}
+
+func TestLeavePetRemovesNonOwner(t *testing.T) {
+	t.Parallel()
+
+	member := &ports.MemberView{ID: uuid.New(), PetID: uuid.New(), UserID: uuid.New(), Status: "ACTIVE", IsPrimaryOwner: false}
+	removed := *member
+	removed.Status = "REMOVED"
+	svc := newTestService(&fakeMembershipRepo{
+		activeView:   member,
+		removeResult: &removed,
+	}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.LeavePet(context.Background(), member.PetID, member.UserID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Status != "REMOVED" {
+		t.Fatalf("unexpected removed member: %+v", out)
+	}
+}
+
+func TestLeavePetRejectsPrimaryOwner(t *testing.T) {
+	t.Parallel()
+
+	member := &ports.MemberView{ID: uuid.New(), PetID: uuid.New(), UserID: uuid.New(), Status: "ACTIVE", IsPrimaryOwner: true}
+	svc := newTestService(&fakeMembershipRepo{activeView: member}, &fakeRoleRepo{}, nil)
+
+	_, err := svc.LeavePet(context.Background(), member.PetID, member.UserID)
 	if err != ErrConflict {
 		t.Fatalf("expected ErrConflict, got %v", err)
 	}
@@ -305,6 +525,68 @@ func TestCreateCustomRoleRequiresNonEmptyTitle(t *testing.T) {
 	_, err := svc.CreateCustomRole(context.Background(), CreateCustomRoleParams{PetID: uuid.New(), RequesterID: uuid.New(), Title: "   "})
 	if err != ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestCreateCustomRoleReturnsRole(t *testing.T) {
+	t.Parallel()
+
+	petID := uuid.New()
+	role := &ports.RoleView{ID: uuid.New(), PetID: &petID, Kind: "CUSTOM", Title: "Family"}
+	svc := newTestService(&fakeMembershipRepo{byPetUser: &ports.MembershipAccess{
+		Status: "ACTIVE",
+		Policy: model.Policy{MembersWrite: true},
+	}}, &fakeRoleRepo{createRole: role}, nil)
+
+	out, err := svc.CreateCustomRole(context.Background(), CreateCustomRoleParams{
+		PetID:       petID,
+		RequesterID: uuid.New(),
+		Title:       " Family ",
+		Policy:      model.Policy{PetRead: true},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != role {
+		t.Fatalf("unexpected role: %+v", out)
+	}
+}
+
+func TestUpdateCustomRoleReturnsRole(t *testing.T) {
+	t.Parallel()
+
+	petID := uuid.New()
+	role := &ports.RoleView{ID: uuid.New(), PetID: &petID, Kind: "CUSTOM", Title: "Friends"}
+	svc := newTestService(&fakeMembershipRepo{byPetUser: &ports.MembershipAccess{
+		Status: "ACTIVE",
+		Policy: model.Policy{MembersWrite: true},
+	}}, &fakeRoleRepo{updateRole: role}, nil)
+
+	out, err := svc.UpdateCustomRole(context.Background(), UpdateCustomRoleParams{
+		PetID:       petID,
+		RequesterID: uuid.New(),
+		RoleID:      role.ID,
+		Title:       "Friends",
+		Policy:      model.Policy{PetRead: true},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != role {
+		t.Fatalf("unexpected role: %+v", out)
+	}
+}
+
+func TestDeleteCustomRoleSuccess(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{byPetUser: &ports.MembershipAccess{
+		Status: "ACTIVE",
+		Policy: model.Policy{MembersWrite: true},
+	}}, &fakeRoleRepo{}, nil)
+
+	if err := svc.DeleteCustomRole(context.Background(), uuid.New(), uuid.New(), uuid.New()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -511,6 +793,90 @@ func TestAcceptInviteByTokenMapsNotFound(t *testing.T) {
 	}
 }
 
+func TestGetBootstrapReturnsMembersRolesAndPermissions(t *testing.T) {
+	t.Parallel()
+
+	petID := uuid.New()
+	userID := uuid.New()
+	member := ports.MemberView{
+		ID:     uuid.New(),
+		PetID:  petID,
+		UserID: userID,
+		Status: "ACTIVE",
+		Policy: model.Policy{
+			MembersRead:  true,
+			MembersWrite: true,
+		},
+	}
+	role := ports.RoleView{ID: uuid.New(), Kind: "SYSTEM", Code: "OWNER", Title: "Owner"}
+	svc := newTestService(&fakeMembershipRepo{
+		activeView:  &member,
+		activeViews: []ports.MemberView{member},
+	}, &fakeRoleRepo{roles: []ports.RoleView{role}}, nil)
+
+	out, err := svc.GetBootstrap(context.Background(), petID, userID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Me.UserID != userID || len(out.Members) != 1 || len(out.Roles) != 1 {
+		t.Fatalf("unexpected bootstrap result: %+v", out)
+	}
+	if !out.CanMembersRead || !out.CanMembersWrite {
+		t.Fatalf("unexpected bootstrap permissions: %+v", out)
+	}
+}
+
+func TestListMembersReturnsActiveMembers(t *testing.T) {
+	t.Parallel()
+
+	member := ports.MemberView{ID: uuid.New(), PetID: uuid.New(), UserID: uuid.New(), Status: "ACTIVE"}
+	svc := newTestService(&fakeMembershipRepo{
+		byPetUser:   &ports.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersRead: true}},
+		activeViews: []ports.MemberView{member},
+	}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.ListMembers(context.Background(), member.PetID, uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out) != 1 || out[0].ID != member.ID {
+		t.Fatalf("unexpected members: %+v", out)
+	}
+}
+
+func TestListRolesReturnsRoles(t *testing.T) {
+	t.Parallel()
+
+	role := ports.RoleView{ID: uuid.New(), Kind: "SYSTEM", Code: "OWNER", Title: "Owner"}
+	svc := newTestService(&fakeMembershipRepo{
+		byPetUser: &ports.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersRead: true}},
+	}, &fakeRoleRepo{roles: []ports.RoleView{role}}, nil)
+
+	out, err := svc.ListRoles(context.Background(), uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out) != 1 || out[0].ID != role.ID {
+		t.Fatalf("unexpected roles: %+v", out)
+	}
+}
+
+func TestListInvitesSuccess(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{
+		byPetUser: &ports.MembershipAccess{Status: "ACTIVE", Policy: model.Policy{MembersRead: true}},
+	}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.ListInvites(context.Background(), uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out == nil {
+		t.Fatalf("expected non-nil invite list")
+	}
+}
+
 func TestListRolesRequiresMembersReadPermission(t *testing.T) {
 	t.Parallel()
 
@@ -553,6 +919,34 @@ func TestCriticalOwnerPolicy(t *testing.T) {
 	}
 }
 
+func TestAcceptInviteByCodeSuccess(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.AcceptInviteByCode(context.Background(), "123456", uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out == nil || out.Member == nil || out.PetID == uuid.Nil {
+		t.Fatalf("unexpected accept result: %+v", out)
+	}
+}
+
+func TestAcceptInviteByTokenSuccess(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestService(&fakeMembershipRepo{}, &fakeRoleRepo{}, nil)
+
+	out, err := svc.AcceptInviteByToken(context.Background(), "token", uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out == nil || out.Member == nil || out.PetID == uuid.Nil {
+		t.Fatalf("unexpected accept result: %+v", out)
+	}
+}
+
 func TestAcceptInviteByCodeInvalidInput(t *testing.T) {
 	t.Parallel()
 
@@ -580,6 +974,21 @@ func TestPreviewInviteByTokenInvalidInput(t *testing.T) {
 	_, err := svc.PreviewInviteByToken(context.Background(), " ")
 	if err != ErrInvalidInput {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestPreviewInviteByTokenSuccess(t *testing.T) {
+	t.Parallel()
+
+	invite := &ports.InviteView{ID: uuid.New(), PetID: uuid.New(), Status: "ACTIVE"}
+	svc := newTestService(&fakeMembershipRepo{}, &fakeRoleRepo{}, &fakeInviteRepo{previewInvite: invite})
+
+	out, err := svc.PreviewInviteByToken(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != invite {
+		t.Fatalf("unexpected invite: %+v", out)
 	}
 }
 

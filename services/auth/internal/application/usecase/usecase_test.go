@@ -5,6 +5,7 @@ import (
 	"auth/internal/domain/model"
 	"auth/internal/security"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -145,27 +146,49 @@ func (s *stubSessionRepo) RevokeAll(ctx context.Context, userID uuid.UUID) error
 	return nil
 }
 
-type stubOAuthRepo struct{}
+type stubOAuthRepo struct {
+	createFn                     func(context.Context, *model.OAuthIdentity) error
+	getByProviderAndExternalIDFn func(context.Context, string, string) (*model.OAuthIdentity, error)
+	getByUserIDFn                func(context.Context, uuid.UUID) ([]model.OAuthIdentity, error)
+	getByEmailFn                 func(context.Context, string, string) (*model.OAuthIdentity, error)
+}
 
-func (s *stubOAuthRepo) Create(context.Context, *model.OAuthIdentity) error {
+func (s *stubOAuthRepo) Create(ctx context.Context, identity *model.OAuthIdentity) error {
+	if s.createFn != nil {
+		return s.createFn(ctx, identity)
+	}
 	return nil
 }
 
-func (s *stubOAuthRepo) GetByProviderAndExternalID(context.Context, string, string) (*model.OAuthIdentity, error) {
+func (s *stubOAuthRepo) GetByProviderAndExternalID(ctx context.Context, provider, externalID string) (*model.OAuthIdentity, error) {
+	if s.getByProviderAndExternalIDFn != nil {
+		return s.getByProviderAndExternalIDFn(ctx, provider, externalID)
+	}
 	return nil, ports.ErrNotFound
 }
 
-func (s *stubOAuthRepo) GetByUserID(context.Context, uuid.UUID) ([]model.OAuthIdentity, error) {
+func (s *stubOAuthRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([]model.OAuthIdentity, error) {
+	if s.getByUserIDFn != nil {
+		return s.getByUserIDFn(ctx, userID)
+	}
 	return nil, nil
 }
 
-func (s *stubOAuthRepo) GetByEmail(context.Context, string, string) (*model.OAuthIdentity, error) {
+func (s *stubOAuthRepo) GetByEmail(ctx context.Context, provider, email string) (*model.OAuthIdentity, error) {
+	if s.getByEmailFn != nil {
+		return s.getByEmailFn(ctx, provider, email)
+	}
 	return nil, ports.ErrNotFound
 }
 
-type stubResetTokenRepo struct{}
+type stubResetTokenRepo struct {
+	consumeOnceFn func(context.Context, string, time.Duration) (bool, error)
+}
 
-func (s *stubResetTokenRepo) ConsumeOnce(context.Context, string, time.Duration) (bool, error) {
+func (s *stubResetTokenRepo) ConsumeOnce(ctx context.Context, tokenID string, ttl time.Duration) (bool, error) {
+	if s.consumeOnceFn != nil {
+		return s.consumeOnceFn(ctx, tokenID, ttl)
+	}
 	return true, nil
 }
 
@@ -293,14 +316,51 @@ func (s *stubProfileProvisioner) DeleteProfile(ctx context.Context, userID uuid.
 	return nil
 }
 
-type stubOAuthVerifier struct{}
+type stubOAuthVerifier struct {
+	verifyGoogleIDTokenFn func(context.Context, string) (*ports.OAuthClaims, error)
+}
 
-func (s *stubOAuthVerifier) VerifyGoogleIDToken(context.Context, string) (*ports.OAuthClaims, error) {
+func (s *stubOAuthVerifier) VerifyGoogleIDToken(ctx context.Context, token string) (*ports.OAuthClaims, error) {
+	if s.verifyGoogleIDTokenFn != nil {
+		return s.verifyGoogleIDTokenFn(ctx, token)
+	}
 	return nil, ports.ErrOAuthInvalidToken
 }
 
 func newTestSet(deps Dependencies) *Set {
 	return NewSet(deps)
+}
+
+func baseAuthDeps() Dependencies {
+	return Dependencies{
+		Users:        &stubUserRepo{},
+		Sessions:     &stubSessionRepo{},
+		OAuth:        &stubOAuthRepo{},
+		ResetTokens:  &stubResetTokenRepo{},
+		Verification: &stubVerificationStore{},
+		Notifier:     &stubNotifier{},
+		Tokens: &stubTokenManager{
+			generateAccessTokenFn: func(_, sessionID string) (string, error) {
+				return "access-" + sessionID, nil
+			},
+			generateRefreshTokenFn: func(_, sessionID string) (string, error) {
+				return "refresh-" + sessionID, nil
+			},
+			generateResetTokenFn: func(userID, _ string) (string, error) {
+				return "reset-" + userID, nil
+			},
+		},
+		Profiles:    &stubProfileProvisioner{},
+		OAuthVerify: &stubOAuthVerifier{},
+		Clock:       fixedClock{now: time.Date(2026, 3, 30, 10, 0, 0, 0, time.UTC)},
+	}
+}
+
+func expectErr(t *testing.T, got error, want error) {
+	t.Helper()
+	if !errors.Is(got, want) {
+		t.Fatalf("unexpected error: got %v want %v", got, want)
+	}
 }
 
 func TestRegisterEmail_UsesExplicitLocaleForProfileAndVerification(t *testing.T) {
@@ -350,9 +410,9 @@ func TestRegisterEmail_UsesExplicitLocaleForProfileAndVerification(t *testing.T)
 
 	out, err := set.RegisterEmail.Execute(context.Background(), RegisterEmailParams{
 		Email:     "User@Example.com",
-		Password:  "StrongPass123",
-		FirstName: "Vika",
-		LastName:  "Petrova",
+		Password:  "Password123",
+		FirstName: "Ivan",
+		LastName:  "Ivanov",
 		Locale:    "EN",
 	})
 	if err != nil {
@@ -377,7 +437,7 @@ func TestRegisterEmail_UsesExplicitLocaleForProfileAndVerification(t *testing.T)
 }
 
 func TestLoginEmail_CreatesSessionAndTouchesLastLogin(t *testing.T) {
-	passwordHash, err := security.HashPassword("StrongPass123")
+	passwordHash, err := security.HashPassword("Password123")
 	if err != nil {
 		t.Fatalf("HashPassword returned error: %v", err)
 	}
@@ -434,7 +494,7 @@ func TestLoginEmail_CreatesSessionAndTouchesLastLogin(t *testing.T) {
 
 	out, err := set.LoginEmail.Execute(context.Background(), LoginEmailParams{
 		Email:    "user@example.com",
-		Password: "StrongPass123",
+		Password: "Password123",
 		Locale:   "ru",
 	})
 	if err != nil {
@@ -603,6 +663,493 @@ func TestRequestPasswordReset_UsesExplicitLocale(t *testing.T) {
 
 	if sentLocale != "en" {
 		t.Fatalf("unexpected reset locale: %s", sentLocale)
+	}
+}
+
+func TestUsecases_RejectBasicInvalidInput(t *testing.T) {
+	set := newTestSet(baseAuthDeps())
+
+	tests := []struct {
+		name string
+		run  func() error
+		want error
+	}{
+		{
+			name: "register invalid email",
+			run: func() error {
+				_, err := set.RegisterEmail.Execute(context.Background(), RegisterEmailParams{Email: "bad", Password: "Password123"})
+				return err
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "register weak password",
+			run: func() error {
+				_, err := set.RegisterEmail.Execute(context.Background(), RegisterEmailParams{Email: "user@example.com", Password: "weak"})
+				return err
+			},
+			want: ErrWeakPassword,
+		},
+		{
+			name: "login empty password",
+			run: func() error {
+				_, err := set.LoginEmail.Execute(context.Background(), LoginEmailParams{Email: "user@example.com"})
+				return err
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "refresh empty token",
+			run: func() error {
+				_, err := set.Refresh.Execute(context.Background(), RefreshParams{})
+				return err
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "verify email invalid code",
+			run: func() error {
+				_, err := set.VerifyEmail.Execute(context.Background(), VerifyEmailParams{Email: "user@example.com", Code: "123"})
+				return err
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "resend invalid email",
+			run: func() error {
+				_, err := set.ResendEmailVerification.Execute(context.Background(), ResendEmailVerificationParams{Email: "bad"})
+				return err
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "password reset request invalid email",
+			run: func() error {
+				return set.PasswordResetRequest.Execute(context.Background(), PasswordResetRequestParams{Email: "bad"})
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "password reset verify invalid code",
+			run: func() error {
+				_, err := set.PasswordResetVerify.Execute(context.Background(), PasswordResetVerifyParams{Email: "user@example.com", Code: "abc"})
+				return err
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "password reset confirm weak password",
+			run: func() error {
+				return set.PasswordResetConfirm.Execute(context.Background(), PasswordResetConfirmParams{ResetToken: "token", NewPassword: "weak"})
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "change password missing old password",
+			run: func() error {
+				return set.ChangePassword.Execute(context.Background(), ChangePasswordParams{AccessToken: "access", NewPassword: "Password123"})
+			},
+			want: ErrIncorrectFormat,
+		},
+		{
+			name: "oauth unsupported provider",
+			run: func() error {
+				_, err := set.LoginOAuth.Execute(context.Background(), LoginOAuthParams{Provider: "github", IDToken: "token"})
+				return err
+			},
+			want: ErrIncorrectFormat,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectErr(t, tt.run(), tt.want)
+		})
+	}
+}
+
+func TestVerifyEmail_VerifiesUserAndCreatesSession(t *testing.T) {
+	userID := uuid.New()
+	var verifiedUserID uuid.UUID
+	var createdSession *model.Session
+
+	deps := baseAuthDeps()
+	deps.Users = &stubUserRepo{
+		getByEmailFn: func(context.Context, string) (*model.User, error) {
+			return &model.User{
+				ID:         userID,
+				Email:      "user@example.com",
+				IsVerified: false,
+				IsActive:   true,
+			}, nil
+		},
+		setVerifiedFn: func(_ context.Context, id uuid.UUID) error {
+			verifiedUserID = id
+			return nil
+		},
+	}
+	deps.Sessions = &stubSessionRepo{
+		createFn: func(_ context.Context, session *model.Session) error {
+			createdSession = session
+			return nil
+		},
+	}
+	deps.Verification = &stubVerificationStore{
+		verifyCodeFn: func(_ context.Context, email, purpose, code string) error {
+			if email != "user@example.com" || purpose != "registration" || code != "123456" {
+				t.Fatalf("unexpected verification args: %s %s %s", email, purpose, code)
+			}
+			return nil
+		},
+	}
+
+	set := newTestSet(deps)
+	out, err := set.VerifyEmail.Execute(context.Background(), VerifyEmailParams{
+		Email: "user@example.com",
+		Code:  "123456",
+	})
+	if err != nil {
+		t.Fatalf("VerifyEmail returned error: %v", err)
+	}
+
+	if verifiedUserID != userID {
+		t.Fatalf("unexpected verified user id: %s", verifiedUserID)
+	}
+	if createdSession == nil || createdSession.UserID != userID {
+		t.Fatal("expected session for verified user")
+	}
+	if out.UserID != userID || out.AccessToken == "" || out.RefreshToken == "" {
+		t.Fatalf("unexpected verify result: %+v", out)
+	}
+}
+
+func TestResendEmailVerification_ReturnsMetaForUnverifiedUser(t *testing.T) {
+	userID := uuid.New()
+	deps := baseAuthDeps()
+	deps.Users = &stubUserRepo{
+		getByEmailFn: func(context.Context, string) (*model.User, error) {
+			return &model.User{
+				ID:         userID,
+				Email:      "user@example.com",
+				IsVerified: false,
+				IsActive:   true,
+			}, nil
+		},
+	}
+	deps.Verification = &stubVerificationStore{
+		requestCodeFn: func(context.Context, string, string) (string, int, int, error) {
+			return "123456", 300, 60, nil
+		},
+	}
+
+	set := newTestSet(deps)
+	out, err := set.ResendEmailVerification.Execute(context.Background(), ResendEmailVerificationParams{Email: "user@example.com"})
+	if err != nil {
+		t.Fatalf("ResendEmailVerification returned error: %v", err)
+	}
+	if out.UserID != userID {
+		t.Fatalf("unexpected user id: %s", out.UserID)
+	}
+	if out.Verification.Channel != "email" || out.Verification.CodeTTLSeconds != 300 || out.Verification.CanResendInSeconds != 60 {
+		t.Fatalf("unexpected verification meta: %+v", out.Verification)
+	}
+}
+
+func TestPasswordResetVerify_ReturnsResetToken(t *testing.T) {
+	userID := uuid.New()
+	deps := baseAuthDeps()
+	deps.Users = &stubUserRepo{
+		getByEmailFn: func(context.Context, string) (*model.User, error) {
+			return &model.User{
+				ID:         userID,
+				Email:      "user@example.com",
+				IsVerified: true,
+				IsActive:   true,
+			}, nil
+		},
+	}
+	deps.Verification = &stubVerificationStore{
+		verifyCodeFn: func(_ context.Context, email, purpose, code string) error {
+			if email != "user@example.com" || purpose != "password_reset" || code != "123456" {
+				t.Fatalf("unexpected verification args: %s %s %s", email, purpose, code)
+			}
+			return nil
+		},
+	}
+
+	set := newTestSet(deps)
+	out, err := set.PasswordResetVerify.Execute(context.Background(), PasswordResetVerifyParams{
+		Email: "user@example.com",
+		Code:  "123456",
+	})
+	if err != nil {
+		t.Fatalf("PasswordResetVerify returned error: %v", err)
+	}
+	if out.ResetToken != "reset-"+userID.String() {
+		t.Fatalf("unexpected reset token: %s", out.ResetToken)
+	}
+}
+
+func TestPasswordResetConfirm_UpdatesPasswordAndRevokesSessions(t *testing.T) {
+	userID := uuid.New()
+	resetTokenID := uuid.New().String()
+	var consumedTokenID string
+	var updatedPasswordHash string
+	var revokedUserID uuid.UUID
+
+	deps := baseAuthDeps()
+	deps.Users = &stubUserRepo{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.User, error) {
+			if id != userID {
+				t.Fatalf("unexpected user id: %s", id)
+			}
+			return &model.User{ID: userID, Email: "user@example.com", IsActive: true}, nil
+		},
+		updatePasswordHashFn: func(_ context.Context, id uuid.UUID, hash string) error {
+			if id != userID {
+				t.Fatalf("unexpected user id for password update: %s", id)
+			}
+			updatedPasswordHash = hash
+			return nil
+		},
+	}
+	deps.ResetTokens = &stubResetTokenRepo{
+		consumeOnceFn: func(_ context.Context, tokenID string, ttl time.Duration) (bool, error) {
+			consumedTokenID = tokenID
+			if ttl <= 0 {
+				t.Fatalf("expected positive reset token ttl, got %s", ttl)
+			}
+			return true, nil
+		},
+	}
+	deps.Sessions = &stubSessionRepo{
+		revokeAllFn: func(_ context.Context, id uuid.UUID) error {
+			revokedUserID = id
+			return nil
+		},
+	}
+	deps.Tokens = &stubTokenManager{
+		validateTokenFn: func(token string) (*ports.TokenClaims, error) {
+			if token != "reset-token" {
+				t.Fatalf("unexpected reset token: %s", token)
+			}
+			return &ports.TokenClaims{
+				Subject:   userID.String(),
+				SessionID: resetTokenID,
+				Type:      ports.TokenTypeReset,
+				ExpiresAt: time.Now().Add(time.Hour),
+			}, nil
+		},
+		ensureTokenTypeFn: func(_ *ports.TokenClaims, tokenType string) error {
+			if tokenType != ports.TokenTypeReset {
+				t.Fatalf("unexpected token type: %s", tokenType)
+			}
+			return nil
+		},
+	}
+
+	set := newTestSet(deps)
+	err := set.PasswordResetConfirm.Execute(context.Background(), PasswordResetConfirmParams{
+		ResetToken:  "reset-token",
+		NewPassword: "NewPassword123",
+	})
+	if err != nil {
+		t.Fatalf("PasswordResetConfirm returned error: %v", err)
+	}
+	if consumedTokenID != resetTokenID {
+		t.Fatalf("unexpected consumed token id: %s", consumedTokenID)
+	}
+	if err := security.ComparePassword(updatedPasswordHash, "NewPassword123"); err != nil {
+		t.Fatalf("password hash was not updated: %v", err)
+	}
+	if revokedUserID != userID {
+		t.Fatalf("unexpected revoked user id: %s", revokedUserID)
+	}
+}
+
+func TestChangePassword_UpdatesPasswordAndRevokesSessions(t *testing.T) {
+	userID := uuid.New()
+	oldHash, err := security.HashPassword("OldPassword123")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	var updatedPasswordHash string
+	var revokedUserID uuid.UUID
+
+	deps := baseAuthDeps()
+	deps.Users = &stubUserRepo{
+		getByIDFn: func(context.Context, uuid.UUID) (*model.User, error) {
+			return &model.User{
+				ID:           userID,
+				Email:        "user@example.com",
+				PasswordHash: &oldHash,
+				IsActive:     true,
+			}, nil
+		},
+		updatePasswordHashFn: func(_ context.Context, id uuid.UUID, hash string) error {
+			if id != userID {
+				t.Fatalf("unexpected user id for password update: %s", id)
+			}
+			updatedPasswordHash = hash
+			return nil
+		},
+	}
+	deps.Sessions = &stubSessionRepo{
+		revokeAllFn: func(_ context.Context, id uuid.UUID) error {
+			revokedUserID = id
+			return nil
+		},
+	}
+	deps.Tokens = &stubTokenManager{
+		validateTokenFn: func(token string) (*ports.TokenClaims, error) {
+			if token != "access-token" {
+				t.Fatalf("unexpected access token: %s", token)
+			}
+			return &ports.TokenClaims{Subject: userID.String(), Type: ports.TokenTypeAccess}, nil
+		},
+		ensureTokenTypeFn: func(_ *ports.TokenClaims, tokenType string) error {
+			if tokenType != ports.TokenTypeAccess {
+				t.Fatalf("unexpected token type: %s", tokenType)
+			}
+			return nil
+		},
+	}
+
+	set := newTestSet(deps)
+	err = set.ChangePassword.Execute(context.Background(), ChangePasswordParams{
+		AccessToken: "access-token",
+		OldPassword: "OldPassword123",
+		NewPassword: "NewPassword123",
+	})
+	if err != nil {
+		t.Fatalf("ChangePassword returned error: %v", err)
+	}
+	if err := security.ComparePassword(updatedPasswordHash, "NewPassword123"); err != nil {
+		t.Fatalf("password hash was not updated: %v", err)
+	}
+	if revokedUserID != userID {
+		t.Fatalf("unexpected revoked user id: %s", revokedUserID)
+	}
+}
+
+func TestLogout_RevokesSession(t *testing.T) {
+	sessionID := uuid.New()
+	var revokedSessionID uuid.UUID
+
+	deps := baseAuthDeps()
+	deps.Sessions = &stubSessionRepo{
+		revokeFn: func(_ context.Context, id uuid.UUID) error {
+			revokedSessionID = id
+			return nil
+		},
+	}
+	deps.Tokens = &stubTokenManager{
+		validateTokenFn: func(string) (*ports.TokenClaims, error) {
+			return &ports.TokenClaims{SessionID: sessionID.String(), Type: ports.TokenTypeAccess}, nil
+		},
+		ensureTokenTypeFn: func(_ *ports.TokenClaims, tokenType string) error {
+			if tokenType != ports.TokenTypeAccess {
+				t.Fatalf("unexpected token type: %s", tokenType)
+			}
+			return nil
+		},
+	}
+
+	set := newTestSet(deps)
+	if err := set.Logout.Execute(context.Background(), "access-token"); err != nil {
+		t.Fatalf("Logout returned error: %v", err)
+	}
+	if revokedSessionID != sessionID {
+		t.Fatalf("unexpected revoked session id: %s", revokedSessionID)
+	}
+}
+
+func TestLogoutAll_RevokesUserSessions(t *testing.T) {
+	userID := uuid.New()
+	var revokedUserID uuid.UUID
+
+	deps := baseAuthDeps()
+	deps.Sessions = &stubSessionRepo{
+		revokeAllFn: func(_ context.Context, id uuid.UUID) error {
+			revokedUserID = id
+			return nil
+		},
+	}
+	deps.Tokens = &stubTokenManager{
+		validateTokenFn: func(string) (*ports.TokenClaims, error) {
+			return &ports.TokenClaims{Subject: userID.String(), Type: ports.TokenTypeAccess}, nil
+		},
+		ensureTokenTypeFn: func(_ *ports.TokenClaims, tokenType string) error {
+			if tokenType != ports.TokenTypeAccess {
+				t.Fatalf("unexpected token type: %s", tokenType)
+			}
+			return nil
+		},
+	}
+
+	set := newTestSet(deps)
+	if err := set.LogoutAll.Execute(context.Background(), "access-token"); err != nil {
+		t.Fatalf("LogoutAll returned error: %v", err)
+	}
+	if revokedUserID != userID {
+		t.Fatalf("unexpected revoked user id: %s", revokedUserID)
+	}
+}
+
+func TestLoginOAuth_ExistingIdentityCreatesSession(t *testing.T) {
+	userID := uuid.New()
+	var createdSession *model.Session
+
+	deps := baseAuthDeps()
+	deps.OAuthVerify = &stubOAuthVerifier{
+		verifyGoogleIDTokenFn: func(context.Context, string) (*ports.OAuthClaims, error) {
+			return &ports.OAuthClaims{
+				Subject:       "google-subject",
+				Email:         "user@example.com",
+				EmailVerified: true,
+			}, nil
+		},
+	}
+	deps.OAuth = &stubOAuthRepo{
+		getByProviderAndExternalIDFn: func(context.Context, string, string) (*model.OAuthIdentity, error) {
+			return &model.OAuthIdentity{
+				ID:         uuid.New(),
+				UserID:     userID,
+				Provider:   "google",
+				ExternalID: "google-subject",
+			}, nil
+		},
+	}
+	deps.Users = &stubUserRepo{
+		getByIDFn: func(context.Context, uuid.UUID) (*model.User, error) {
+			return &model.User{
+				ID:         userID,
+				Email:      "user@example.com",
+				IsVerified: true,
+				IsActive:   true,
+			}, nil
+		},
+	}
+	deps.Sessions = &stubSessionRepo{
+		createFn: func(_ context.Context, session *model.Session) error {
+			createdSession = session
+			return nil
+		},
+	}
+
+	set := newTestSet(deps)
+	out, err := set.LoginOAuth.Execute(context.Background(), LoginOAuthParams{
+		Provider: "google",
+		IDToken:  "id-token",
+	})
+	if err != nil {
+		t.Fatalf("LoginOAuth returned error: %v", err)
+	}
+	if createdSession == nil || createdSession.UserID != userID {
+		t.Fatal("expected oauth login to create session")
+	}
+	if out.UserID != userID || out.AccessToken == "" || out.RefreshToken == "" {
+		t.Fatalf("unexpected oauth result: %+v", out)
 	}
 }
 

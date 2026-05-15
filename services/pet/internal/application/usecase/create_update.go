@@ -131,6 +131,7 @@ func (s *Pet) UpdatePet(ctx context.Context, p UpdatePetParams) (*model.Pet, err
 		Colors:               colors,
 		IsNeutered:           p.IsNeutered,
 		IsOutdoor:            p.IsOutdoor,
+		ProfilePhotoFileID:   current.ProfilePhotoFileID,
 		MicrochipID:          p.MicrochipID,
 		MicrochipInstalledAt: p.MicrochipInstalledAt,
 	})

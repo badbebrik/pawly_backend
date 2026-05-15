@@ -42,7 +42,7 @@ func (c *Client) Close() {
 }
 
 func (c *Client) IsActiveMember(ctx context.Context, petID, userID uuid.UUID) (bool, error) {
-	resp, err := c.client.GetPolicy(ctx, &aclpb.GetPolicyRequest{
+	resp, err := c.client.IsMember(ctx, &aclpb.IsMemberRequest{
 		PetId:  petID.String(),
 		UserId: userID.String(),
 	})
@@ -50,7 +50,7 @@ func (c *Client) IsActiveMember(ctx context.Context, petID, userID uuid.UUID) (b
 		return false, mapErr(err)
 	}
 
-	return resp.GetStatus() == aclpb.MembershipStatus_MEMBERSHIP_STATUS_ACTIVE, nil
+	return resp.GetIsMember(), nil
 }
 
 func mapErr(err error) error {
